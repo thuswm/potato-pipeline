@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "title": "Fastener loads, lap joint (synthetic data)",
+    "author": "",
+    "created": "2026-11-12",
+    "description": ""
+  },
+  "settings": {
+    "default_unit_system": "SI_mm"
+  },
+  "variables": {
+    "h5_file": "data/synthetic_fastener_joint.h5"
+  },
+  "blocks": [
+    {
+      "id": "cbush",
+      "type_id": "nastran.hdf5_results",
+      "type_version": 1,
+      "label": "CBUSH forces",
+      "params": {
+        "file": "${h5_file}",
+        "result": "ELEMENTAL/ELEMENT_FORCE/BUSH"
+      },
+      "position": [
+        80.0,
+        80.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "rbe2",
+      "type_id": "nastran.hdf5_rbe2_loads",
+      "type_version": 1,
+      "label": "RBE2 loads",
+      "params": {
+        "file": "${h5_file}",
+        "side": "dependent"
+      },
+      "position": [
+        80.0,
+        260.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "fl_cbush",
+      "type_id": "loads.fastener_loads",
+      "type_version": 1,
+      "label": "Fastener loads CBUSH",
+      "params": {
+        "axial_axis": "X"
+      },
+      "position": [
+        340.0,
+        80.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "fl_rbe2",
+      "type_id": "loads.fastener_loads",
+      "type_version": 1,
+      "label": "Fastener loads RBE2",
+      "params": {
+        "axial_axis": "Z"
+      },
+      "position": [
+        340.0,
+        260.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "drop_grid",
+      "type_id": "table.select",
+      "type_version": 1,
+      "label": "Drop GRID",
+      "params": {
+        "columns": [
+          "EID",
+          "SUBCASE",
+          "TENSION",
+          "SHEAR"
+        ]
+      },
+      "position": [
+        560.0,
+        260.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "all",
+      "type_id": "table.concat",
+      "type_version": 1,
+      "label": "All fasteners",
+      "params": {},
+      "position": [
+        780.0,
+        160.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "names",
+      "type_id": "table.case_labels",
+      "type_version": 1,
+      "label": "Load case names",
+      "params": {
+        "labels": {
+          "1": "Shear X",
+          "2": "Shear Y",
+          "3": "Pull-off",
+          "4": "Combined"
+        }
+      },
+      "position": [
+        780.0,
+        360.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "lct",
+      "type_id": "table.load_case_table",
+      "type_version": 1,
+      "label": "Fastener load table",
+      "params": {
+        "value_columns": [
+          "TENSION",
+          "SHEAR"
+        ],
+        "envelope": [
+          "max"
+        ]
+      },
+      "position": [
+        1000.0,
+        160.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "crit",
+      "type_id": "table.envelope",
+      "type_version": 1,
+      "label": "Critical fastener",
+      "params": {
+        "columns": [
+          "TENSION",
+          "SHEAR"
+        ],
+        "governing_columns": [
+          "EID",
+          "SUBCASE"
+        ]
+      },
+      "position": [
+        1000.0,
+        360.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "excel",
+      "type_id": "table.write_excel",
+      "type_version": 1,
+      "label": "Fastener workbook",
+      "params": {
+        "file": "output/fastener_loads.xlsx",
+        "sheet_names": [
+          "Load table",
+          "Envelope",
+          "All loads"
+        ]
+      },
+      "position": [
+        1240.0,
+        240.0
+      ],
+      "notes": ""
+    }
+  ],
+  "connections": [
+    {
+      "id": "cbd1953fd",
+      "source": {
+        "block": "cbush",
+        "port": "table"
+      },
+      "target": {
+        "block": "fl_cbush",
+        "port": "forces"
+      }
+    },
+    {
+      "id": "ca445a6e8",
+      "source": {
+        "block": "rbe2",
+        "port": "table"
+      },
+      "target": {
+        "block": "fl_rbe2",
+        "port": "forces"
+      }
+    },
+    {
+      "id": "c1720e98a",
+      "source": {
+        "block": "fl_rbe2",
+        "port": "loads"
+      },
+      "target": {
+        "block": "drop_grid",
+        "port": "table"
+      }
+    },
+    {
+      "id": "cf860e7c4",
+      "source": {
+        "block": "fl_cbush",
+        "port": "loads"
+      },
+      "target": {
+        "block": "all",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "ca3b2a562",
+      "source": {
+        "block": "drop_grid",
+        "port": "table"
+      },
+      "target": {
+        "block": "all",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "c1c711ed6",
+      "source": {
+        "block": "all",
+        "port": "table"
+      },
+      "target": {
+        "block": "lct",
+        "port": "table"
+      }
+    },
+    {
+      "id": "cc3a7dd00",
+      "source": {
+        "block": "names",
+        "port": "table"
+      },
+      "target": {
+        "block": "lct",
+        "port": "labels"
+      }
+    },
+    {
+      "id": "c5e72729a",
+      "source": {
+        "block": "all",
+        "port": "table"
+      },
+      "target": {
+        "block": "crit",
+        "port": "table"
+      }
+    },
+    {
+      "id": "caff367ca",
+      "source": {
+        "block": "lct",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "c2943e3af",
+      "source": {
+        "block": "crit",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "c6a7b5fa5",
+      "source": {
+        "block": "all",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    }
+  ],
+  "macros": []
+}

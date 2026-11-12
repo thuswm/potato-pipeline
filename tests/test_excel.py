@@ -62,10 +62,26 @@ def test_locked_file_gives_clear_error(tmp_path: Path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_multiindex_columns_refused(tmp_path: Path):
-    df = pd.DataFrame([[1, 2]], columns=pd.MultiIndex.from_tuples([("T", "LC1"), ("T", "LC2")]))
-    with pytest.raises(ExcelWriteError, match="multi-level"):
-        write_workbook(tmp_path / "x.xlsx", [df])
+def test_two_level_header(tmp_path: Path):
+    cols = pd.MultiIndex.from_tuples(
+        [("EID", ""), ("T", "LC1"), ("T", "MAX_CASE"), ("S", "LC1"), ("S", "MAX_CASE")]
+    )
+    df = pd.DataFrame([[1, 10.0, "LC1", 5.0, "LC1"]], columns=cols)
+    set_units(df, UnitSystem.SI_MM, {"T": "N", "S": "N"})
+    path = tmp_path / "x.xlsx"
+    write_workbook(path, [df])
+    ws = openpyxl.load_workbook(path).active
+    assert [c.value for c in ws[1]] == ["EID", "T [N]", None, "S [N]", None]
+    assert [c.value for c in ws[2]] == [None, "LC1", "MAX_CASE", "LC1", "MAX_CASE"]
+    assert [c.value for c in ws[3]] == [1, 10, "LC1", 5, "LC1"]
+    assert {str(r) for r in ws.merged_cells.ranges} == {"A1:A2", "B1:C1", "D1:E1"}
+    assert ws.freeze_panes == "A3"
+
+
+def test_three_level_header_refused(tmp_path: Path):
+    cols = pd.MultiIndex.from_tuples([("a", "b", "c")])
+    with pytest.raises(ExcelWriteError, match="two-level"):
+        write_workbook(tmp_path / "x.xlsx", [pd.DataFrame([[1]], columns=cols)])
 
 
 def test_block_in_pipeline_always_rewrites(tmp_path: Path):

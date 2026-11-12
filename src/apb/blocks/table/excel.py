@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import BaseModel, ConfigDict, Field
@@ -65,14 +66,55 @@ def sheet_names(tables: Sequence[pd.DataFrame], requested: Sequence[str]) -> lis
     return names
 
 
-def _format_sheet(ws: Worksheet, table: pd.DataFrame, headers: list[str]) -> None:
-    """Freeze the header row and size the columns to their content."""
-    ws.freeze_panes = "A2"
+def _format_sheet(
+    ws: Worksheet, table: pd.DataFrame, headers: list[str], freeze: str = "A2"
+) -> None:
+    """Freeze the header row(s) and size the columns to their content."""
+    ws.freeze_panes = freeze
     sample = table.head(_WIDTH_SAMPLE_ROWS)
     for idx, (col, header) in enumerate(zip(table.columns, headers, strict=True), start=1):
         values = sample[col].map(lambda v: f"{v:.6g}" if isinstance(v, float) else str(v))
         longest = max([len(header), *values.str.len().tolist()])
         ws.column_dimensions[get_column_letter(idx)].width = min(longest + 2, _MAX_COLUMN_WIDTH)
+
+
+def _write_two_level(
+    writer: pd.ExcelWriter, name: str, table: pd.DataFrame, units: dict[str, str]
+) -> None:
+    """Write a table with a two-level header (e.g. TENSION | SHEAR over load cases).
+
+    The top level is written once per group as a merged, centred cell (with unit); key
+    columns without a second level (e.g. ``("EID", "")``) span both header rows.
+    """
+    flat = table.copy()
+    flat.columns = pd.Index(range(len(table.columns)))
+    flat.to_excel(writer, sheet_name=name, index=False, header=False, startrow=2)
+    ws = writer.sheets[name]
+    bold = Font(bold=True)
+    centre = Alignment(horizontal="center", vertical="center")
+    col = 1
+    tops = [str(c[0]) for c in table.columns]
+    subs = [str(c[1]) for c in table.columns]
+    while col <= len(tops):
+        top = tops[col - 1]
+        if not subs[col - 1]:  # key column: spans both rows
+            ws.cell(1, col, header_with_unit(top, units)).font = bold
+            ws.merge_cells(start_row=1, start_column=col, end_row=2, end_column=col)
+            ws.cell(1, col).alignment = centre
+            col += 1
+            continue
+        end = col
+        while end < len(tops) and tops[end] == top and subs[end]:
+            end += 1
+        cell = ws.cell(1, col, header_with_unit(top, units))
+        cell.font, cell.alignment = bold, centre
+        if end > col:
+            ws.merge_cells(start_row=1, start_column=col, end_row=1, end_column=end)
+        for c in range(col, end + 1):
+            sub = ws.cell(2, c, subs[c - 1])
+            sub.font, sub.alignment = bold, centre
+        col = end + 1
+    _format_sheet(ws, flat, subs, freeze="A3")
 
 
 def write_workbook(
@@ -103,8 +145,8 @@ def write_workbook(
     if not tables:
         raise ExcelWriteError("No tables connected")
     for table in tables:
-        if isinstance(table.columns, pd.MultiIndex):
-            raise ExcelWriteError("Tables with multi-level column headers are not supported yet")
+        if isinstance(table.columns, pd.MultiIndex) and table.columns.nlevels != 2:
+            raise ExcelWriteError("Only one- and two-level column headers are supported")
     path.parent.mkdir(parents=True, exist_ok=True)
     used_names = sheet_names(tables, names)
 
@@ -115,6 +157,9 @@ def write_workbook(
         with pd.ExcelWriter(tmp, engine="openpyxl") as writer:
             for table, name in zip(tables, used_names, strict=True):
                 units = get_units(table) if units_in_header else {}
+                if isinstance(table.columns, pd.MultiIndex):
+                    _write_two_level(writer, name, table, units)
+                    continue
                 headers = [header_with_unit(str(c), units) for c in table.columns]
                 table.to_excel(writer, sheet_name=name, index=False, header=headers)
                 _format_sheet(writer.sheets[name], table, headers)

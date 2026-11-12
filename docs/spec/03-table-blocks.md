@@ -19,21 +19,21 @@ blocks. All table blocks take and return `pandas.DataFrame`s.
 | type_id | Title | Inputs → Outputs | Params |
 |---------|-------|------------------|--------|
 | `table.read_excel` | Read Excel | – → `table` | `file`, `sheet`, `header_row`, `range` (optional, e.g. `A1:F200`) |
-| `table.read_csv` | Read CSV | – → `table` | `file`, `delimiter`, `decimal` (`.`/`,`), `skip_rows` |
+| `table.read_csv` | Read CSV | – → `table` | `file`, `delimiter`, `decimal` (`.`/`,`), `skip_rows`, `encoding` |
 | `table.write_excel` | Write Excel | `tables` (multiple) → `file` (Text) | `file`, `sheet_names`, `units_in_header` (see §3.3) |
 | `table.select` | Select columns | `table` → `table` | `columns`, `rename` (mapping) |
 | `table.filter` | Filter rows | `table` → `table` | `expression` (pandas query syntax, e.g. `SUBCASE in [1,2] and EID > 1000`) |
 | `table.sort` | Sort | `table` → `table` | `by`, `ascending` |
-| `table.envelope` | Envelope / aggregate | `table` → `table` | `group_by`, `column(s)`, `mode` (max, min, abs-max), `keep_row` (keep the full row of the critical case, e.g. its SUBCASE) |
-| `table.join` | Join | `left`, `right` → `table` | `on`, `how` (inner/left/outer) |
-| `table.concat` | Stack tables | `tables` (multiple) → `table` | `add_source_column` |
-| `table.compute` | Computed column | `table` → `table` | `new_column`, `expression` (pandas eval, e.g. `sqrt(FX**2 + FY**2)`) |
-| `table.pick` | Pick value | `table` → `scalar` | `column`, `row` (`max`, `min`, index, or filter) |
-| `table.constant` | Constant | – → `scalar` | `value`, `unit` |
-| `units.convert` | Convert units | `table` or `scalar` → same | `to` (`SI` / `SI_mm`); uses the units metadata (spec 00 §5.1) |
-| `table.set_units` | Set units | `table` → `table` | `unit_system`, column → quantity kind (for tables from Excel/CSV) |
-| `table.load_case_table` | Load case table | `table` → `table` | `id_column` (e.g. `EID`), `case_column` (e.g. `SUBCASE`), `value_columns`, `case_labels` (optional mapping subcase → name), `envelope` (add max/min/abs-max + governing case columns) |
-| `table.case_labels` | Load case names | – → `table` | Editable table subcase ID → load case name (or read from Excel); joinable onto any result |
+| `table.envelope` | Envelope | `table` → `table` | `group_by` (empty = whole table), `columns`, `mode` (`max`, `min`, `abs_max` – sign kept), `governing_columns` (columns of the governing row reported as `<value>_<column>`, default `SUBCASE`; e.g. add `EID` to see which element governs), `keep_row` (full governing row, one value column) |
+| `table.join` | Join | `left`, `right` → `table` | `on`, `how` (inner/left/right/outer); clashing right columns get `_RIGHT` |
+| `table.concat` | Stack tables | `tables` (multiple) → `table` | `add_source_column` (`SOURCE` = file name or title) |
+| `table.compute` | Computed column | `table` → `table` | `new_column`, `expression` (pandas eval, e.g. `sqrt(FX**2 + FY**2)`), `unit` |
+| `table.pick` | Pick value | `table` → `scalar` | `column`, `row` (`max`, `min`, `abs_max`, `first`, `last`), `where` (optional filter); value carries the column unit |
+| `table.constant` | Constant | – → `scalar` | `value`, `unit` (must be a known unit label) |
+| `units.convert` | Convert units | `value` (Any: table or scalar with unit) → same | `to` (`SI` / `SI_mm`); uses the units metadata (spec 00 §5.1) |
+| `table.set_units` | Set units | `table` → `table` | `unit_system`, `units` (column → unit label, e.g. `MPa`), `replace` (for tables from Excel/CSV) |
+| `table.load_case_table` | Load case table | `table`, `labels` (optional names table) → `table` | `id_columns` (default `EID`), `case_column` (default `SUBCASE`), `value_columns`, `envelope` (list of `max`/`min`/`abs_max`, each adds `<NAME>` and `<NAME>_CASE`), `layout` (`side_by_side` / `flat`), `labels` (case ID → name, overrides the input) |
+| `table.case_labels` | Load case names | – → `table` | `labels` (subcase ID → name); output `SUBCASE, LABEL`, connects to `load_case_table.labels` or joins onto any result |
 
 Expressions use pandas' `query`/`eval`, which are restricted expression languages (no
 arbitrary code). Anything more complex goes into the Python block (spec 04).
@@ -47,6 +47,9 @@ This is the main Excel task today and gets first-class support:
 - **`table.load_case_table`** turns it into the **wide format** analysts put in reports and
   spreadsheets: one row per entity, one column per load case (`LC1`, `LC2`, … or names from
   `case_labels`), optionally followed by envelope columns, e.g. `MAX`, `MAX_CASE`.
+- Load cases without a value for an entity are left empty; the envelope ignores them.
+  Several rows per entity and load case (e.g. CBEAM stations) are an error: filter first or
+  add ID columns.
 - With **several `value_columns`** (e.g. `TENSION` and `SHEAR`) the groups are placed **side by
   side in one table** with a two-level header, which `table.write_excel` writes to one sheet
   and the report writes as one table:
@@ -64,7 +67,7 @@ This is the main Excel task today and gets first-class support:
 |---|---|
 | Inputs | `forces: Table` (CBUSH element forces or RBE2 loads from spec 02, long format) |
 | Outputs | `loads: Table` — `EID, SUBCASE, TENSION, SHEAR` (+ original force columns if wanted) |
-| Params | `axial_axis` (`X`/`Y`/`Z` of the element system, default `X`), `tension_mode` (`signed` = keep compression as negative, `tension_only` = compression set to 0), `include_moments` (bool) |
+| Params | `axial_axis` (`X`/`Y`/`Z` of the force components, default `X`), `tension_mode` (`signed` = keep compression as negative, `tension_only` = compression set to 0), `include_moments` (adds `BENDING`, `TORSION`), `keep_forces` |
 
 - `TENSION` = force along `axial_axis`; `SHEAR` = √(F_a² + F_b²) of the two other components.
 - Typical chain: Nastran CBUSH forces → `loads.fastener_loads` → `table.load_case_table`
@@ -87,7 +90,8 @@ This is the main Excel task today and gets first-class support:
   half-written workbook. If the workbook is open in Excel (Windows file lock) the block
   fails with "close it in Excel and run again".
 - Always runs (ENG-17), so a deleted or edited workbook is rewritten on the next run.
-- Multi-level headers (the side-by-side load case table) follow with `table.load_case_table`.
+- Two-level headers (side-by-side load case table): top level written once as a merged cell
+  with unit, load case names below, header rows frozen.
 
 ## 4. Out of scope (v1)
 

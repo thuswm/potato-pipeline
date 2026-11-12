@@ -148,3 +148,17 @@ def registry() -> BlockRegistry:
     """Registry with the test blocks; run counters reset."""
     Source.runs = Scale.runs = TextFile.runs = 0
     return BlockRegistry(TEST_BLOCKS)
+
+
+def run_block(
+    cls: type[Block[Any]],
+    inputs: dict[str, Any] | None = None,
+    tmp: Path | None = None,
+    **params: Any,
+) -> dict[str, Any]:
+    """Run one block directly (no pipeline) and return its outputs."""
+    base = tmp or Path.cwd()
+    ctx = RunContext(block_id="t", pipeline_dir=base, output_dir=base)
+    full_inputs = {p.name: ([] if p.multiple else None) for p in cls.inputs}
+    full_inputs.update(inputs or {})
+    return cls().run(cls.Params.model_validate(params), full_inputs, ctx)

@@ -232,7 +232,8 @@ def common_unit_system(tables: Iterable[pd.DataFrame]) -> UnitSystem | None:
 def convert_table(df: pd.DataFrame, target: UnitSystem) -> pd.DataFrame:
     """Convert all columns with a known unit to another unit system.
 
-    Columns without unit are unchanged. The input table is not modified.
+    Columns without unit are unchanged. The input table is not modified. For two-level
+    headers the units apply to all sub-columns of a top-level column except ``*_CASE``.
 
     Args:
         df: Table with units metadata.
@@ -246,13 +247,20 @@ def convert_table(df: pd.DataFrame, target: UnitSystem) -> pd.DataFrame:
     """
     out = df.copy()
     new_units: dict[str, str] = {}
+    multi = isinstance(df.columns, pd.MultiIndex)
     for col, unit in get_units(df).items():
         if col not in out.columns:
             continue
         factor, label = conversion_factor(unit, target)
-        if factor != 1.0:
-            out[col] = out[col] * factor
         new_units[col] = label
+        if factor == 1.0:
+            continue
+        if multi:  # units are keyed by the top level; *_CASE columns hold case names
+            for full in df.columns:
+                if full[0] == col and not str(full[-1]).endswith("_CASE"):
+                    out[full] = out[full] * factor
+        else:
+            out[col] = out[col] * factor
     out.attrs = dict(df.attrs)
     set_units(out, target, new_units)
     return out
