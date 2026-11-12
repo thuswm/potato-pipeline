@@ -172,13 +172,25 @@ def new_script(
 
 
 @app.command()
-def gui(pipeline: Annotated[Path | None, typer.Argument(help="Pipeline to open")] = None) -> None:
-    """Start the graphical editor (not implemented yet)."""
-    typer.echo("The GUI is not implemented yet.")
-    raise typer.Exit(1)
+def gui(
+    pipeline: Annotated[Path | None, typer.Argument(help="Pipeline to open")] = None,
+    port: Annotated[int, typer.Option(help="Local port of the GUI server")] = 8765,
+    no_browser: Annotated[bool, typer.Option(help="Do not open the browser")] = False,
+) -> None:
+    """Start the graphical editor in the web browser (stop with Ctrl+C)."""
+    from apb.gui.app import run_gui
+
+    if pipeline is not None and not pipeline.is_file():
+        typer.secho(f"File not found: {pipeline}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    run_gui(pipeline, port=port, show=not no_browser)
 
 
 @app.command()
 def version() -> None:
     """Print the version."""
     typer.echo(__version__)
+
+
+if __name__ == "__main__":
+    app()

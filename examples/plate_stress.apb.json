@@ -28,8 +28,8 @@
         ]
       },
       "position": [
-        100.0,
-        100.0
+        40.0,
+        40.0
       ],
       "notes": ""
     },
@@ -44,8 +44,8 @@
         "ids": "11, 33, 55"
       },
       "position": [
-        100.0,
-        250.0
+        40.0,
+        200.0
       ],
       "notes": ""
     },
@@ -58,8 +58,8 @@
         "file": "${h5_file}"
       },
       "position": [
-        100.0,
-        400.0
+        40.0,
+        360.0
       ],
       "notes": ""
     },
@@ -72,8 +72,8 @@
         "file": "output/plate_results.xlsx"
       },
       "position": [
-        450.0,
-        250.0
+        330.0,
+        200.0
       ],
       "notes": ""
     }
@@ -88,7 +88,8 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c63caa2d9",
@@ -99,7 +100,8 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "cc33439be",
@@ -110,7 +112,8 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
     }
   ],
   "macros": []

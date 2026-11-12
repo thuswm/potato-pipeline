@@ -57,6 +57,24 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 - If Drawflow turns out to be limiting, only `NodeCanvas` is replaced (e.g. by Vue Flow, which
   fits NiceGUI's Vue base); the rest of the GUI and the engine are unaffected.
 
+### 3.2.1 Implementation notes (step 1)
+
+- `gui/editor.py` (`EditorState`) holds all edit rules and is tested without a browser:
+  readable block IDs (`b1`, `b2` …, never reused), label defaults to the block title,
+  connection checks (types, one connection per single input, no self-connection, no loop)
+  with a message shown to the user; the canvas undoes a refused connection.
+- The initial pipeline is sent with the page (no flicker); connection paths are redrawn
+  after layout; **View > Fit to window** (also automatic after opening), zoom in/out
+  (also Ctrl + mouse wheel), reset view.
+- Delete: select a block or connection and press Delete (only while the canvas has the
+  keyboard focus, so typing in the side panels is safe), or use "Delete block" in the panel.
+- The tab title and header show the file name with `*` for unsaved changes; the browser
+  asks before closing a tab with unsaved changes. New/Open ask before discarding changes.
+- Opening a pipeline with Python blocks shows a trust notice (spec 04 §3.3); blocks of
+  types that are not installed are shown in red and reported.
+- Browser tests: `tests/gui/test_browser.py` drives the real GUI in headless Chromium with
+  **Playwright** (dev dependency; `uv run playwright install chromium` once). They run in CI.
+
 ### 3.3 Running
 
 Runs execute in a background thread via the engine; engine events are pushed to the browser

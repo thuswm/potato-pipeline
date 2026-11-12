@@ -16,4 +16,6 @@ uv run pytest               # tests
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 uv run apb --help           # command line
+uv run apb gui examples/fastener_loads.apb.json   # graphical editor in the browser
+uv run playwright install chromium                # once, for the browser tests
 ```

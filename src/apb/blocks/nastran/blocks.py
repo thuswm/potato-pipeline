@@ -63,7 +63,7 @@ class Hdf5Results(_H5Block[Hdf5ResultsParams]):
     type_id = "nastran.hdf5_results"
     title = "Nastran HDF5 results"
     description = "Read a result dataset from an MSC Nastran .h5 file into a long-format table."
-    outputs = (Port("table", PortType.TABLE),)
+    outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = Hdf5ResultsParams
 
     def run(
@@ -89,7 +89,7 @@ class Hdf5Eigenvalues(_H5Block[_H5Params]):
     type_id = "nastran.hdf5_eigenvalues"
     title = "Nastran eigenvalues"
     description = "Mode number, eigenvalue, frequency [Hz], generalised mass and stiffness."
-    outputs = (Port("table", PortType.TABLE),)
+    outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = _H5Params
 
     def run(self, params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
@@ -122,7 +122,7 @@ class Hdf5Rbe2Loads(_H5Block[Hdf5Rbe2LoadsParams]):
         "Forces per RBE2 element from MPC forces or grid point forces, in the "
         "output coordinate system of the grids."
     )
-    outputs = (Port("table", PortType.TABLE),)
+    outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = Hdf5Rbe2LoadsParams
 
     def run(
@@ -149,7 +149,7 @@ class Hdf5Masses(_H5Block[_H5Params]):
     type_id = "nastran.hdf5_masses"
     title = "Nastran point masses"
     description = "CONM2 elements: grid, mass, offsets and inertia."
-    outputs = (Port("table", PortType.TABLE),)
+    outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = _H5Params
 
     def run(self, params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:

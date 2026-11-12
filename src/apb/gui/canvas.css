@@ -1,0 +1,129 @@
+/* Node canvas styles (overrides of drawflow.min.css). Ports are 22 px rows: the port dots
+   (12 px + 2 x 5 px margin) line up with the port labels (line-height 22 px). */
+
+.apb-canvas {
+  width: 100%;
+  height: 100%;
+  background-color: #f6f7f9;
+  background-image: radial-gradient(#d4d8de 1px, transparent 1px);
+  background-size: 20px 20px;
+  outline: none;
+}
+
+.apb-canvas .drawflow .drawflow-node {
+  align-items: flex-start;
+  width: 210px;
+  min-height: 0;
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid #9aa4b2;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #1f2933;
+  font-size: 12px;
+}
+
+.apb-canvas .drawflow .drawflow-node.selected {
+  background: #ffffff;
+  border: 2px solid #1f6feb;
+  margin: -1px;
+}
+
+.apb-canvas .drawflow .drawflow-node .inputs,
+.apb-canvas .drawflow .drawflow-node .outputs {
+  padding-top: 40px; /* = header height */
+}
+
+.apb-canvas .drawflow .drawflow-node .input,
+.apb-canvas .drawflow .drawflow-node .output {
+  width: 12px;
+  height: 12px;
+  margin: 5px 0;
+  top: 0;
+  border: 1.5px solid #52606d;
+  background: #ffffff;
+}
+
+.apb-canvas .drawflow .drawflow-node .input { left: -7px; }
+.apb-canvas .drawflow .drawflow-node .output { left: -6px; right: auto; }
+
+.apb-canvas .drawflow .drawflow-node .apb-port-Table  { background: #3b82f6; }
+.apb-canvas .drawflow .drawflow-node .apb-port-Scalar { background: #22a06b; }
+.apb-canvas .drawflow .drawflow-node .apb-port-Text   { background: #f59e0b; }
+.apb-canvas .drawflow .drawflow-node .apb-port-Figure { background: #a855f7; }
+.apb-canvas .drawflow .drawflow-node .apb-port-Any    { background: #ffffff; }
+
+.apb-canvas .apb-head {
+  height: 40px;
+  box-sizing: border-box;
+  padding: 5px 10px;
+  border-bottom: 1px solid #e4e7eb;
+  border-radius: 5px 5px 0 0;
+  overflow: hidden;
+}
+
+.apb-canvas .apb-label {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apb-canvas .apb-sub {
+  font-size: 10.5px;
+  color: #616e7c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apb-canvas .apb-ports {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.apb-canvas .apb-in,
+.apb-canvas .apb-out {
+  height: 22px;
+  line-height: 22px;
+  font-size: 11px;
+  color: #3e4c59;
+  white-space: nowrap;
+}
+
+.apb-canvas .apb-in { padding-left: 9px; }
+.apb-canvas .apb-out { padding-right: 9px; text-align: right; }
+
+/* Header colour by library category */
+.apb-canvas .apb-cat-input  .apb-head { background: #e6f0ff; }
+.apb-canvas .apb-cat-table  .apb-head { background: #eef2f6; }
+.apb-canvas .apb-cat-loads  .apb-head { background: #fff4e5; }
+.apb-canvas .apb-cat-python .apb-head { background: #fff9db; }
+.apb-canvas .apb-cat-units  .apb-head { background: #eef2f6; }
+.apb-canvas .apb-cat-output .apb-head { background: #e9f7ef; }
+.apb-canvas .apb-cat-unknown .apb-head { background: #fde2e2; }
+
+.apb-canvas .drawflow-node.apb-highlight { box-shadow: 0 0 0 3px #f59e0b; }
+
+/* Run states (GUI-09) */
+.apb-canvas .drawflow-node.apb-state-stale   { border-color: #d97706; }
+.apb-canvas .drawflow-node.apb-state-running { border-color: #1f6feb; border-style: dashed; }
+.apb-canvas .drawflow-node.apb-state-done    { border-color: #16a34a; }
+.apb-canvas .drawflow-node.apb-state-error   { border-color: #dc2626; border-width: 2px; }
+.apb-canvas .drawflow-node.apb-state-skipped { opacity: 0.6; }
+
+.apb-canvas .drawflow .connection .main-path { stroke: #7b8794; stroke-width: 3px; }
+.apb-canvas .drawflow .connection .main-path:hover { stroke: #1f6feb; }
+.apb-canvas .drawflow .connection .main-path.selected { stroke: #f59e0b; }
+
+.apb-canvas .drawflow-delete {
+  width: 22px;
+  height: 22px;
+  line-height: 20px;
+  font-size: 13px;
+  background: #dc2626;
+  border: 2px solid #ffffff;
+}
+.apb-canvas .parent-node .drawflow-delete { right: -11px; top: -11px; }
