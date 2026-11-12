@@ -121,7 +121,8 @@ def test_add_connect_reject_delete_save(page, workdir: Path):
     head = sort.locator(".apb-head").bounding_box()
     page.mouse.move(head["x"] + 20, head["y"] + 10)
     page.mouse.down()
-    page.mouse.move(400, 820, steps=8)
+    area = page.locator(".apb-canvas").bounding_box()
+    page.mouse.move(area["x"] + 140, area["y"] + area["height"] - 90, steps=8)
     page.mouse.up()
     page.wait_for_timeout(300)
 
@@ -176,3 +177,95 @@ def test_move_block_is_saved(page, workdir: Path):
     saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
     names = next(b for b in saved["blocks"] if b["id"] == "names")
     assert names["position"][1] > 300
+
+
+def select(pg, label: str) -> None:
+    node(pg, label).locator(".apb-head").click()
+    pg.wait_for_timeout(400)
+
+
+def run_all(pg) -> None:
+    pg.get_by_role("button", name="Run", exact=True).click()
+    pg.wait_for_selector("text=/Run (finished|stopped)/", timeout=30000)
+    pg.wait_for_timeout(500)
+
+
+def states(pg) -> set[str]:
+    classes = pg.eval_on_selector_all(
+        ".drawflow-node",
+        "els => els.map(e => [...e.classList].find(c => c.startsWith('apb-state-')) || '')",
+    )
+    return set(classes)
+
+
+def test_run_states_and_preview(page, workdir: Path):
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+    assert (workdir / "output" / "fastener_report.docx").exists()
+    select(page, "Fastener margins")
+    preview = page.locator(".q-tab-panels").first
+    assert page.get_by_role("tab", name="min_ms").is_visible()
+    assert "SHEAR [N]" in preview.inner_text()
+    page.get_by_role("tab", name="min_ms").click()
+    page.wait_for_timeout(300)
+    assert "0.234568" in page.locator(".q-tab-panels").first.inner_text()
+    page.get_by_role("tab", name="plot").click()
+    page.wait_for_timeout(300)
+    assert page.locator(".q-tab-panels img").count() == 1
+
+
+def test_edit_parameter_makes_blocks_stale_and_rerun(page):
+    run_all(page)
+    select(page, "Shear allowable")
+    value = page.get_by_role("textbox", name="Value *")
+    assert value.input_value() == "${allowable_shear}"
+    value.fill("1800")
+    value.press("Enter")
+    page.wait_for_timeout(1000)  # states are refreshed twice a second
+    stale = page.locator(".drawflow-node.apb-state-stale")
+    assert node(page, "Fastener margins").get_attribute("class").count("apb-state-stale") == 1
+    assert stale.count() >= 3  # constant, margins and everything downstream
+    assert node(page, "CBUSH forces").get_attribute("class").count("apb-state-done") == 1
+    run_all(page)
+    select(page, "Fastener margins")
+    page.get_by_role("tab", name="min_ms").click()
+    page.wait_for_timeout(300)
+    # R_S = 1.5 * 1350 / 1800 = 1.125 -> MS = 1/1.125 - 1 = -0.111
+    assert "-0.111111" in page.locator(".q-tab-panels").first.inner_text()
+
+
+def test_error_is_shown_and_log_selects_block(page):
+    select(page, "CBUSH forces")
+    result = page.get_by_role("textbox", name="Result *")
+    result.fill("ELEMENTAL/STRESS/NOPE")
+    result.press("Enter")
+    page.wait_for_timeout(300)
+    run_all(page)
+    assert "apb-state-error" in node(page, "CBUSH forces").get_attribute("class")
+    assert "apb-state-skipped" in node(page, "Fastener report").get_attribute("class")
+    assert "apb-state-done" in node(page, "RBE2 loads").get_attribute("class")
+    select(page, "Shear allowable")
+    page.locator(".apb-log-line", has_text="✘ CBUSH forces").click()
+    page.wait_for_timeout(400)
+    assert page.get_by_label("Label").input_value() == "CBUSH forces"
+    assert "not found" in page.locator(".q-tab-panels, .text-red-700").first.inner_text()
+
+
+def test_invalid_parameters_block_the_run(page):
+    page.locator(".q-drawer .q-item", has_text="Sort").first.click()
+    page.wait_for_timeout(500)
+    assert page.locator(".text-red-700", has_text="not connected").count() >= 1
+    run_all_attempt = page.get_by_role("button", name="Run", exact=True)
+    run_all_attempt.click()
+    page.wait_for_selector("text=Cannot run", timeout=10000)
+    assert "apb-state-error" in node(page, "Sort").get_attribute("class")
+
+
+def test_python_block_port_change_updates_canvas(page):
+    select(page, "Fastener margins")
+    page.get_by_role("button", name="Add port").first.click()
+    page.wait_for_timeout(500)
+    margins = node(page, "Fastener margins")
+    assert margins.locator(".inputs .input").count() == 5
+    assert margins.locator(".apb-in", has_text="value5").count() == 1
+    assert page.locator(".drawflow .connection").count() == 24  # existing connections kept

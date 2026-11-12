@@ -75,6 +75,31 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 - Browser tests: `tests/gui/test_browser.py` drives the real GUI in headless Chromium with
   **Playwright** (dev dependency; `uv run playwright install chromium` once). They run in CI.
 
+### 3.2.2 Implementation notes (step 2)
+
+- **Parameter panel** (`gui/forms.py`): generated from the block's Pydantic `Params`;
+  edits the stored parameters, so `${variables}` are kept (number fields accept a number or
+  `${name}`). Widgets: text, file (with server-side file picker, path stored relative to
+  the pipeline), code (folded when empty), number, switch, drop-down, multi-select,
+  comma-separated list, key/value rows, port rows (Python block), nested group, JSON
+  editor fallback (report sections until their own editor, step 3). Validation messages of
+  the selected block are shown above its parameters. A newly added block is selected.
+- **Python block:** "Create script" (skeleton matching the ports) and "Edit script"
+  (full-screen code editor). Changing ports rebuilds the block on the canvas and removes
+  connections to ports that no longer exist (with a notice).
+- **Run** (header) and **Run to here** (block panel) run in a worker thread; events reach
+  the page through a queue. **Stop** stops after the current block. Block border colours:
+  green done, amber stale (settings, inputs or files changed since the run), blue dashed
+  running, red error, faded skipped. Validation problems block the run and are listed in
+  the log.
+- **Preview** (below the canvas): the selected block's result — error with traceback,
+  one tab per output (table: first 500 rows, units in headers, two-level headers as
+  "TENSION [N] / LC1"; values with unit; figures; written files with an "Open" button),
+  and the block's own log.
+- **Log** (below the canvas): run events; lines of a block are clickable and select it.
+- **Pipeline > Variables and settings:** variables (values as JSON, else text), default
+  unit system, title, author, description.
+
 ### 3.3 Running
 
 Runs execute in a background thread via the engine; engine events are pushed to the browser

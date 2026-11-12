@@ -201,6 +201,21 @@ export default {
       this.editor.drawflow.drawflow[this.editor.module].data[entry.nid].html = this.nodeHtml(spec);
     },
 
+    replace_node(spec, connections) {
+      // Ports changed (e.g. Python block): rebuild the node at its position, reconnect.
+      const entry = this.byBlock[spec.id];
+      this.quiet(() => {
+        if (entry) {
+          const node = this.editor.getNodeFromId(entry.nid);
+          spec = { ...spec, x: node.pos_x, y: node.pos_y };
+          this.editor.removeNodeId(`node-${entry.nid}`);
+        }
+        this.addQuiet(spec);
+        connections.forEach((c) => this.connectQuiet(c));
+      });
+      requestAnimationFrame(() => this.refresh_connections());
+    },
+
     connect(c) {
       this.quiet(() => this.connectQuiet(c));
     },

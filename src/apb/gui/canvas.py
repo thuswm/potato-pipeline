@@ -67,6 +67,10 @@ class NodeCanvas(Element, component="canvas.js", dependencies=["static/drawflow/
         """Redraw a block's label (same ports)."""
         self.run_method("update_node", spec)
 
+    def replace_node(self, spec: Payload, connections: list[dict[str, str]]) -> None:
+        """Rebuild a block whose ports changed, keeping its position, and reconnect it."""
+        self.run_method("replace_node", spec, connections)
+
     def connect(self, conn: Payload) -> None:
         """Draw a connection."""
         self.run_method("connect", conn)

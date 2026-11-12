@@ -30,6 +30,16 @@ from apb.engine.types import Port, types_compatible
 PIPELINE_SUFFIX = ".apb.json"
 
 
+class _Unset:
+    """Marker: remove a stored parameter (use the default)."""
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+UNSET: Any = _Unset()
+
+
 class EditError(ValueError):
     """An edit that is not allowed; the message is shown to the user."""
 
@@ -201,6 +211,98 @@ class EditorState:
             block.position = (round(x, 1), round(y, 1))
             self._changed()
 
+    def set_param(self, block_id: str, name: str, value: Any) -> list[Connection]:
+        """Set (or, with :data:`UNSET`, remove) one stored parameter of a block.
+
+        If the change alters the block's ports (Python block), connections to ports that
+        no longer exist or no longer have a compatible type are removed.
+
+        Returns:
+            The connections that were removed.
+        """
+        block = self.pipeline.block(block_id)
+        before = self.ports(block)
+        if value is UNSET:
+            if name not in block.params:
+                return []
+            del block.params[name]
+        else:
+            if block.params.get(name, UNSET) == value:
+                return []
+            block.params[name] = value
+        removed = self._prune_connections(block_id) if self.ports(block) != before else []
+        self._changed()
+        return removed
+
+    def _prune_connections(self, block_id: str) -> list[Connection]:
+        """Drop connections of a block whose ports vanished or became incompatible."""
+        removed: list[Connection] = []
+        kept: list[Connection] = []
+        for conn in self.pipeline.connections:
+            if block_id in (conn.source.block, conn.target.block) and not self._still_valid(conn):
+                removed.append(conn)
+            else:
+                kept.append(conn)
+        self.pipeline.connections = kept
+        return removed
+
+    def _still_valid(self, conn: Connection) -> bool:
+        src = self.pipeline.block(conn.source.block)
+        dst = self.pipeline.block(conn.target.block)
+        out = next((p for p in self.ports(src)[1] if p.name == conn.source.port), None)
+        inp = next((p for p in self.ports(dst)[0] if p.name == conn.target.port), None)
+        return out is not None and inp is not None and types_compatible(out.type, inp.type)
+
+    def connections_of(self, block_id: str) -> list[dict[str, str]]:
+        """Return the connections of a block in canvas format."""
+        return [
+            self._conn_spec(c)
+            for c in self.pipeline.connections
+            if block_id in (c.source.block, c.target.block)
+        ]
+
+    @staticmethod
+    def _conn_spec(c: Connection) -> dict[str, str]:
+        return {
+            "source_block": c.source.block,
+            "source_port": c.source.port,
+            "target_block": c.target.block,
+            "target_port": c.target.port,
+        }
+
+    def set_variables(self, variables: dict[str, Any]) -> None:
+        """Replace the pipeline variables."""
+        if variables != self.pipeline.variables:
+            self.pipeline.variables = dict(variables)
+            self._changed()
+
+    def set_settings(self, **changes: Any) -> None:
+        """Change pipeline settings or metadata fields (``default_unit_system``, ``title`` ...)."""
+        changed = False
+        for key, value in changes.items():
+            target: Any = (
+                self.pipeline.settings
+                if key in type(self.pipeline.settings).model_fields
+                else self.pipeline.metadata
+            )
+            if getattr(target, key) != value:
+                setattr(target, key, value)
+                changed = True
+        if changed:
+            self._changed()
+
+    @property
+    def base_dir(self) -> Path:
+        """Folder that relative paths refer to: the pipeline's folder, else the current one."""
+        return self.path.parent if self.path else Path.cwd()
+
+    def relative_path(self, path: Path) -> str:
+        """Express a file path relative to the pipeline folder if possible (ENG-13)."""
+        try:
+            return path.resolve().relative_to(self.base_dir.resolve()).as_posix()
+        except ValueError:
+            return path.resolve().as_posix()
+
     def rename_block(self, block_id: str, label: str) -> None:
         """Change a block's label."""
         block = self.pipeline.block(block_id)
@@ -302,13 +404,5 @@ class EditorState:
         """Describe the whole pipeline for the canvas."""
         return {
             "nodes": [self.node_spec(b) for b in self.pipeline.blocks],
-            "connections": [
-                {
-                    "source_block": c.source.block,
-                    "source_port": c.source.port,
-                    "target_block": c.target.block,
-                    "target_port": c.target.port,
-                }
-                for c in self.pipeline.connections
-            ],
+            "connections": [self._conn_spec(c) for c in self.pipeline.connections],
         }
