@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "title": "Plate stress and modes (synthetic data)",
+    "author": "",
+    "created": "2026-11-12",
+    "description": ""
+  },
+  "settings": {
+    "default_unit_system": "SI_mm"
+  },
+  "variables": {
+    "h5_file": "data/synthetic_plate.h5"
+  },
+  "blocks": [
+    {
+      "id": "quad_stress",
+      "type_id": "nastran.hdf5_results",
+      "type_version": 1,
+      "label": "QUAD4 stresses",
+      "params": {
+        "file": "${h5_file}",
+        "result": "ELEMENTAL/STRESS/QUAD4",
+        "subcases": [
+          1,
+          2,
+          3
+        ]
+      },
+      "position": [
+        100.0,
+        100.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "tip_disp",
+      "type_id": "nastran.hdf5_results",
+      "type_version": 1,
+      "label": "Tip displacements",
+      "params": {
+        "file": "${h5_file}",
+        "result": "NODAL/DISPLACEMENT",
+        "ids": "11, 33, 55"
+      },
+      "position": [
+        100.0,
+        250.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "modes",
+      "type_id": "nastran.hdf5_eigenvalues",
+      "type_version": 1,
+      "label": "Eigenfrequencies",
+      "params": {
+        "file": "${h5_file}"
+      },
+      "position": [
+        100.0,
+        400.0
+      ],
+      "notes": ""
+    }
+  ],
+  "connections": [],
+  "macros": []
+}

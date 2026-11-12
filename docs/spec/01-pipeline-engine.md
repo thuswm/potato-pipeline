@@ -34,13 +34,13 @@ how a pipeline is executed, cached and saved.
 class Block(ABC):
     """Base class of all block types."""
 
-    type_id: ClassVar[str]            # globally unique, e.g. "nastran.hdf5_results"
+    type_id: ClassVar[str]  # globally unique, e.g. "nastran.hdf5_results"
     version: ClassVar[int] = 1
-    category: ClassVar[str]           # library grouping, e.g. "Input/Nastran"
-    title: ClassVar[str]              # shown in GUI
+    category: ClassVar[str]  # library grouping, e.g. "Input/Nastran"
+    title: ClassVar[str]  # shown in GUI
     inputs: ClassVar[list[Port]]
     outputs: ClassVar[list[Port]]
-    Params: ClassVar[type[BaseModel]] # Pydantic model of the block's settings
+    Params: ClassVar[type[BaseModel]]  # Pydantic model of the block's settings
 
     def run(self, params: BaseModel, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
         """Compute outputs from inputs. Must be deterministic and side-effect free,
@@ -57,11 +57,11 @@ class Block(ABC):
 ```python
 @dataclass(frozen=True)
 class Port:
-    name: str                    # identifier, unique within block side
-    type: PortType               # Table, Scalar, Text, Figure, Any
+    name: str  # identifier, unique within block side
+    type: PortType  # Table, Scalar, Text, Figure, Any
     label: str = ""
-    optional: bool = False       # optional inputs may be unconnected
-    multiple: bool = False       # input accepts several connections (gets a list), e.g. report items
+    optional: bool = False  # optional inputs may be unconnected
+    multiple: bool = False  # input accepts several connections (gets a list), e.g. report items
 ```
 
 `RunContext` gives the block: pipeline directory, an output directory, a logger, and a
@@ -72,7 +72,7 @@ progress callback.
 - `PipelineModel` (Pydantic): `schema_version`, `settings`, `variables`, `blocks`, `connections`, `metadata`.
 - `BlockInstance`: `id` (short uuid), `type_id`, `type_version`, `label`, `params` (dict),
   `position` (x, y for the GUI), `notes`.
-- `Connection`: `id`, `source: (block_id, port)`, `target: (block_id, port)`.
+- `Connection`: `id`, `source: {block, port}`, `target: {block, port}`.
 
 ### 3.3 Execution
 
@@ -108,19 +108,20 @@ changes. A persistent on-disk cache is *later*.
      "position": [380, 120], "params": {"group_by": ["EID"], "column": "VON_MISES", "mode": "max"}}
   ],
   "connections": [
-    {"id": "c1", "source": ["b1", "table"], "target": ["b2", "table"]}
+    {"id": "c1", "source": {"block": "b1", "port": "table"},
+     "target": {"block": "b2", "port": "table"}}
   ]
 }
 ```
 
 JSON is chosen over YAML: native in browser and Python stdlib, unambiguous, diff-friendly when
-pretty-printed with sorted keys.
+pretty-printed with a fixed key order.
 
 ### 3.6 Command line (Typer)
 
 ```
 apb gui [pipeline.apb.json]            # start the GUI and open the browser
-apb run pipeline.apb.json [--set h5_file=new.h5] [--until b3]
+apb run pipeline.apb.json [--set h5_file=new.h5] [--until b3] [--verbose]
 apb validate pipeline.apb.json
 apb blocks                              # list available block types
 ```

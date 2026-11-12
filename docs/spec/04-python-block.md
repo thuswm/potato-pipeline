@@ -32,6 +32,7 @@ type), `inline_code` (only if PY-08 is used). A script file looks like this:
 
 ```python
 """Margins of safety for rib elements."""
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
