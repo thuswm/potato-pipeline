@@ -87,7 +87,12 @@ def run(
     executor = Executor(default_registry(), sink=lambda e: _print_event(e, names, verbose))
     try:
         result = executor.run(
-            model, pipeline.parent, until=until, overrides=_overrides(set_), output_dir=output_dir
+            model,
+            pipeline.parent,
+            until=until,
+            overrides=_overrides(set_),
+            output_dir=output_dir,
+            pipeline_file=pipeline.resolve(),
         )
     except PipelineValidationError as exc:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)

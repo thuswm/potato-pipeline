@@ -33,9 +33,9 @@ added without changing pipelines.
 
 | | |
 |---|---|
-| Inputs | `items: Any` (multiple) — every connection gets a name (default: source block label) |
-| Outputs | none (writes file); also exposes `file: Text` (path of the written report) |
-| Params | `output_file`, `mode` (`generated` / `template`), `base_document` (optional .docx for styles), `metadata`, `sections` (ordered list, generated mode), `template_file` (template mode) |
+| Inputs | `items: Any` (multiple) — every connection has a name (connection name, else derived from the source; spec 01 §3.2) |
+| Outputs | `file: Text` (path of the written report); the block always runs (ENG-17) |
+| Params | `output_file` (relative to the output folder), `mode` (`generated`; `template` later), `base_document` (optional .docx for styles, relative to the pipeline), `metadata` (`title`, `document_number`, `revision`, `author`, `date` — empty date = run date), `sections` (ordered list) |
 
 ### 3.2 Generated mode (v1) — library: python-docx
 
@@ -55,8 +55,28 @@ added without changing pipelines.
 ]
 ```
 
-`{name}` / `{name:format}` placeholders in text refer to connected scalar/text items (Python
-format-string syntax, evaluated safely — attribute access and indexing are not allowed).
+Section kinds: `title` (title and a small metadata table), `heading` (level 1–3),
+`paragraph`, `value` (`label: value unit`), `table`, `figure`, `page_break`, `units`,
+`traceability`.
+
+`{name}` / `{name:format}` placeholders in text refer to connected scalar/text items and to
+the metadata fields (Python format-string syntax, evaluated safely — attribute access and
+indexing are not allowed; unknown names give an error listing the available ones).
+
+Tables: caption above ("Table N: …"), figures: caption below ("Figure N: …"); numbers are
+Word `SEQ` fields so Word cross-references work. Number formats accept Excel style (`0.00`,
+`#,##0.0`, `0.0E+00`, `0.0%`), Python specs (`.3e`) or `auto` (4 significant digits).
+`default_format` applies to decimal columns only; integer columns (EID, SUBCASE) are printed
+as they are unless a column format is given. Header rows are bold, shaded and repeated on
+each page; numbers are right-aligned; highlighted rows are shaded light red. Two-level
+tables (load case tables) get two header rows with merged cells; highlighting is not
+available for them. `max_rows` adds "(First N of M rows shown.)".
+
+`traceability` lists: generation time and tool version, the pipeline file and every input
+file read upstream of the report (Nastran results, Excel/CSV inputs, Python scripts, base
+document) with modification time and SHA-256 prefix; for `.h5` files also the Nastran
+version and a SYNTHETIC TEST DATA mark for synthetic files. Connected items that are used
+nowhere are reported in the block log.
 
 If `base_document` is set, the report is built on top of a copy of it, so its styles,
 headers/footers and page setup are used (REP-09). This is already a light form of "company

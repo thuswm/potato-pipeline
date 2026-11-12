@@ -60,6 +60,8 @@ class RunContext:
         log_callback: Receives log lines.
         progress_callback: Receives progress fractions (0..1).
         cancel_event: Set when the user stops the run.
+        input_names: Names of the values at ``multiple`` inputs (connection name, else
+            derived from the source block; see :func:`apb.engine.graph.connection_name`).
     """
 
     block_id: str
@@ -69,6 +71,12 @@ class RunContext:
     log_callback: Callable[[str], None] = field(default=lambda _msg: None)
     progress_callback: Callable[[float], None] = field(default=lambda _f: None)
     cancel_event: threading.Event = field(default_factory=threading.Event)
+    input_names: dict[str, list[str]] = field(default_factory=dict)
+    """For each ``multiple`` input port: the names of its values, in list order."""
+    pipeline_file: Path | None = None
+    """The pipeline file, if the run started from one."""
+    upstream_files: list[Path] = field(default_factory=list)
+    """Files read by this block and all blocks upstream of it (for traceability)."""
 
     def log(self, message: str) -> None:
         """Write a line to the block's log."""

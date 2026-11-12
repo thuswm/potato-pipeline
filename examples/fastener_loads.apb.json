@@ -13,7 +13,9 @@
     "h5_file": "data/synthetic_fastener_joint.h5",
     "allowable_tension": 2000.0,
     "allowable_shear": 2500.0,
-    "safety_factor": 1.5
+    "safety_factor": 1.5,
+    "doc_number": "APB-EX-001",
+    "revision": "A"
   },
   "blocks": [
     {
@@ -295,6 +297,91 @@
         560.0
       ],
       "notes": ""
+    },
+    {
+      "id": "report",
+      "type_id": "report.word",
+      "type_version": 1,
+      "label": "Fastener report",
+      "params": {
+        "output_file": "output/fastener_report.docx",
+        "metadata": {
+          "title": "Fastener loads and margins, lap joint",
+          "document_number": "${doc_number}",
+          "revision": "${revision}",
+          "author": "Analysis Pipeline Builder example"
+        },
+        "sections": [
+          {
+            "kind": "title"
+          },
+          {
+            "kind": "heading",
+            "text": "1 Introduction"
+          },
+          {
+            "kind": "paragraph",
+            "text": "This report presents the fastener loads and margins of safety of the lap joint (example on synthetic data). Allowables: tension {allowable_tension:.0f}, shear {allowable_shear:.0f}; safety factor {safety_factor:.2f}."
+          },
+          {
+            "kind": "units"
+          },
+          {
+            "kind": "heading",
+            "text": "2 Fastener loads"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Table 1 lists tension and shear per fastener and load case with the envelope."
+          },
+          {
+            "kind": "table",
+            "item": "load_table",
+            "caption": "Fastener loads per load case",
+            "default_format": "0.0"
+          },
+          {
+            "kind": "heading",
+            "text": "3 Margins of safety"
+          },
+          {
+            "kind": "table",
+            "item": "critical_margins",
+            "caption": "Critical load case per fastener",
+            "columns": [
+              "EID",
+              "SUBCASE",
+              "TENSION",
+              "SHEAR",
+              "MS"
+            ],
+            "formats": {
+              "TENSION": "0.0",
+              "SHEAR": "0.0",
+              "MS": "0.00"
+            },
+            "highlight": "MS < 0.5"
+          },
+          {
+            "kind": "figure",
+            "item": "plot",
+            "caption": "Minimum margin of safety per fastener",
+            "width_cm": 14
+          },
+          {
+            "kind": "paragraph",
+            "text": "The minimum margin of safety is {min_ms:.2f}."
+          },
+          {
+            "kind": "traceability"
+          }
+        ]
+      },
+      "position": [
+        1720.0,
+        300.0
+      ],
+      "notes": ""
     }
   ],
   "connections": [
@@ -307,7 +394,8 @@
       "target": {
         "block": "fl_cbush",
         "port": "forces"
-      }
+      },
+      "name": ""
     },
     {
       "id": "ca445a6e8",
@@ -318,7 +406,8 @@
       "target": {
         "block": "fl_rbe2",
         "port": "forces"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c1720e98a",
@@ -329,7 +418,8 @@
       "target": {
         "block": "drop_grid",
         "port": "table"
-      }
+      },
+      "name": ""
     },
     {
       "id": "cf860e7c4",
@@ -340,7 +430,8 @@
       "target": {
         "block": "all",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "ca3b2a562",
@@ -351,7 +442,8 @@
       "target": {
         "block": "all",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c1c711ed6",
@@ -362,7 +454,8 @@
       "target": {
         "block": "lct",
         "port": "table"
-      }
+      },
+      "name": ""
     },
     {
       "id": "cc3a7dd00",
@@ -373,7 +466,8 @@
       "target": {
         "block": "lct",
         "port": "labels"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c5e72729a",
@@ -384,7 +478,8 @@
       "target": {
         "block": "crit",
         "port": "table"
-      }
+      },
+      "name": ""
     },
     {
       "id": "caff367ca",
@@ -395,7 +490,8 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c2943e3af",
@@ -406,7 +502,8 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c6a7b5fa5",
@@ -417,7 +514,8 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c1b6181a5",
@@ -428,7 +526,8 @@
       "target": {
         "block": "margins",
         "port": "loads"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c2e689b5e",
@@ -439,7 +538,8 @@
       "target": {
         "block": "margins",
         "port": "allowable_tension"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c2749bf76",
@@ -450,7 +550,8 @@
       "target": {
         "block": "margins",
         "port": "allowable_shear"
-      }
+      },
+      "name": ""
     },
     {
       "id": "cff3b240a",
@@ -461,7 +562,8 @@
       "target": {
         "block": "margins",
         "port": "safety_factor"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c2662e79b",
@@ -472,7 +574,8 @@
       "target": {
         "block": "crit_ms",
         "port": "table"
-      }
+      },
+      "name": ""
     },
     {
       "id": "c26040595",
@@ -483,7 +586,92 @@
       "target": {
         "block": "excel",
         "port": "tables"
-      }
+      },
+      "name": ""
+    },
+    {
+      "id": "c35fdbe70",
+      "source": {
+        "block": "lct",
+        "port": "table"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "load_table"
+    },
+    {
+      "id": "c4b31e376",
+      "source": {
+        "block": "crit_ms",
+        "port": "table"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "critical_margins"
+    },
+    {
+      "id": "cf06e42c4",
+      "source": {
+        "block": "margins",
+        "port": "plot"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": ""
+    },
+    {
+      "id": "cc4a8afe5",
+      "source": {
+        "block": "margins",
+        "port": "min_ms"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": ""
+    },
+    {
+      "id": "c471ef50d",
+      "source": {
+        "block": "pt",
+        "port": "value"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "allowable_tension"
+    },
+    {
+      "id": "c3e262cb8",
+      "source": {
+        "block": "ps",
+        "port": "value"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "allowable_shear"
+    },
+    {
+      "id": "c853ad4fc",
+      "source": {
+        "block": "fos",
+        "port": "value"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "safety_factor"
     }
   ],
   "macros": []

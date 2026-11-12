@@ -9,6 +9,7 @@ the GUI can show all problems at once.
 from __future__ import annotations
 
 import graphlib
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -127,6 +128,29 @@ class PreparedGraph:
                     stack.append(c.target.block)
         return result
 
+    def input_names(self, block_id: str) -> dict[str, list[str]]:
+        """Return the value names of each ``multiple`` input port of a block.
+
+        Duplicate names get a ``_2``, ``_3`` ... suffix.
+        """
+        block = self.blocks[block_id]
+        names: dict[str, list[str]] = {}
+        for port in block.inputs:
+            if not port.multiple:
+                continue
+            used: list[str] = []
+            for conn in self.incoming(block_id):
+                if conn.target.port != port.name:
+                    continue
+                base = connection_name(conn, self.blocks[conn.source.block])
+                name, n = base, 1
+                while name in used:
+                    n += 1
+                    name = f"{base}_{n}"
+                used.append(name)
+            names[port.name] = used
+        return names
+
     def issues_for(self, block_ids: Iterable[str]) -> list[ValidationIssue]:
         """Return the issues relevant when running ``block_ids``.
 
@@ -134,6 +158,28 @@ class PreparedGraph:
         """
         ids = set(block_ids)
         return [i for i in self.issues if i.block_id is None or i.block_id in ids]
+
+
+def python_name(text: str) -> str:
+    """Turn a label into a valid lower-case Python name, e.g. ``"Max load"`` -> ``max_load``."""
+    name = re.sub(r"\W+", "_", text.strip().lower()).strip("_")
+    if not name:
+        return "item"
+    return f"_{name}" if name[0].isdigit() else name
+
+
+def connection_name(conn: Connection, source: PreparedBlock) -> str:
+    """Return the name of a connection's value at a ``multiple`` input.
+
+    The explicit connection name if set; else the source port name if the source block has
+    several outputs (ports are descriptive, e.g. ``min_ms``); else the source block label
+    (or ID) as a Python name.
+    """
+    if conn.name:
+        return conn.name
+    if len(source.outputs) > 1:
+        return conn.source.port
+    return python_name(source.instance.label or source.instance.id)
 
 
 def _prepare_block(

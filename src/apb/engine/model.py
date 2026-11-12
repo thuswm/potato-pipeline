@@ -54,6 +54,9 @@ class Connection(_Model):
     id: str = Field(default_factory=lambda: new_id("c"))
     source: PortRef
     target: PortRef
+    name: str = Field(
+        default="", description="Name of the value at a multiple input, e.g. a report item"
+    )
 
 
 class PipelineMetadata(_Model):
@@ -115,12 +118,13 @@ class PipelineModel(_Model):
         self.blocks.append(inst)
         return inst
 
-    def connect(self, source: str, target: str) -> Connection:
+    def connect(self, source: str, target: str, name: str = "") -> Connection:
         """Append a connection given as ``"block.port"`` strings.
 
         Args:
             source: Output port, e.g. ``"b1.table"``.
             target: Input port, e.g. ``"b2.table"``.
+            name: Name of the value at a multiple input (default: derived from the source).
 
         Returns:
             The new connection.
@@ -128,7 +132,9 @@ class PipelineModel(_Model):
         s_block, s_port = source.split(".", 1)
         t_block, t_port = target.split(".", 1)
         conn = Connection(
-            source=PortRef(block=s_block, port=s_port), target=PortRef(block=t_block, port=t_port)
+            source=PortRef(block=s_block, port=s_port),
+            target=PortRef(block=t_block, port=t_port),
+            name=name,
         )
         self.connections.append(conn)
         return conn

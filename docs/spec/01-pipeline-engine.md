@@ -65,15 +65,20 @@ class Port:
     multiple: bool = False  # input accepts several connections (gets a list), e.g. report items
 ```
 
-`RunContext` gives the block: pipeline directory, an output directory, a logger, and a
-progress callback.
+`RunContext` gives the block: pipeline directory, an output directory, a logger, a
+progress callback, the names of the values at `multiple` inputs, the pipeline file (if
+any) and the files read by the block and everything upstream of it (for traceability).
 
 ### 3.2 Graph model
 
 - `PipelineModel` (Pydantic): `schema_version`, `settings`, `variables`, `blocks`, `connections`, `metadata`.
 - `BlockInstance`: `id` (short uuid), `type_id`, `type_version`, `label`, `params` (dict),
   `position` (x, y for the GUI), `notes`.
-- `Connection`: `id`, `source: {block, port}`, `target: {block, port}`.
+- `Connection`: `id`, `source: {block, port}`, `target: {block, port}`, `name` (optional).
+  At a `multiple` input each value has a name (used e.g. by the report as item names): the
+  connection's `name` if set, else the source port name if the source block has several
+  outputs, else the source block label (or ID) as a Python name (`Fastener load table` →
+  `fastener_load_table`). Duplicates get `_2`, `_3` …
 
 ### 3.3 Execution
 

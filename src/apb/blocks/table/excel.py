@@ -6,10 +6,7 @@ pipeline engine.
 
 from __future__ import annotations
 
-import contextlib
-import os
 import re
-import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -22,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from apb.engine.block import Block, FilePath, RunContext
 from apb.engine.types import Port, PortType
+from apb.fileutil import OutputFileError, atomic_output
 from apb.units import get_units, header_with_unit
 
 #: Excel's limit on sheet name length.
@@ -147,14 +145,9 @@ def write_workbook(
     for table in tables:
         if isinstance(table.columns, pd.MultiIndex) and table.columns.nlevels != 2:
             raise ExcelWriteError("Only one- and two-level column headers are supported")
-    path.parent.mkdir(parents=True, exist_ok=True)
     used_names = sheet_names(tables, names)
-
-    fd, tmp_name = tempfile.mkstemp(suffix=".xlsx", prefix=".apb-", dir=path.parent)
-    os.close(fd)
-    tmp = Path(tmp_name)
     try:
-        with pd.ExcelWriter(tmp, engine="openpyxl") as writer:
+        with atomic_output(path) as tmp, pd.ExcelWriter(tmp, engine="openpyxl") as writer:
             for table, name in zip(tables, used_names, strict=True):
                 units = get_units(table) if units_in_header else {}
                 if isinstance(table.columns, pd.MultiIndex):
@@ -163,15 +156,8 @@ def write_workbook(
                 headers = [header_with_unit(str(c), units) for c in table.columns]
                 table.to_excel(writer, sheet_name=name, index=False, header=headers)
                 _format_sheet(writer.sheets[name], table, headers)
-        try:
-            tmp.replace(path)
-        except PermissionError as exc:
-            raise ExcelWriteError(
-                f"Cannot write {path.name}: the file is in use. Close it in Excel and run again."
-            ) from exc
-    finally:
-        with contextlib.suppress(OSError):
-            tmp.unlink(missing_ok=True)
+    except OutputFileError as exc:
+        raise ExcelWriteError(str(exc)) from exc
     return used_names
 
 

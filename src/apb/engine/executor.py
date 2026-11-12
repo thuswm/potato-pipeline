@@ -170,6 +170,7 @@ class Executor:
         until: str | None = None,
         overrides: Mapping[str, Any] | None = None,
         output_dir: Path | None = None,
+        pipeline_file: Path | None = None,
     ) -> RunResult:
         """Run a pipeline, or only the blocks needed for block ``until``.
 
@@ -179,6 +180,7 @@ class Executor:
             until: Run only this block and its upstream blocks.
             overrides: Variable values overriding the pipeline's variables.
             output_dir: Directory for written files (default: ``pipeline_dir``).
+            pipeline_file: The pipeline file, if any (reported by blocks, e.g. traceability).
 
         Returns:
             Results per block.
@@ -198,6 +200,7 @@ class Executor:
                 raise PipelineValidationError(issues)
             order = [b for b in graph.order if b in run_set]
             make_ctx = self._context_factory(pipeline, pipeline_dir, output_dir)
+            make_ctx.pipeline_file = pipeline_file
             keys = self._cache_keys(graph, order, make_ctx)
 
             self._emit(RunEvent(EventKind.RUN_STARTED, message=f"{len(order)} block(s)"))
@@ -244,11 +247,12 @@ class Executor:
             if block.cls is None or block.params is None:
                 continue
             upstream = [
-                [c.target.port, c.source.port, keys.get(c.source.block, "")]
+                [c.target.port, c.source.port, c.name, keys.get(c.source.block, "")]
                 for c in graph.incoming(block_id)
             ]
             try:
                 files = block.cls().input_files(block.params, make_ctx(block_id))
+                make_ctx.block_files[block_id] = list(files)
                 stamps = sorted(_file_stamp(f) for f in files)
             except Exception as exc:  # error surfaces again when the block runs
                 stamps = [f"error:{exc}"]
@@ -310,6 +314,10 @@ class Executor:
 
         log: list[str] = []
         ctx = make_ctx(block.id, log)
+        ctx.input_names = graph.input_names(block.id)
+        ctx.upstream_files = sorted(
+            {f for b in graph.upstream(block.id) for f in make_ctx.block_files.get(b, [])}
+        )
         self._emit(RunEvent(EventKind.BLOCK_STARTED, block.id, block.name))
         start = time.perf_counter()
         try:
@@ -373,6 +381,8 @@ class _ContextFactory:
         self._pipeline_dir = pipeline_dir
         self._output_dir = output_dir
         self._unit_system = pipeline.settings.default_unit_system
+        self.pipeline_file: Path | None = None
+        self.block_files: dict[str, list[Path]] = {}
 
     def __call__(self, block_id: str, log: list[str] | None = None) -> RunContext:
         """Return a context for ``block_id``; log lines are also appended to ``log``."""
@@ -394,4 +404,5 @@ class _ContextFactory:
             log_callback=on_log,
             progress_callback=on_progress,
             cancel_event=executor.cancel_event,
+            pipeline_file=self.pipeline_file,
         )
