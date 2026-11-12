@@ -12,13 +12,15 @@ Examples of intermediate boxes can be, Fastener calculation based on input from 
 The flow of data between boxes will be depicted by connectors.
 
 ## The Stack
-I want the tool to be built with python 3.12. The gui will be run through the web browser. Supported web browsers should be at least Firefox, Edge and Chrome
+I want the tool to be built with python 3.12 and later. The gui will be run through the web browser. Supported web browsers should be at least Firefox, Edge and Chrome
 
 The code must contain docstrings and code hints
 
 ## Other requirements
 - Write specification before coding
 - Write a specification for each feature (make a first proposal)
+- Use well established (preferable industry standard dependancies)
+- Ask before starting to code
 
 ## The first version
 - Make a first working version with some basic 
