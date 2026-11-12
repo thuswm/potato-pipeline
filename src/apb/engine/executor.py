@@ -8,9 +8,9 @@ hash) of the files it reads.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
+import logging
 import threading
 import time
 import traceback
@@ -25,6 +25,8 @@ from apb.engine.graph import PreparedBlock, PreparedGraph, ValidationIssue, prep
 from apb.engine.model import PipelineModel
 from apb.engine.registry import BlockRegistry
 from apb.engine.types import copy_value, value_matches
+
+_log = logging.getLogger(__name__)
 
 #: Files up to this size are content-hashed for the cache key; larger ones use size + mtime.
 HASH_LIMIT_BYTES = 16 * 1024 * 1024
@@ -219,9 +221,10 @@ class Executor:
         """Send an event to the sink, never letting the sink break the run."""
         if self._sink is None:
             return
-        # A broken GUI callback must not stop the run.
-        with contextlib.suppress(Exception):
+        try:
             self._sink(event)
+        except Exception:  # a broken GUI callback must not stop the run
+            _log.exception("Event sink failed for %s event", event.kind)
 
     def _context_factory(
         self, pipeline: PipelineModel, pipeline_dir: Path, output_dir: Path | None = None

@@ -133,6 +133,39 @@ def blocks() -> None:
         typer.secho(err, fg=typer.colors.YELLOW, err=True)
 
 
+@app.command("new-script")
+def new_script(
+    pipeline: Annotated[Path, typer.Argument(help="Pipeline file (*.apb.json)")],
+    block_id: Annotated[str, typer.Argument(help="ID of the Python block")],
+    force: Annotated[bool, typer.Option(help="Overwrite an existing script")] = False,
+) -> None:
+    """Create the script of a Python block with a run() matching its ports."""
+    from apb.blocks.python.block import PythonBlock, PythonParams
+    from apb.blocks.python.scripting import ScriptError, write_skeleton
+
+    model = _load(pipeline)
+    try:
+        inst = model.block(block_id)
+    except KeyError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
+    if inst.type_id != PythonBlock.type_id:
+        typer.secho(f"Block {block_id!r} is not a Python block", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    params = PythonParams.model_validate(inst.params)
+    if not params.script:
+        typer.secho("The block uses inline code, not a script file", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    path = Path(params.script)
+    path = path if path.is_absolute() else pipeline.parent / path
+    try:
+        write_skeleton(path, params.inputs, params.outputs, overwrite=force)
+    except ScriptError as exc:
+        typer.secho(f"{exc} (use --force to overwrite)", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    typer.secho(f"Created {path}", fg=typer.colors.GREEN)
+
+
 @app.command()
 def gui(pipeline: Annotated[Path | None, typer.Argument(help="Pipeline to open")] = None) -> None:
     """Start the graphical editor (not implemented yet)."""

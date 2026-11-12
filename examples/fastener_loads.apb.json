@@ -10,7 +10,10 @@
     "default_unit_system": "SI_mm"
   },
   "variables": {
-    "h5_file": "data/synthetic_fastener_joint.h5"
+    "h5_file": "data/synthetic_fastener_joint.h5",
+    "allowable_tension": 2000.0,
+    "allowable_shear": 2500.0,
+    "safety_factor": 1.5
   },
   "blocks": [
     {
@@ -172,12 +175,124 @@
         "sheet_names": [
           "Load table",
           "Envelope",
-          "All loads"
+          "All loads",
+          "Margins"
         ]
       },
       "position": [
         1240.0,
         240.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "pt",
+      "type_id": "table.constant",
+      "type_version": 1,
+      "label": "Tension allowable",
+      "params": {
+        "value": "${allowable_tension}",
+        "unit": "N"
+      },
+      "position": [
+        1000.0,
+        560.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "ps",
+      "type_id": "table.constant",
+      "type_version": 1,
+      "label": "Shear allowable",
+      "params": {
+        "value": "${allowable_shear}",
+        "unit": "N"
+      },
+      "position": [
+        1000.0,
+        660.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "fos",
+      "type_id": "table.constant",
+      "type_version": 1,
+      "label": "Safety factor",
+      "params": {
+        "value": "${safety_factor}"
+      },
+      "position": [
+        1000.0,
+        760.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "margins",
+      "type_id": "python.script",
+      "type_version": 1,
+      "label": "Fastener margins",
+      "params": {
+        "script": "scripts/fastener_margins.py",
+        "inputs": [
+          {
+            "name": "loads",
+            "type": "Table"
+          },
+          {
+            "name": "allowable_tension",
+            "type": "Scalar"
+          },
+          {
+            "name": "allowable_shear",
+            "type": "Scalar"
+          },
+          {
+            "name": "safety_factor",
+            "type": "Scalar"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "margins",
+            "type": "Table"
+          },
+          {
+            "name": "min_ms",
+            "type": "Scalar"
+          },
+          {
+            "name": "plot",
+            "type": "Figure"
+          }
+        ]
+      },
+      "position": [
+        1240.0,
+        560.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "crit_ms",
+      "type_id": "table.envelope",
+      "type_version": 1,
+      "label": "Critical margin per fastener",
+      "params": {
+        "group_by": [
+          "EID"
+        ],
+        "columns": [
+          "MS"
+        ],
+        "mode": "min",
+        "keep_row": true
+      },
+      "position": [
+        1480.0,
+        560.0
       ],
       "notes": ""
     }
@@ -297,6 +412,72 @@
       "id": "c6a7b5fa5",
       "source": {
         "block": "all",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "c1b6181a5",
+      "source": {
+        "block": "all",
+        "port": "table"
+      },
+      "target": {
+        "block": "margins",
+        "port": "loads"
+      }
+    },
+    {
+      "id": "c2e689b5e",
+      "source": {
+        "block": "pt",
+        "port": "value"
+      },
+      "target": {
+        "block": "margins",
+        "port": "allowable_tension"
+      }
+    },
+    {
+      "id": "c2749bf76",
+      "source": {
+        "block": "ps",
+        "port": "value"
+      },
+      "target": {
+        "block": "margins",
+        "port": "allowable_shear"
+      }
+    },
+    {
+      "id": "cff3b240a",
+      "source": {
+        "block": "fos",
+        "port": "value"
+      },
+      "target": {
+        "block": "margins",
+        "port": "safety_factor"
+      }
+    },
+    {
+      "id": "c2662e79b",
+      "source": {
+        "block": "margins",
+        "port": "margins"
+      },
+      "target": {
+        "block": "crit_ms",
+        "port": "table"
+      }
+    },
+    {
+      "id": "c26040595",
+      "source": {
+        "block": "crit_ms",
         "port": "table"
       },
       "target": {

@@ -48,16 +48,36 @@ def run(loads: pd.DataFrame, allowable: float) -> dict[str, object]:
 
 The file can also be run and tested outside the tool (it is plain Python).
 
+Block type `python.script`. "New script" is available on the command line as
+`apb new-script <pipeline> <block id>` (the GUI button will call the same function); it
+refuses to overwrite an existing file unless `--force` is given.
+
+Values passed to `run`: tables as DataFrames, **scalars as plain numbers** (a scalar with
+unit is logged, e.g. `allowable = 410 MPa (passed as a number)`). A script may return a
+`apb.units.Quantity(value, unit)` for a scalar with unit. If the block has exactly one
+output, `run` may return the value itself instead of a dict. NumPy scalars are converted to
+Python numbers.
+
+Inline code (PY-08) also defines a complete `run(...)` function.
+
 Units: input tables keep their `attrs` (unit system, column units). Inputs with different unit
 systems are refused (spec 00 §5.1). Returned tables inherit the inputs' unit system unless the
 script sets `attrs` itself.
 
 ### 3.2 Execution
 
-- The script is loaded fresh on every run (`importlib.util.spec_from_file_location` under a
-  unique module name), so edits are always picked up; tracebacks show the real file name and
-  line numbers. Helper modules from the script's folder are importable during the run and are
-  reloaded each run. Inline code is compiled with the pseudo filename `<block b3>`.
+- The script is compiled from its source on every run (never from `__pycache__`, whose
+  timestamp check has a one-second resolution), so edits are always picked up. It runs as a
+  module with a unique name registered in `sys.modules` during the run (needed by e.g.
+  dataclasses). Helper modules from the script's folder are importable during the run and
+  are forgotten afterwards; no bytecode is written while a script runs. Inline code is
+  compiled with the pseudo filename `<block b3>`.
+- Errors name the user's file and line, e.g. `ZeroDivisionError: division by zero
+  (margins.py, line 12)`; the full traceback is in the block's error details
+  (`apb run --verbose`).
+- The script and all `.py` files in its folder are the block's input files: editing any of
+  them marks the block stale (PY-10).
+- matplotlib is switched to its off-screen backend (`Agg`), so scripts never open windows.
 - `stdout` is captured (`contextlib.redirect_stdout`) into the block log.
 - Inputs are passed as copies (TAB-02 also applies here).
 

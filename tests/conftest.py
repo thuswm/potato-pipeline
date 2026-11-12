@@ -152,13 +152,14 @@ def registry() -> BlockRegistry:
 
 def run_block(
     cls: type[Block[Any]],
-    inputs: dict[str, Any] | None = None,
+    values: dict[str, Any] | None = None,
     tmp: Path | None = None,
     **params: Any,
 ) -> dict[str, Any]:
     """Run one block directly (no pipeline) and return its outputs."""
     base = tmp or Path.cwd()
     ctx = RunContext(block_id="t", pipeline_dir=base, output_dir=base)
-    full_inputs = {p.name: ([] if p.multiple else None) for p in cls.inputs}
-    full_inputs.update(inputs or {})
-    return cls().run(cls.Params.model_validate(params), full_inputs, ctx)
+    parsed = cls.Params.model_validate(params)
+    full_inputs = {p.name: ([] if p.multiple else None) for p in cls.input_ports(parsed)}
+    full_inputs.update(values or {})
+    return cls().run(parsed, full_inputs, ctx)
