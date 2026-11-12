@@ -301,7 +301,7 @@ class Executor:
             return self._skip(block.id, f"Upstream block(s) not done: {', '.join(failed_upstream)}")
 
         cached = self._cache.get(block.id)
-        if cached is not None and cached[0] == key:
+        if cached is not None and cached[0] == key and not block.cls.always_run:
             self._emit(RunEvent(EventKind.BLOCK_CACHED, block.id, "Up to date (cached)"))
             return BlockResult(BlockState.DONE, outputs=cached[1], cache_key=key, cached=True)
 

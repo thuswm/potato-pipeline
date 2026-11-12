@@ -20,7 +20,7 @@ blocks. All table blocks take and return `pandas.DataFrame`s.
 |---------|-------|------------------|--------|
 | `table.read_excel` | Read Excel | – → `table` | `file`, `sheet`, `header_row`, `range` (optional, e.g. `A1:F200`) |
 | `table.read_csv` | Read CSV | – → `table` | `file`, `delimiter`, `decimal` (`.`/`,`), `skip_rows` |
-| `table.write_excel` | Write Excel | `table` (multiple) → – | `file`, sheet name per input |
+| `table.write_excel` | Write Excel | `tables` (multiple) → `file` (Text) | `file`, `sheet_names`, `units_in_header` (see §3.3) |
 | `table.select` | Select columns | `table` → `table` | `columns`, `rename` (mapping) |
 | `table.filter` | Filter rows | `table` → `table` | `expression` (pandas query syntax, e.g. `SUBCASE in [1,2] and EID > 1000`) |
 | `table.sort` | Sort | `table` → `table` | `by`, `ascending` |
@@ -73,6 +73,21 @@ This is the main Excel task today and gets first-class support:
 - This block is the seed of the **fastener library** (your planned separate project); the
   detailed fastener calculations (bearing, pull-through, interaction, margins) will live in
   that project as an installable block package (ARC-08).
+
+### 3.3 Write Excel (`table.write_excel`)
+
+- One sheet per connected table, in connection order. Sheet name: the user's name for that
+  input, else the table title (e.g. "CQUAD4 stresses"), else `Table1`, `Table2` …; invalid
+  characters replaced, cut to 31 characters, duplicates numbered.
+- Column headers with units (`SX_Z1 [MPa]`) unless `units_in_header` is off; header row
+  frozen, column widths fitted to the content; no index column.
+- Relative paths are relative to the output folder (default: the pipeline folder;
+  `apb run --output-dir` changes it).
+- Written via a temporary file and then moved into place: a failed run never leaves a
+  half-written workbook. If the workbook is open in Excel (Windows file lock) the block
+  fails with "close it in Excel and run again".
+- Always runs (ENG-17), so a deleted or edited workbook is rewritten on the next run.
+- Multi-level headers (the side-by-side load case table) follow with `table.load_case_table`.
 
 ## 4. Out of scope (v1)
 

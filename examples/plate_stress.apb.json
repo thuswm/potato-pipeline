@@ -62,8 +62,56 @@
         400.0
       ],
       "notes": ""
+    },
+    {
+      "id": "excel",
+      "type_id": "table.write_excel",
+      "type_version": 1,
+      "label": "Results workbook",
+      "params": {
+        "file": "output/plate_results.xlsx"
+      },
+      "position": [
+        450.0,
+        250.0
+      ],
+      "notes": ""
     }
   ],
-  "connections": [],
+  "connections": [
+    {
+      "id": "cc8c9bfd7",
+      "source": {
+        "block": "quad_stress",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "c63caa2d9",
+      "source": {
+        "block": "tip_disp",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    },
+    {
+      "id": "cc33439be",
+      "source": {
+        "block": "modes",
+        "port": "table"
+      },
+      "target": {
+        "block": "excel",
+        "port": "tables"
+      }
+    }
+  ],
   "macros": []
 }

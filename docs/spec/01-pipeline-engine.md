@@ -25,6 +25,7 @@ how a pipeline is executed, cached and saved.
 | ENG-14 | Pipeline-level **variables** (e.g. `h5_file`, `allowable`) that block parameters can reference as `${name}`; overridable from the CLI | S |
 | ENG-15 | Pipeline setting `default_unit_system` (`SI` / `SI_mm`), used as default by input blocks (spec 00 §5.1) | M |
 | ENG-16 | Macro blocks (sub-pipeline as reusable block) | L |
+| ENG-17 | Blocks that write files (Excel, report) are marked `always_run` and bypass the cache, so a deleted or edited output file is always rewritten | M |
 
 ## 3. Design
 

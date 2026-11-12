@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "h5py>=3.16.0",
     "numpy>=2.5.4",
+    "openpyxl>=3.1.5",
     "pandas>=3.1.1",
     "pydantic>=2.14.3",
     "typer>=0.29.1",
@@ -60,4 +61,5 @@ dev = [
     "pandas-stubs>=3.1.0.261029",
     "pytest>=9.2.0",
     "ruff>=0.17.5",
+    "types-openpyxl>=3.1.5.20261017",
 ]

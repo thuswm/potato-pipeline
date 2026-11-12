@@ -124,6 +124,8 @@ class Block[P: BaseModel](ABC):
     outputs: ClassVar[tuple[Port, ...]] = ()
     Params: ClassVar[type[BaseModel]] = NoParams
     """Pydantic model of the block's parameters."""
+    always_run: ClassVar[bool] = False
+    """Never take outputs from the cache; for blocks that write files (Excel, report)."""
 
     @abstractmethod
     def run(self, params: P, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
