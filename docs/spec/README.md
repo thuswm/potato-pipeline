@@ -45,7 +45,7 @@ Agreed order. Each step: spec update → approval → code → commit.
 | 3 | Python block: view the code in the property panel, open the file, start from a template; a template never overwrites an existing file | 04 | done `024fcbf` |
 | 4 | Report section editor (with item names and previews); requirement check block; the concrete test case as example pipeline `examples/test_case.apb.json` with an example margin script | 05 §3.4, 03 §3.4, 07 | done `fd7f443` |
 | 5 | Block outputs stored on disk (Parquet via `pyarrow`) so a reopened pipeline is recognised as already run; "Clear outputs" | 01 §3.4, 08 | done `e2edf44` |
-| 6 | Nastran analysis block: points at the `.bdf`, run mode never / if input changed / always, outputs `.h5` and `.f06`, reports fatal errors and warnings from the f06; analysis blocks (mode *never*) added to the test case | 09, 07 | spec agreed, in progress |
+| 6 | Nastran analysis block: points at the `.bdf`, run mode never / if input changed / always, outputs `.h5` and `.f06`, reports fatal errors and warnings from the f06; analysis blocks (mode *never*) added to the test case | 09, 07 | coded, waiting for commit |
 
 Later (noted, not scheduled): load table → model update block; mode shape plots; Abaqus
 blocks; Word template as block input; start/exit as an application that hides the server;

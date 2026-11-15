@@ -16,6 +16,7 @@ import pandas as pd
 from nicegui import app, ui
 
 from apb import __version__
+from apb.blocks.nastran.analysis import NastranRun
 from apb.blocks.nastran.blocks import Hdf5Results
 from apb.blocks.python.block import PythonBlock
 from apb.blocks.report import editing as report_editing
@@ -25,6 +26,7 @@ from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
 from apb.engine.store import StoreError, format_size
 from apb.engine.variables import VariableError, resolve
+from apb.gui.analysis_panel import AnalysisPanel
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
@@ -264,7 +266,18 @@ class EditorPage:
                     default_units=self.state.pipeline.settings.default_unit_system,
                     show_peek=lambda table, error: self._show_peek(block.id, table, error),
                     log=lambda text: self._log(f"  {self._block_name(block.id)}: {text}"),
+                    connected=lambda: self._connected_file(block.id),
                 ).build()
+            elif cls is NastranRun:  # status lines and buttons (spec 09 §3.9)
+                self.analysis_panel = AnalysisPanel(
+                    block.params,
+                    on_change=lambda name, value: self._set_param(block.id, name, value),
+                    pick_file=self._pick_file,
+                    resolve=self._resolve_variables,
+                    base_dir=self.state.base_dir,
+                    open_file=open_with_system,
+                )
+                self.analysis_panel.build()
             elif cls is WordReport:  # section editor (spec 05 §3.4)
                 ReportPanel(
                     block.params,
@@ -377,7 +390,9 @@ class EditorPage:
     def _refresh_states(self) -> None:
         if self._states_dirty and not self.runner.running:
             self._states_dirty = False
-            self.canvas.set_states(self.runner.display_states())
+            states = self.runner.display_states()
+            self.canvas.set_states(states)
+            self.canvas.set_warnings(self.runner.warning_blocks(states))
 
     def _log(self, text: str, level: str = "info", block_id: str | None = None) -> None:
         colours = {
@@ -582,6 +597,24 @@ class EditorPage:
             return
         self._after_clear(f"Cleared all stored outputs ({len(cleared)} block(s))")
 
+    def _connected_file(self, block_id: str) -> tuple[str, str | None] | None:
+        """Return ``(block name, file)`` if a block delivers the result file of ``block_id``.
+
+        ``file`` is ``None`` while that block has no output yet.
+        """
+        for conn in self.state.pipeline.connections:
+            if conn.target.block == block_id and conn.target.port == "file":
+                result = self.runner.result(conn.source.block)
+                path: str | None = None
+                if result is not None:
+                    try:
+                        value = result.outputs.get(conn.source.port)
+                    except StoreError:
+                        value = None
+                    path = value if isinstance(value, str) else None
+                return self._block_name(conn.source.block), path
+        return None
+
     def _resolve_variables(self, value: Any) -> Any:
         """Replace ``${variable}`` references; undefined variables are left as they are."""
         try:
@@ -704,6 +737,11 @@ class EditorPage:
         ui.notify(text, type=kind)
         self._states_dirty = True
         self._render_stored()
+        panel = getattr(self, "analysis_panel", None)
+        if panel is not None and self.selected is not None:
+            block = self.state.pipeline.block(self.selected)
+            if self.state.block_class(block) is NastranRun:  # the panel on show, not an old one
+                panel.refresh()
         self._show_preview()
 
     # ---- pipeline settings -----------------------------------------------------------------
@@ -884,9 +922,17 @@ class EditorPage:
         )
         if unknown:
             ui.notify(f"Block types not installed: {', '.join(unknown)}", type="warning")
-        if any(b.type_id == PythonBlock.type_id for b in self.state.pipeline.blocks):
+        kinds = {b.type_id for b in self.state.pipeline.blocks}
+        if kinds & {PythonBlock.type_id, NastranRun.type_id}:
+            what = (
+                "Python blocks and commands that start programs"
+                if NastranRun.type_id in kinds and PythonBlock.type_id in kinds
+                else "commands that start programs"
+                if NastranRun.type_id in kinds
+                else "Python blocks"
+            )
             ui.notify(
-                "This pipeline contains Python blocks: only run pipelines from sources you trust.",
+                f"This pipeline contains {what}: only run pipelines from sources you trust.",
                 type="info",
                 position="top",
                 timeout=8000,

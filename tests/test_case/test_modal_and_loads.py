@@ -49,7 +49,31 @@ def test_pipeline_file_is_what_the_generator_writes():
 def test_whole_pipeline_runs(outcome):
     _, result = outcome
     assert result.ok
-    assert len(result.results) == 12
+    assert len(result.results) == 16
+
+
+def test_the_analyses_check_their_f06_files(outcome):
+    _, result = outcome
+    assert [result.output(b, "status") for b in ("modal_run", "global_run", "local_run")] == [
+        "OK",
+        "OK",
+        "WARNINGS",
+    ]
+    assert result.output("local_run", "h5").endswith("fem/local_loads.h5")
+    assert result.output("modal_run", "messages").empty
+    messages = result.output("msgs", "table")
+    assert len(messages) == 1  # the 9058 warning of the local loads, nothing else
+    row = messages.iloc[0]
+    assert (row["SOURCE"], row["SEVERITY"], row["NUMBER"], row["MODULE"]) == (
+        "local_loads.f06",
+        "WARNING",
+        9058,
+        "SUBDMAP SESTATIC",
+    )
+    assert "APPLIED LOADS" in row["TEXT"]
+    log = result.results["local_run"].log
+    assert any(line.startswith("WARNING: 9058 (SUBDMAP SESTATIC)") for line in log)
+    assert not any(line.startswith("WARNING") for line in result.results["global_run"].log)
 
 
 def test_first_eigenfrequency_requirement(outcome):
@@ -147,6 +171,7 @@ def test_word_report(outcome):
         "2 Modal analysis",
         "3 Global loads",
         "4 Local loads",
+        "5 Analysis checks",
         "Traceability",
     ]
 
@@ -168,9 +193,20 @@ def test_word_report(outcome):
     assert len(local_margins) == 9
     assert local_margins[1][3:] == ["0", "0", ""]  # no margin: empty cell, not "nan"
     assert all(shaded(t) == 0 for t in doc.tables[1:5])  # nothing fails
+    messages = table_text(doc.tables[5])
+    assert messages[0] == ["SOURCE", "SEVERITY", "NUMBER", "MODULE", "TEXT"]
+    assert messages[1][:4] == ["local_loads.f06", "WARNING", "9058", "SUBDMAP SESTATIC"]
+    assert len(messages) == 2 and len(doc.tables) == 6
 
     trace = " ".join(text)
-    for needle in ("fem/modal.h5", "fem/global_loads.h5", "fem/local_loads.h5", "msc20233"):
+    for needle in (
+        "fem/modal.h5",
+        "fem/global_loads.h5",
+        "fem/local_loads.h5",
+        "fem/modal.f06",
+        "fem/local_loads.bdf",
+        "msc20233",
+    ):
         assert needle in trace, needle
     assert "scripts/cbush_margins.py" in trace and "test_case/locations.csv" in trace
 
@@ -196,6 +232,10 @@ def test_second_run_takes_unchanged_blocks_from_the_cache(tmp_path):
     assert second.ok
     cached = {b for b, r in second.results.items() if r.cached}
     assert cached == {
+        "modal_run",
+        "global_run",
+        "local_run",
+        "msgs",
         "modal",
         "f1",
         "fmin",
@@ -207,3 +247,21 @@ def test_second_run_takes_unchanged_blocks_from_the_cache(tmp_path):
         "global_margins",
         "local_margins",
     }  # the report and the workbook always run
+
+
+def test_the_run_records_of_the_example_decks_still_match():
+    from apb.blocks.solvers.fingerprint import fingerprint
+    from apb.blocks.solvers.record import read_record, record_path
+
+    for job in ("modal", "global_loads", "local_loads"):
+        deck = EXAMPLES / "fem" / f"{job}.bdf"
+        record = read_record(record_path(deck))
+        assert record is not None and record.complete
+        assert record.input_hash == fingerprint([deck], deck.parent)[0], job
+
+
+def test_no_analysis_warns_about_file_times(outcome):
+    """With a run record the result does not depend on when the files were copied."""
+    _, result = outcome
+    for block in ("modal_run", "global_run"):
+        assert not any(line.startswith("WARNING") for line in result.results[block].log), block

@@ -11,6 +11,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
     """Return all block types shipped with the tool."""
     from apb.blocks.check.requirement import BLOCKS as CHECK
     from apb.blocks.loads.fastener import BLOCKS as FASTENER
+    from apb.blocks.nastran.analysis import BLOCKS as ANALYSIS
     from apb.blocks.nastran.blocks import BLOCKS as NASTRAN
     from apb.blocks.python.block import BLOCKS as PYTHON
     from apb.blocks.report.block import BLOCKS as REPORT
@@ -21,6 +22,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
     from apb.blocks.table.values import BLOCKS as VALUES
 
     return [
+        *ANALYSIS,
         *NASTRAN,
         *READERS,
         *VALUES,

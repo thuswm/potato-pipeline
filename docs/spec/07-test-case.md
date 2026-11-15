@@ -97,6 +97,8 @@ Checked by the automated test (§7); computed by hand from the f06 forces.
 
 | Check | Value |
 |-------|-------|
+| Analysis status (modal / global / local) | `OK` / `OK` / `WARNINGS` |
+| Nastran messages table | 1 row: `local_loads.f06`, WARNING 9058, SUBDMAP SESTATIC (loads are zero) |
 | First eigenfrequency | 25.7119 Hz (mode 1) |
 | Requirement `> 20 Hz` | PASS, margin 0.2856 |
 | Global loads: rows | 1 subcase × 3 elements × 2 locations = 6 |

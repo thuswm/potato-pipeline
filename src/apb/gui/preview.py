@@ -18,6 +18,9 @@ from apb.engine.executor import BlockResult
 from apb.engine.store import StoreError
 from apb.units import Quantity, get_units, header_with_unit
 
+#: Files a text output can be opened from (Word, Excel, Nastran text files).
+OPENABLE_SUFFIXES = {".docx", ".xlsx", ".f06", ".f04", ".log", ".bdf", ".dat"}
+
 #: Rows shown in a table preview (the full table is used by the pipeline).
 PREVIEW_ROWS = 500
 
@@ -94,7 +97,7 @@ def show_value(name: str, value: Any) -> None:
         ui.label(text).classes("text-2xl font-medium")
     elif isinstance(value, str):
         path = Path(value)
-        if len(value) < 400 and path.suffix.lower() in {".docx", ".xlsx"} and path.is_file():
+        if len(value) < 400 and path.suffix.lower() in OPENABLE_SUFFIXES and path.is_file():
             with ui.row().classes("items-center gap-2"):
                 ui.label(value).classes("text-sm break-all")
                 ui.button(

@@ -169,3 +169,64 @@ def run_block(
     full_inputs = {p.name: ([] if p.multiple else None) for p in cls.input_ports(parsed)}
     full_inputs.update(values or {})
     return cls().run(parsed, full_inputs, ctx)
+
+
+# ---- fake Nastran (spec 09 §3.11) -------------------------------------------------------
+
+FAKE_NASTRAN = Path(__file__).resolve().parent / "fake_nastran.py"
+
+
+class FakeNastran:
+    """A ``nastran`` command on a folder that the block's ``path`` setting points to."""
+
+    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import os
+        import stat
+        import sys
+
+        self.bin = tmp_path / "fakebin"
+        self.bin.mkdir()
+        self.log = tmp_path / "nastran_calls.txt"
+        if os.name == "nt":
+            (self.bin / "nastran.bat").write_text(
+                f'@echo off\r\n"{sys.executable}" "{FAKE_NASTRAN}" %*\r\n', encoding="utf-8"
+            )
+        else:
+            launcher = self.bin / "nastran"
+            launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE_NASTRAN}" "$@"\n')
+            launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+        monkeypatch.setenv("FAKE_NASTRAN_LOG", str(self.log))
+        monkeypatch.setenv("APB_CONFIG", str(tmp_path / "no_config.toml"))  # no user config
+        self._monkeypatch = monkeypatch
+
+    def behave(self, mode: str) -> None:
+        """Select the behaviour of the fake (see ``tests/fake_nastran.py``)."""
+        self._monkeypatch.setenv("FAKE_NASTRAN", mode)
+
+    def calls(self) -> list[tuple[str, str]]:
+        """Return ``(working folder, arguments)`` of every call so far."""
+        if not self.log.exists():
+            return []
+        return [tuple(line.split("|", 1)) for line in self.log.read_text().splitlines()]  # type: ignore[misc]
+
+
+@pytest.fixture
+def fake_nastran(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeNastran:
+    """A fake ``nastran`` program; blocks find it with ``path=str(fake_nastran.bin)``."""
+    return FakeNastran(tmp_path, monkeypatch)
+
+
+def write_deck(
+    folder: Path, job: str = "job", *, hdf5: bool = True, include: str | None = None
+) -> Path:
+    """Write a minimal input deck ``<job>.bdf`` (optionally including another file)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    lines = ["SOL SESTATIC", "CEND", "  TITLE = test", "BEGIN BULK"]
+    if hdf5:
+        lines.append("HDF5OUT CMPRMTHDNONE")
+    if include:
+        lines.append(f"INCLUDE '{include}'")
+    lines += ["GRID,1,,0.,0.,0.", "ENDDATA"]
+    deck = folder / f"{job}.bdf"
+    deck.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return deck

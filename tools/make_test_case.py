@@ -1,8 +1,11 @@
 """Generate the test case pipeline ``examples/test_case.apb.json`` (spec 07).
 
 Modal results, global loads and local loads from the real MSC Nastran files in
-``examples/fem`` go into one Word report; the modal table also goes to Excel. All numbers
-that are not results (requirement, safety factor, allowables) are made up.
+``examples/fem`` go into one Word report; the modal table also goes to Excel. The analyses
+are in the pipeline as *MSC Nastran analysis* blocks in run mode ``never`` (the supplied
+results are used, Nastran is not started) and their messages are stacked into one table for
+the report. All numbers that are not results (requirement, safety factor, allowables) are
+made up.
 
 Usage::
 
@@ -13,14 +16,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from apb.blocks.solvers.fingerprint import fingerprint
+from apb.blocks.solvers.record import ADOPTED, RunRecord, record_path, write_record
 from apb.engine import PipelineModel, save_pipeline
 from apb.units import UnitSystem
 
 ROOT = Path(__file__).resolve().parents[1]
+FEM = ROOT / "examples" / "fem"
+JOBS = ("modal", "global_loads", "local_loads")
 OUT = ROOT / "examples" / "test_case.apb.json"
 
 MARGIN_FORMATS = {"TENSION": "0", "SHEAR": "0", "MS": "0.00"}
 MARGIN_COLUMNS = ["SUBCASE", "EID", "LOCATION", "TENSION", "SHEAR", "MS"]
+SHIFT = 290  # the analysis blocks take the first column
 
 
 def build() -> PipelineModel:
@@ -37,16 +45,28 @@ def build() -> PipelineModel:
         type_id: str, block_id: str, label: str, x: float, y: float, **params: object
     ) -> None:
         inst = p.add_block(type_id, block_id=block_id, label=label, **params)
-        inst.position = (x, y)
+        inst.position = (x + (0 if type_id == "nastran.run" else SHIFT), y)
+
+    def analysis(case: str, job: str, label: str, y: float) -> None:
+        """An analysis block in run mode ``never``: the supplied results are used."""
+        block(
+            "nastran.run",
+            f"{case}_run",
+            f"{label} analysis",
+            40,
+            y,
+            input_file=f"fem/{job}.bdf",
+            run_mode="never",
+        )
 
     # Eigenmode calculation
+    analysis("modal", "modal", "Modal", 40)
     block(
         "nastran.hdf5_results",
         "modal",
         "Modal results",
         40,
         40,
-        file="fem/modal.h5",
         result="MODAL/MODAL_EFFECTIVE_MASS",
         unit_system="SI",
     )
@@ -78,6 +98,7 @@ def build() -> PipelineModel:
         file="output/test_case_modal.xlsx",
         sheet_names=["Effective mass"],
     )
+    p.connect("modal_run.h5", "modal.file")
     p.connect("modal.table", "f1.table")
     p.connect("f1.value", "req.value")
     p.connect("fmin.value", "req.limit")
@@ -95,13 +116,13 @@ def build() -> PipelineModel:
         "outputs": [{"name": "margins", "type": "Table"}, {"name": "min_ms", "type": "Scalar"}],
     }
     for case, y, title in (("global", 360, "Global"), ("local", 600, "Local")):
+        analysis(case, f"{case}_loads", title, y)
         block(
             "nastran.hdf5_results",
             f"{case}_forces",
             f"{title} CBUSH forces",
             330,
             y,
-            file=f"fem/{case}_loads.h5",
             result="ELEMENTAL/ELEMENT_FORCE/BUSH",
             unit_system="SI",
         )
@@ -114,9 +135,15 @@ def build() -> PipelineModel:
             script="scripts/cbush_margins.py",
             **ports,
         )
+        p.connect(f"{case}_run.h5", f"{case}_forces.file")
         p.connect(f"{case}_forces.table", f"{case}_margins.forces")
         p.connect("locs.table", f"{case}_margins.locations")
         p.connect("sf.value", f"{case}_margins.safety_factor")
+
+    # The messages of the three analyses in one table
+    block("table.concat", "msgs", "Nastran messages", 620, 800, add_source_column=True)
+    for case in ("modal", "global", "local"):
+        p.connect(f"{case}_run.messages", "msgs.tables")
 
     # Report
     sections: list[dict[str, object]] = [
@@ -179,6 +206,19 @@ def build() -> PipelineModel:
             "formats": MARGIN_FORMATS,
             "highlight": "MS < 0",
         },
+        {"kind": "heading", "text": "5 Analysis checks"},
+        {
+            "kind": "paragraph",
+            "text": "Warnings and errors found in the Nastran result files of the three "
+            "analyses (information messages are not listed). The warning of the local load "
+            "case says that its loads are zero.",
+        },
+        {
+            "kind": "table",
+            "item": "nastran_messages",
+            "caption": "Nastran messages",
+            "columns": ["SOURCE", "SEVERITY", "NUMBER", "MODULE", "TEXT"],
+        },
         {"kind": "traceability"},
     ]
     block(
@@ -206,6 +246,7 @@ def build() -> PipelineModel:
         ("global_margins.margins", "global_margins"),
         ("global_margins.min_ms", "min_ms_global"),
         ("local_margins.margins", "local_margins"),
+        ("msgs.table", "nastran_messages"),
     ):
         p.connect(source, "report.items", name=name)
     for number, connection in enumerate(p.connections, start=1):
@@ -213,6 +254,22 @@ def build() -> PipelineModel:
     return p
 
 
+def write_run_records() -> None:
+    """Write a run record next to each example deck (status ``adopted``).
+
+    The analysis blocks run in mode ``never``; with a record they compare the fingerprint of
+    the deck instead of file times, which differ between checkouts and copies. The records
+    say: these results belong to this input.
+    """
+    for job in JOBS:
+        deck = FEM / f"{job}.bdf"
+        digest, listing = fingerprint([deck], FEM)
+        record = RunRecord(ADOPTED, digest, listing, [], "", "", "2026-11-15T14:26:00+01:00")
+        write_record(record_path(deck), record)
+        print(f"Wrote {record_path(deck)}")
+
+
 if __name__ == "__main__":
     save_pipeline(build(), OUT)
     print(f"Wrote {OUT}")
+    write_run_records()

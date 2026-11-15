@@ -118,16 +118,37 @@ class RunResult:
         return self.results[block_id].outputs[port]
 
 
+#: Files changed less than this long ago (ns) are always re-hashed: a second change could keep
+#: the same size and the same, coarse, modification time ("racy" timestamps).
+_RACY_NS = 2_000_000_000
+
+_stamp_cache: dict[str, tuple[int, int, str]] = {}
+"""path -> (size, mtime_ns, digest): the content hash of files that did not change."""
+
+
 def _file_stamp(path: Path) -> str:
-    """Return a fingerprint of a file for the cache key."""
+    """Return a fingerprint of a file for the cache key.
+
+    Small files are hashed (the hash is reused while size and modification time are the
+    same, so refreshing the states twice a second does not read every file twice a second);
+    large files use size and modification time.
+    """
     try:
         stat = path.stat()
     except OSError:
         return f"{path}:missing"
-    if stat.st_size <= HASH_LIMIT_BYTES:
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        return f"{path}:{digest}"
-    return f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
+    if stat.st_size > HASH_LIMIT_BYTES:
+        return f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
+    key = str(path)
+    known = _stamp_cache.get(key)
+    if known is not None and known[:2] == (stat.st_size, stat.st_mtime_ns):
+        return f"{path}:{known[2]}"
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if time.time_ns() - stat.st_mtime_ns > _RACY_NS:
+        if len(_stamp_cache) > 2000:
+            _stamp_cache.clear()
+        _stamp_cache[key] = (stat.st_size, stat.st_mtime_ns, digest)
+    return f"{path}:{digest}"
 
 
 def _recorded(base: Path, path: Path) -> str:
@@ -389,7 +410,7 @@ class Executor:
             order = [b for b in graph.order if b in run_set]
             make_ctx = self._context_factory(pipeline, pipeline_dir, output_dir)
             make_ctx.pipeline_file = pipeline_file
-            keys = self._cache_keys(graph, order, make_ctx)
+            keys: dict[str, str] = {}
 
             self._emit(RunEvent(EventKind.RUN_STARTED, message=f"{len(order)} block(s)"))
             results: dict[str, BlockResult] = {}
@@ -397,8 +418,13 @@ class Executor:
                 if self.cancel_event.is_set():
                     results[block_id] = self._skip(block_id, "Run stopped by user")
                     continue
+                # Computed now, not at the start of the run: an upstream block that ran
+                # in this run may have delivered new files (ENG-19).
+                key = self._key_for(graph, block_id, keys, make_ctx)
+                assert key is not None  # the blocks to run were validated
+                keys[block_id] = key
                 results[block_id] = self._run_block(
-                    graph, graph.blocks[block_id], keys[block_id], results, make_ctx
+                    graph, graph.blocks[block_id], key, results, make_ctx
                 )
             run = RunResult(results, cancelled=self.cancel_event.is_set())
             failed = sum(r.state is BlockState.ERROR for r in results.values())
@@ -431,32 +457,65 @@ class Executor:
         """Compute the cache key of each block in ``order`` (upstream blocks first)."""
         keys: dict[str, str] = {}
         for block_id in order:
-            block = graph.blocks[block_id]
-            if block.cls is None or block.params is None:
-                continue
-            upstream = [
-                [c.target.port, c.source.port, c.name, keys.get(c.source.block, "")]
-                for c in graph.incoming(block_id)
-            ]
-            try:
-                files = block.cls().input_files(block.params, make_ctx(block_id))
-                make_ctx.block_files[block_id] = list(files)
-                stamps = sorted(_file_stamp(f) for f in files)
-            except Exception as exc:  # error surfaces again when the block runs
-                stamps = [f"error:{exc}"]
-            payload = json.dumps(
-                [
-                    block.cls.type_id,
-                    block.cls.version,
-                    block.params.model_dump(mode="json"),
-                    upstream,
-                    stamps,
-                ],
-                sort_keys=True,
-                default=str,
-            )
-            keys[block_id] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            key = self._key_for(graph, block_id, keys, make_ctx)
+            if key is not None:
+                keys[block_id] = key
         return keys
+
+    def _delivered(self, block_id: str) -> list[str]:
+        """Return the files a block delivered last time (written or handed on), as recorded."""
+        cached = self._cache.get(block_id)
+        if cached is not None:
+            return cached.written
+        entry = self._index().get(block_id)
+        return list(entry.written_files) if entry is not None else []
+
+    def _key_for(
+        self,
+        graph: PreparedGraph,
+        block_id: str,
+        keys: Mapping[str, str],
+        make_ctx: _ContextFactory,
+    ) -> str | None:
+        """Compute the cache key of one block, given the keys of the blocks upstream of it.
+
+        The key covers the block type and version, its parameters, the keys of its upstream
+        blocks, the files it reads and the files its upstream blocks *deliver* (ENG-19), so
+        that e.g. a rewritten result file makes the blocks that read it stale.
+
+        Returns:
+            The key, or ``None`` for a block whose type or parameters are not valid.
+        """
+        block = graph.blocks[block_id]
+        if block.cls is None or block.params is None:
+            return None
+        incoming = graph.incoming(block_id)
+        upstream = [
+            [c.target.port, c.source.port, c.name, keys.get(c.source.block, "")] for c in incoming
+        ]
+        base = make_ctx.pipeline_dir
+        delivered = sorted(
+            {_file_stamp(base / name) for c in incoming for name in self._delivered(c.source.block)}
+        )
+        try:
+            files = block.cls().input_files(block.params, make_ctx(block_id))
+            make_ctx.block_files[block_id] = list(files)
+            stamps = sorted(_file_stamp(f) for f in files)
+        except Exception as exc:  # error surfaces again when the block runs
+            stamps = [f"error:{exc}"]
+        payload = json.dumps(
+            [
+                block.cls.type_id,
+                block.cls.version,
+                block.params.model_dump(mode="json"),
+                upstream,
+                stamps,
+                delivered,
+            ],
+            sort_keys=True,
+            default=str,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _skip(self, block_id: str, reason: str) -> BlockResult:
         """Mark a block as skipped."""
@@ -497,7 +556,8 @@ class Executor:
 
         base = make_ctx.pipeline_dir
         cached = self._cache.get(block.id)
-        if cached is not None and cached.key == key and not block.cls.always_run:
+        always = block.cls.always_runs(block.params)
+        if cached is not None and cached.key == key and not always:
             self._emit(RunEvent(EventKind.BLOCK_CACHED, block.id, "Up to date (cached)"))
             return self._from_cache(cached, key)
         entry = self._index().get(block.id) if self.use_stored else None
@@ -505,7 +565,7 @@ class Executor:
             entry is not None
             and entry.usable
             and entry.cache_key == key
-            and not block.cls.always_run
+            and not always
             and _files_exist(base, entry.written_files)
         ):
             cached = _Cached(
@@ -526,9 +586,11 @@ class Executor:
         log: list[str] = []
         ctx = make_ctx(block.id, log)
         ctx.input_names = graph.input_names(block.id)
+        upstream = graph.upstream(block.id)
         ctx.upstream_files = sorted(
-            {f for b in graph.upstream(block.id) for f in make_ctx.block_files.get(b, [])}
-        )
+            {f for b in upstream for f in make_ctx.block_files.get(b, [])}
+            | {base / name for b in upstream for name in self._delivered(b)}
+        )  # files read upstream and files delivered upstream (e.g. Nastran results)
         self._emit(RunEvent(EventKind.BLOCK_STARTED, block.id, block.name))
         start = time.perf_counter()
         try:

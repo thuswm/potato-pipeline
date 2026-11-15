@@ -31,7 +31,9 @@ def _free_port() -> int:
 
 @pytest.fixture
 def workdir(tmp_path: Path) -> Path:
-    shutil.copytree(EXAMPLES, tmp_path / "examples", ignore=shutil.ignore_patterns("output"))
+    shutil.copytree(
+        EXAMPLES, tmp_path / "examples", ignore=shutil.ignore_patterns("output", ".apb")
+    )
     return tmp_path / "examples"
 
 
@@ -249,7 +251,7 @@ def test_edit_parameter_makes_blocks_stale_and_rerun(page):
 
 def test_error_is_shown_and_log_selects_block(page):
     select(page, "CBUSH forces")
-    file = page.get_by_role("textbox", name="File *")
+    file = page.get_by_role("textbox", name="File", exact=True)
     file.fill("missing/model.h5")
     file.press("Enter")
     page.wait_for_timeout(300)
@@ -293,7 +295,7 @@ def test_result_browser_lists_selects_and_peeks(page, workdir: Path):
     assert "EID present: 1001 to 1004 (4 IDs)" in page.locator(".apb-h5-ids").inner_text()
 
     # Point the block at a real file: the list follows, the old result is reported missing.
-    box = page.get_by_role("textbox", name="File *")
+    box = page.get_by_role("textbox", name="File", exact=True)
     box.fill("fem/modal.h5")
     box.press("Enter")
     page.wait_for_timeout(600)
@@ -328,7 +330,7 @@ def test_result_browser_lists_selects_and_peeks(page, workdir: Path):
 
 def test_result_browser_unreadable_file_keeps_text_fields(page):
     select(page, "CBUSH forces")
-    box = page.get_by_role("textbox", name="File *")
+    box = page.get_by_role("textbox", name="File", exact=True)
     box.fill("missing/model.h5")
     box.press("Enter")
     page.wait_for_timeout(600)
@@ -677,7 +679,7 @@ def test_report_editor_refuses_a_name_in_use_and_flags_missing_items(page):
 
 @pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
 def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
-    assert counts(page) == (12, 19)
+    assert counts(page) == (16, 26)
     assert node(page, "Frequency requirement").locator(".apb-sub").inner_text() == (
         "Requirement check"
     )
@@ -712,6 +714,7 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
         "global_margins",
         "min_ms_global",
         "local_margins",
+        "nastran_messages",
     ]
     assert page.locator(".apb-unused").count() == 0
     assert page.locator(".apb-section-warning:visible").count() == 0
@@ -750,7 +753,7 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 
     reopen(page, server)
     assert states(page) == {"apb-state-done"}  # recognised as run, nothing was run
-    assert "Stored outputs found for 12 of 12 blocks" in log_text(page)
+    assert "Stored outputs found for 16 of 16 blocks" in log_text(page)
     assert not (workdir / "output" / "x").exists()
 
     select(page, "Frequency requirement")
@@ -769,7 +772,7 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 
     # Run: the blocks that are up to date come from the store; the writers run again.
     run_all(page)
-    assert "10 up to date" in log_text(page)
+    assert "14 up to date" in log_text(page)
     assert states(page) == {"apb-state-done"}
 
 
@@ -826,9 +829,9 @@ def test_stored_outputs_dialog_and_clear_all(page, workdir: Path):
     page.get_by_text("Stored outputs…", exact=True).click()
     dialog = page.locator(".q-dialog")
     assert ".apb/test_case" in dialog.locator(".apb-stored-folder").inner_text()
-    assert "12 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
+    assert "16 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
     dialog.get_by_role("button", name="Clear all…").click()
-    page.wait_for_selector("text=Delete the stored outputs of 12 block(s)")
+    page.wait_for_selector("text=Delete the stored outputs of 16 block(s)")
     page.get_by_role("button", name="Clear all", exact=True).click()
     page.wait_for_timeout(1000)
     assert {state_of(page, n) for n in ("Modal results", "Global margins", "Test case report")} == {
@@ -861,3 +864,88 @@ def test_an_unsaved_pipeline_is_stored_at_the_first_save(page, workdir: Path):
     entries = list((workdir / ".apb" / "scratch").glob("*/meta.json"))
     assert len(entries) == 1  # the block that was done is stored now
     assert states(page) == {"apb-state-done"}
+
+
+# ---- Nastran analysis block (spec 09 §3.9) -----------------------------------------------
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_analysis_blocks_in_the_gui(page):
+    notice = page.locator(".q-notification").first.inner_text()
+    assert "Python blocks and commands that start programs" in notice
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+    # Only the analysis with a warning gets the mark.
+    assert "apb-warn" in node(page, "Local analysis").get_attribute("class")
+    assert "apb-warn" not in node(page, "Modal analysis").get_attribute("class")
+    assert "apb-warn" not in node(page, "Global analysis").get_attribute("class")
+
+    select(page, "Local analysis")
+    assert (
+        "nastran local_loads.bdf batch=no old=no scr=yes"
+        in page.locator(".apb-analysis-command").inner_text()
+    )
+    assert "(default)" in page.locator(".apb-analysis-command").inner_text()
+    assert "local_loads.bdf" in page.locator(".apb-analysis-input").inner_text()
+    assert "HDF5 request found" in page.locator(".apb-analysis-input").inner_text()
+    results = page.locator(".apb-analysis-results").inner_text()
+    assert "local_loads.f06 ✔" in results and "local_loads.h5 ✔" in results
+    assert page.get_by_role("button", name="Open f06").is_visible()
+    assert page.get_by_role("button", name="Open folder").is_visible()
+
+    page.get_by_role("tab", name="messages").click()
+    page.wait_for_timeout(300)
+    preview = page.locator(".q-tab-panels").first
+    assert "9058" in preview.inner_text() and "SUBDMAP SESTATIC" in preview.inner_text()
+    page.get_by_role("tab", name="status").click()
+    page.wait_for_timeout(300)
+    assert "WARNINGS" in page.locator(".q-tab-panels").first.inner_text()
+    page.get_by_role("tab", name="f06").click()
+    page.wait_for_timeout(300)
+    assert "local_loads.f06" in page.locator(".q-tab-panels").first.inner_text()
+    assert page.locator(".q-tab-panels").get_by_role("button", name="Open").is_visible()
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_analysis_panel_checks_the_program_and_the_input(page, fake_nastran, workdir):
+    select(page, "Modal analysis")
+    program = page.locator(".apb-analysis-program")
+    assert program.count() == 1  # found or not on this computer: it says which
+    path_box = page.get_by_role("textbox", name="Path")
+    path_box.fill(str(workdir / "no_such_folder"))
+    path_box.press("Enter")
+    page.wait_for_timeout(500)
+    assert "'nastran' not found" in page.locator(".apb-analysis-program").inner_text()
+    path_box.fill(str(fake_nastran.bin))
+    path_box.press("Enter")
+    page.wait_for_timeout(500)
+    found = page.locator(".apb-analysis-program").inner_text()
+    assert str(fake_nastran.bin) in found and "(path: block)" in found
+    command = page.get_by_role("textbox", name="Command")
+    command.fill("nastran {input} jid={job}")
+    command.press("Enter")
+    page.wait_for_timeout(500)
+    text = page.locator(".apb-analysis-command").inner_text()
+    assert "nastran modal.bdf jid=modal" in text and "(block)" in text
+    deck = page.get_by_role("textbox", name="Input file")
+    deck.fill("fem/missing.bdf")
+    deck.press("Enter")
+    page.wait_for_timeout(500)
+    assert "Input deck not found" in page.locator(".apb-analysis-problem").inner_text()
+    command.fill("nastran {deck}")
+    command.press("Enter")
+    page.wait_for_timeout(500)
+    assert "Unknown placeholder" in page.locator(".apb-analysis-problem").inner_text()
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_result_browser_follows_the_connected_analysis(page):
+    select(page, "Modal results")
+    assert "Result file from block 'Modal analysis'" in page.locator("body").inner_text()
+    assert "(that block has not run yet)" in page.locator("body").inner_text()
+    run_all(page)
+    select(page, "Global margins")  # leave and come back: the panel is built again
+    select(page, "Modal results")
+    assert "modal.h5" in page.locator("body").inner_text()
+    assert "MSC Nastran 2023.3" in page.locator(".apb-h5-info").inner_text()
+    assert "Modal effective mass" in page.locator(".apb-h5-results").inner_text()

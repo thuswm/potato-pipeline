@@ -166,6 +166,18 @@ class Block[P: BaseModel](ABC):
         return []
 
     @classmethod
+    def always_runs(cls, params: BaseModel | None) -> bool:
+        """Return whether the block bypasses the cache and runs on every run.
+
+        Defaults to the class attribute ``always_run``; a block whose behaviour depends on a
+        parameter (the run mode of an analysis block) overrides it (ENG-20).
+
+        Args:
+            params: Validated parameters of the block instance, if known.
+        """
+        return cls.always_run
+
+    @classmethod
     def input_ports(cls, params: BaseModel | None) -> tuple[Port, ...]:
         """Return the input ports; override for blocks whose ports depend on parameters.
 

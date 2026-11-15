@@ -22,7 +22,11 @@ class _H5Params(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    file: FilePath = Field(description="Nastran .h5 result file")
+    file: FilePath = Field(
+        default="",
+        description="Nastran .h5 result file; empty if the file comes from a connected "
+        "analysis block",
+    )
     unit_system: UnitSystem | None = Field(default=None, description=_UNIT_HELP)
 
 
@@ -30,10 +34,25 @@ class _H5Block[P: _H5Params](Block[P]):
     """Common behaviour: the .h5 file is an input file for the cache."""
 
     category = CATEGORY
+    inputs = (Port("file", PortType.TEXT, label="Result file", optional=True),)
 
     def input_files(self, params: P, ctx: RunContext) -> list[Path]:
-        """Return the .h5 file (a changed file invalidates the cache, NAS-10)."""
-        return [ctx.resolve_path(params.file)]
+        """Return the .h5 file (a changed file invalidates the cache, NAS-10).
+
+        A file that comes from a connected analysis block is covered by the engine: the
+        files an upstream block delivers are part of the cache key (spec 09 §3.7).
+        """
+        return [ctx.resolve_path(params.file)] if params.file else []
+
+    @staticmethod
+    def _path(params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> Path:
+        """Return the result file: from the connector if there is one, else the parameter."""
+        name = inputs.get("file") or params.file
+        if not name:
+            raise ValueError(
+                "No result file: type the path of the .h5 file or connect an analysis block"
+            )
+        return ctx.resolve_path(str(name))
 
     @staticmethod
     def _log_source(ctx: RunContext, path: Path, rows: int) -> None:
@@ -70,7 +89,7 @@ class Hdf5Results(_H5Block[Hdf5ResultsParams]):
         self, params: Hdf5ResultsParams, inputs: dict[str, Any], ctx: RunContext
     ) -> dict[str, Any]:
         """Read the selected dataset."""
-        path = ctx.resolve_path(params.file)
+        path = self._path(params, inputs, ctx)
         table = h5reader.read_result(
             path,
             params.result,
@@ -94,7 +113,7 @@ class Hdf5Eigenvalues(_H5Block[_H5Params]):
 
     def run(self, params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
         """Read the eigenvalue table."""
-        path = ctx.resolve_path(params.file)
+        path = self._path(params, inputs, ctx)
         table = h5reader.read_eigenvalues(path, ctx.unit_system(params.unit_system))
         self._log_source(ctx, path, len(table))
         return {"table": table}
@@ -129,7 +148,7 @@ class Hdf5Rbe2Loads(_H5Block[Hdf5Rbe2LoadsParams]):
         self, params: Hdf5Rbe2LoadsParams, inputs: dict[str, Any], ctx: RunContext
     ) -> dict[str, Any]:
         """Read RBE2 loads."""
-        path = ctx.resolve_path(params.file)
+        path = self._path(params, inputs, ctx)
         table = h5reader.read_rbe2_loads(
             path,
             source=params.source,
@@ -154,7 +173,7 @@ class Hdf5Masses(_H5Block[_H5Params]):
 
     def run(self, params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
         """Read CONM2 data."""
-        path = ctx.resolve_path(params.file)
+        path = self._path(params, inputs, ctx)
         table = h5reader.read_masses(path, ctx.unit_system(params.unit_system))
         self._log_source(ctx, path, len(table))
         return {"table": table}

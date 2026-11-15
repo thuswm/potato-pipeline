@@ -1,0 +1,18 @@
+{
+ "schema": 1,
+ "status": "adopted",
+ "input_hash": "097bde1b71cd9d22a145d35caf44a22e08c50dd1b00946768c4309e81065e443",
+ "inputs": [
+  {
+   "path": "modal.bdf",
+   "sha256": "c099479724a77c6c1faa465a5a9497d95e5e7fade9b9f569a532d92463b6ae32"
+  }
+ ],
+ "options": [],
+ "command": "",
+ "started": "",
+ "finished": "2026-11-15T14:26:00+01:00",
+ "exit_code": null,
+ "duration": 0.0,
+ "tool_version": "0.1.0.dev0"
+}

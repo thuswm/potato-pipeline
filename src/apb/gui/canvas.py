@@ -83,6 +83,10 @@ class NodeCanvas(Element, component="canvas.js", dependencies=["static/drawflow/
         """Colour blocks by run state (block id -> state name)."""
         self.run_method("set_states", states)
 
+    def set_warnings(self, block_ids: list[str]) -> None:
+        """Mark the blocks that have warnings (a small badge on the block)."""
+        self.run_method("set_warnings", block_ids)
+
     def select_node(self, block_id: str | None) -> None:
         """Highlight a block (e.g. when an error in the log is clicked)."""
         self.run_method("select_node", block_id)

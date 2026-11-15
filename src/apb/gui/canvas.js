@@ -248,6 +248,15 @@ export default {
       });
     },
 
+    set_warnings(blockIds) {
+      // A small mark on blocks whose log contains a warning (e.g. an analysis with warnings).
+      const warn = new Set(blockIds);
+      Object.entries(this.byBlock).forEach(([blockId, entry]) => {
+        const el = document.getElementById(`node-${entry.nid}`);
+        if (el) el.classList.toggle("apb-warn", warn.has(blockId));
+      });
+    },
+
     view_center() {
       // Canvas coordinates of the middle of the visible area (to place new blocks).
       // Inverse of screen = c + (p - c) * zoom + translate, for the screen point s = c.

@@ -127,6 +127,19 @@ class RunController:
             self.edited.discard(block_id)
         return cleared
 
+    def warning_blocks(self, states: dict[str, str]) -> list[str]:
+        """Return the blocks whose latest result has a warning in its log (``WARNING:`` line).
+
+        Args:
+            states: The displayed states; blocks that are idle have no result to warn about.
+        """
+        return [
+            block_id
+            for block_id, result in self.results.items()
+            if states.get(block_id) in ("done", "stale")
+            and any(line.startswith("WARNING:") for line in result.log)
+        ]
+
     def stored_entry(self, block_id: str) -> StoredEntry | None:
         """Return the stored entry of a block, if any."""
         return self.executor.stored_entry(block_id)

@@ -113,6 +113,11 @@
 .apb-canvas .drawflow-node.apb-state-done    { border-color: #16a34a; }
 .apb-canvas .drawflow-node.apb-state-error   { border-color: #dc2626; border-width: 2px; }
 .apb-canvas .drawflow-node.apb-state-skipped { opacity: 0.6; }
+.apb-canvas .drawflow-node.apb-warn::after {
+  content: "\26A0"; position: absolute; top: -9px; right: -9px; width: 16px; height: 16px;
+  line-height: 16px; text-align: center; font-size: 11px; color: #fff; background: #d97706;
+  border-radius: 50%;
+}
 
 .apb-canvas .drawflow .connection .main-path { stroke: #7b8794; stroke-width: 3px; }
 .apb-canvas .drawflow .connection .main-path:hover { stroke: #1f6feb; }

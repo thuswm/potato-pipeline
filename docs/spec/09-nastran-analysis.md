@@ -186,7 +186,7 @@ Rules (checked against the three real files of the test case):
   to a blank line, the next message or a page header (at most 10 lines, joined).
 - **Severity:** `FATAL` → fatal; `WARNING` and `ALARM` → warning; `INFORMATION` → information.
 - **Information messages are left out** unless `include_information` is set: the real files
-  have 49 to 65 of them per run (data block bookkeeping) and only one real warning.
+  have 50 to 65 of them per run (data block bookkeeping) and only one real warning.
 - **Grouping:** the same severity, number, source and text counts once with `COUNT`; the
   table keeps the line of the first occurrence.
 - **Completion:** the `.f06` must contain `* * * END OF JOB * * *`; without it the job did
@@ -199,7 +199,9 @@ Rules (checked against the three real files of the test case):
   ("The input has no HDF5 request … add `HDF5OUT` or `MDLPRM,HDF5,0`") since a run without it
   would not deliver an `.h5`. After a run the `.h5` must exist.
 
-The `messages` table has `SEVERITY`, `NUMBER`, `SOURCE`, `COUNT`, `LINE`, `TEXT`, sorted by
+The `messages` table has `SEVERITY`, `NUMBER`, `MODULE`, `COUNT`, `LINE`, `TEXT` (`MODULE` is the
+module or subDMAP Nastran names in parentheses; the name `SOURCE` stays free for the file name
+that *Stack tables* adds), sorted by
 severity and line. It is empty when the analysis is clean. Every warning and error is also a
 line in the block log.
 
@@ -294,6 +296,29 @@ environment variables to exit with a code, write a fatal or a warning message, o
 the block's `command` and `path` at it (`nastran` found through `path`, as at work). Nothing in
 the tests needs a licence.
 
+### 3.12 Implementation notes
+
+Decisions made while implementing, none of which changes the agreed behaviour:
+
+- The `messages` table calls the module column `MODULE` (not `SOURCE`), see §3.5.
+- The log line of a message is `WARNING: 9058 (SUBDMAP SESTATIC): THE SOLUTION ...` (the
+  severity once, as prefix); information messages, if requested, are logged without prefix.
+- **Warning mark on the canvas:** any block whose log has a line starting with `WARNING:` gets
+  the small mark (the analysis block, and also e.g. a failed requirement check).
+- **Traceability:** the files an upstream block *delivers* (for the analysis: `.f06` and `.h5`)
+  are listed with the files read upstream, so the report's traceability section still lists
+  the `.h5` with the Nastran version although the result block gets its path from a
+  connector.
+- **File times in the cache:** the content hash of a file is reused while its size and
+  modification time are unchanged (the GUI refreshes the states twice a second), except for
+  files changed within the last two seconds, which are always read again.
+- **Examples:** `examples/fem` holds a run record (`<job>.apb-run.json`, status `adopted`) next
+  to each deck, so the test case does not depend on file times, which differ between
+  checkouts and copies. `tools/make_test_case.py` writes them; a test checks that they still
+  match the decks.
+- **Not verified with real Nastran** (open since the start): the keywords `batch=no old=no
+  scr=yes`. The block log shows the exact command, and the `command` setting can be changed.
+
 ## 4. Out of scope (v1)
 
 Abaqus, OP2/PCH/XDB output, submitting to a cluster or queue, running several jobs in
@@ -316,7 +341,7 @@ None open. To check on the first real run: the exact keywords of the default com
 
 - **f06 parser (unit):** the three real files — `modal` and `global_loads`: no warning, no
   fatal, end of job found; `local_loads`: exactly one warning, 9058, with its text; the
-  information counts (65, 51, 49) with `include_information`; synthetic cases: fatal and
+  information counts (65, 52, 50) with `include_information`; synthetic cases: fatal and
   alarm messages, the same message repeated (grouped), continuation lines and a page header
   in the text, a message without number, a file without `END OF JOB`, an empty file, CRLF.
 - **Deck scanner (unit):** `HDF5OUT` / `MDLPRM,HDF5` in fixed, free and comma format and any

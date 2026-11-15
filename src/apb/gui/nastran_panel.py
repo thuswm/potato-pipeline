@@ -107,6 +107,7 @@ class Hdf5ResultsPanel:
         default_units: UnitSystem,
         show_peek: Callable[[pd.DataFrame | None, str], None],
         log: Callable[[str], None],
+        connected: Callable[[], tuple[str, str | None] | None] = lambda: None,
     ) -> None:
         self.params = params
         self.on_change = on_change
@@ -115,6 +116,7 @@ class Hdf5ResultsPanel:
         self.default_units = default_units
         self.show_peek = show_peek
         self.log = log
+        self.connected = connected
         self.form = ParamForm(Hdf5ResultsParams, params, self._changed, pick_file)
         self._infos: list[ResultInfo] = []
         self._search = ""
@@ -134,8 +136,14 @@ class Hdf5ResultsPanel:
         return Hdf5ResultsParams.model_validate(self.resolve(dict(self.params)))
 
     def _path(self) -> Path | None:
-        """Return the absolute path of the chosen file, or ``None`` if none is chosen."""
-        value = self.resolve(self.params.get("file") or "")
+        """Return the absolute path of the chosen file, or ``None`` if none is chosen.
+
+        A file delivered by a connected analysis block wins over the typed path.
+        """
+        link = self.connected()
+        value = (
+            link[1] if link is not None and link[1] else self.resolve(self.params.get("file") or "")
+        )
         if not value:
             return None
         path = Path(str(value)).expanduser()
@@ -188,7 +196,15 @@ class Hdf5ResultsPanel:
 
     def build(self) -> None:
         """Create the widgets in the current NiceGUI context."""
-        self.form.field("file")
+        link = self.connected()
+        if link is None:
+            self.form.field("file")
+        else:
+            name, path = link
+            ui.label(f"Result file from block '{name}'").classes("text-xs text-slate-700")
+            ui.label(path or "(that block has not run yet)").classes(
+                "text-[10px] break-all " + ("text-slate-500" if path else "text-amber-700")
+            )
         self.body = ui.column().classes("w-full gap-2")
         self._build_body()
 
