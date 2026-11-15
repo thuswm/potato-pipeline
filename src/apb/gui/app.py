@@ -10,19 +10,23 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from nicegui import ui
 
 from apb import __version__
+from apb.blocks.nastran.blocks import Hdf5Results
 from apb.blocks.python.block import PythonBlock, PythonParams
 from apb.blocks.python.scripting import ScriptError, write_skeleton
 from apb.engine.events import EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
+from apb.engine.variables import VariableError, resolve
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
 from apb.gui.forms import ParamForm, suffix_hint
-from apb.gui.preview import show_result
+from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
+from apb.gui.preview import show_result, show_value
 from apb.gui.runner import EVENT_STATES, RunController, summary
 from apb.units import UnitSystem
 
@@ -219,12 +223,24 @@ class EditorPage:
             self.issues = ui.column().classes("w-full gap-0")
             self._show_issues()
             ui.label("Parameters").classes("text-xs font-medium text-slate-600 mt-1")
-            ParamForm(
-                cls.Params,
-                block.params,
-                on_change=lambda name, value: self._set_param(block.id, name, value),
-                pick_file=self._pick_file,
-            ).build()
+            if cls is Hdf5Results:  # own panel with the result browser (spec 02 §3.7)
+                Hdf5ResultsPanel(
+                    block.params,
+                    on_change=lambda name, value: self._set_param(block.id, name, value),
+                    pick_file=self._pick_file,
+                    resolve=self._resolve_variables,
+                    base_dir=self.state.base_dir,
+                    default_units=self.state.pipeline.settings.default_unit_system,
+                    show_peek=lambda table, error: self._show_peek(block.id, table, error),
+                    log=lambda text: self._log(f"  {self._block_name(block.id)}: {text}"),
+                ).build()
+            else:
+                ParamForm(
+                    cls.Params,
+                    block.params,
+                    on_change=lambda name, value: self._set_param(block.id, name, value),
+                    pick_file=self._pick_file,
+                ).build()
             if cls is PythonBlock:
                 self._python_tools(block.id)
             inputs, outputs = self.state.ports(block)
@@ -409,6 +425,34 @@ class EditorPage:
         self.preview_title.text = f"Preview — {self._block_name(self.selected)}"
         with self.preview:
             show_result(self.runner.result(self.selected))
+
+    def _resolve_variables(self, value: Any) -> Any:
+        """Replace ``${variable}`` references; undefined variables are left as they are."""
+        try:
+            return resolve(value, self.state.pipeline.variables)
+        except VariableError:
+            return value
+
+    def _show_peek(self, block_id: str, table: pd.DataFrame | None, error: str) -> None:
+        """Show a preview read straight from a result file, before the block has run.
+
+        Args:
+            block_id: Block the preview belongs to (ignored if it is no longer selected).
+            table: The first rows of the result, or ``None`` if reading failed.
+            error: Why reading failed.
+        """
+        if self.selected != block_id:
+            return
+        self.preview.clear()
+        self.preview_title.text = f"Preview — {self._block_name(block_id)}"
+        with self.preview:
+            ui.label(
+                f"Preview from file (at most the first {PEEK_ROWS} rows) — not yet run"
+            ).classes("text-xs text-amber-700 apb-peek")
+            if table is None:
+                ui.label(error).classes("text-sm text-red-700 whitespace-pre-wrap")
+            else:
+                show_value("table", table)
 
     # ---- canvas events --------------------------------------------------------------------
 

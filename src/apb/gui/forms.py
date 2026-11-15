@@ -123,6 +123,15 @@ class ParamForm:
             current = self.values.get(name, default_of(field))
             self._field(name, field, current, self._setter(name))
 
+    def field(self, name: str) -> None:
+        """Create the widget of one parameter (for panels that mix custom and standard fields).
+
+        Args:
+            name: Field name in the ``Params`` model.
+        """
+        info = self.model.model_fields[name]
+        self._field(name, info, self.values.get(name, default_of(info)), self._setter(name))
+
     def _setter(self, name: str) -> Setter:
         def set_value(value: Any) -> None:
             self.on_change(name, value)

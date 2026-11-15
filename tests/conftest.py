@@ -1,4 +1,4 @@
-"""Shared fixtures: small test blocks and paths to the synthetic Nastran files."""
+"""Shared fixtures: small test blocks and paths to the Nastran test files."""
 
 from __future__ import annotations
 
@@ -15,6 +15,12 @@ from apb.engine.block import FilePath
 DATA_DIR = Path(__file__).resolve().parents[1] / "examples" / "data"
 PLATE_H5 = DATA_DIR / "synthetic_plate.h5"
 JOINT_H5 = DATA_DIR / "synthetic_fastener_joint.h5"
+
+#: Real MSC Nastran 2023.3 reference files (spec 02 §3.9); unit system SI.
+FEM_DIR = Path(__file__).resolve().parents[1] / "examples" / "fem"
+MODAL_H5 = FEM_DIR / "modal.h5"
+GLOBAL_H5 = FEM_DIR / "global_loads.h5"
+LOCAL_H5 = FEM_DIR / "local_loads.h5"
 
 
 class SourceParams(BaseModel):

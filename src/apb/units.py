@@ -43,6 +43,8 @@ class QuantityKind(StrEnum):
     MASS = "mass"
     MASS_INERTIA = "mass_inertia"
     DENSITY = "density"
+    ENERGY = "energy"
+    ENERGY_DENSITY = "energy_density"
     VELOCITY = "velocity"
     ACCELERATION = "acceleration"
     ROTATION = "rotation"
@@ -79,6 +81,8 @@ _UNITS: dict[QuantityKind, _UnitDef] = {
     QuantityKind.MASS: _UnitDef("kg", "t", 1e-3),
     QuantityKind.MASS_INERTIA: _UnitDef("kg·m²", "t·mm²", 1e3),
     QuantityKind.DENSITY: _UnitDef("kg/m³", "t/mm³", 1e-12),
+    QuantityKind.ENERGY: _UnitDef("J", "mJ", 1e3),
+    QuantityKind.ENERGY_DENSITY: _UnitDef("J/m³", "mJ/mm³", 1e-6),
     QuantityKind.VELOCITY: _UnitDef("m/s", "mm/s", 1e3),
     QuantityKind.ACCELERATION: _UnitDef("m/s²", "mm/s²", 1e3),
     QuantityKind.ROTATION: _UnitDef("rad", "rad", 1.0),

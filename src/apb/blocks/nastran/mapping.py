@@ -5,22 +5,34 @@ renamed into the output table, the quantity kind of each column (for unit labels
 array fields hold beam stations, and derived columns. Datasets without a mapping are read
 "raw" (NAS-07). Adapting to another Nastran version only needs changes here.
 
-Reference version: MSC Nastran 2023.3. The entries are not yet verified against real files
-(spec 02 §5).
+Reference version: MSC Nastran 2023.3. Verified against the real files in ``examples/fem``
+(spec 02 §3.9): nodal displacements, eigenvectors, SPC forces, applied loads, grid point
+weight, CBUSH forces, element strain energy, eigenvalue summary and the modal effective mass
+results. Not yet verified (synthetic test files only): CQUAD4, CBEAM, MPC forces, grid point
+forces.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from apb.units import QuantityKind as Q
 
 #: Function adding derived columns to a table (in place).
 type Deriver = Callable[[pd.DataFrame], None]
+
+#: Function building the table from the raw dataset rows, for datasets that are not one
+#: table row per dataset row (matrices). Must keep a ``DOMAIN_ID`` column if the data has one.
+type Transform = Callable[[npt.NDArray[Any]], pd.DataFrame]
+
+#: Names of the six degrees of freedom in modal effective mass output.
+DOF_NAMES = ("T1", "T2", "T3", "R1", "R2", "R3")
 
 
 @dataclass(frozen=True)
@@ -35,6 +47,8 @@ class ResultMapping:
         kinds: Output column name -> quantity kind.
         stations: Array fields are per-station values (CBEAM) -> one row per station.
         derive: Functions adding derived columns.
+        transform: Builds the table from the raw rows instead of the default conversion.
+        size_label: Size shown in the result browser instead of the row count, e.g. ``6 x 6``.
     """
 
     title: str
@@ -44,6 +58,65 @@ class ResultMapping:
     kinds: dict[str, Q] = field(default_factory=dict)
     stations: bool = False
     derive: tuple[Deriver, ...] = ()
+    transform: Transform | None = None
+    size_label: str = ""
+
+
+def _matrix6(data: npt.NDArray[Any]) -> pd.DataFrame:
+    """Turn rows holding a 6 x 6 matrix (fields ``COL1 .. COL6``) into six table rows each.
+
+    Args:
+        data: Raw dataset rows; field ``COLj`` holds column ``j`` of the matrix.
+
+    Returns:
+        Table ``DOF, T1 .. R3`` (and ``DOMAIN_ID``) with one row per matrix row.
+    """
+    n = len(data)
+    columns: dict[str, Any] = {"DOF": np.tile(np.array(DOF_NAMES, dtype=object), n)}
+    for j, name in enumerate(DOF_NAMES):
+        columns[name] = np.asarray(data[f"COL{j + 1}"], dtype=float).reshape(n, 6).ravel()
+    if "DOMAIN_ID" in (data.dtype.names or ()):
+        columns["DOMAIN_ID"] = np.repeat(data["DOMAIN_ID"], 6)
+    return pd.DataFrame(columns)
+
+
+def _grid_weight(data: npt.NDArray[Any]) -> pd.DataFrame:
+    """Turn grid point weight generator output into a mass / centre of gravity table.
+
+    Args:
+        data: Raw dataset rows (fields ``MX, XX, YX, ZX, MY, ...``: mass and centre of
+            gravity per mass direction).
+
+    Returns:
+        Table ``DIRECTION, MASS, X_CG, Y_CG, Z_CG`` (and ``DOMAIN_ID``), three rows per
+        dataset row.
+    """
+    rows: list[dict[str, Any]] = []
+    has_domain = "DOMAIN_ID" in (data.dtype.names or ())
+    for rec in data:
+        for d in "XYZ":
+            row: dict[str, Any] = {
+                "DIRECTION": d,
+                "MASS": float(rec[f"M{d}"]),
+                "X_CG": float(rec[f"X{d}"]),
+                "Y_CG": float(rec[f"Y{d}"]),
+                "Z_CG": float(rec[f"Z{d}"]),
+            }
+            if has_domain:
+                row["DOMAIN_ID"] = int(rec["DOMAIN_ID"])
+            rows.append(row)
+    names = ["DIRECTION", "MASS", "X_CG", "Y_CG", "Z_CG"] + (["DOMAIN_ID"] if has_domain else [])
+    return pd.DataFrame(rows, columns=names)
+
+
+def _modal_kinds(translation: Q | None, rotation: Q | None) -> dict[str, Q]:
+    """Return kinds for a modal table with ``FREQUENCY`` and the columns ``T1 .. R3``."""
+    out: dict[str, Q] = {"FREQUENCY": Q.FREQUENCY}
+    for name in DOF_NAMES:
+        kind = translation if name.startswith("T") else rotation
+        if kind is not None:
+            out[name] = kind
+    return out
 
 
 def _von_mises_quad4(df: pd.DataFrame) -> None:
@@ -159,6 +232,51 @@ RESULT_MAPPINGS: dict[str, ResultMapping] = {
         stations=True,
     ),
     "ELEMENTAL/ELEMENT_FORCE/BUSH": ResultMapping("CBUSH forces", "EID", "EID", {}, _six("F", "M")),
+    "ELEMENTAL/ENERGY/STRAIN_ELEM": ResultMapping(
+        "Element strain energy",
+        "ID",
+        "EID",
+        {"ID": "EID", "DEN": "DENSITY"},
+        {"ENERGY": Q.ENERGY, "PCT": Q.DIMENSIONLESS, "DENSITY": Q.ENERGY_DENSITY},
+    ),
+    "NODAL/APPLIED_LOAD": ResultMapping("Applied loads", "ID", "GRID", _NODAL_RENAME, _six()),
+    "NODAL/GRID_WEIGHT": ResultMapping(
+        "Grid point weight (mass and centre of gravity)",
+        None,
+        "",
+        {},
+        {"MASS": Q.MASS, "X_CG": Q.LENGTH, "Y_CG": Q.LENGTH, "Z_CG": Q.LENGTH},
+        transform=_grid_weight,
+        size_label="3 rows",
+    ),
+    "MODAL/MODAL_EFFECTIVE_MASS": ResultMapping(
+        "Modal effective mass", None, "", {}, _modal_kinds(Q.MASS, Q.MASS_INERTIA)
+    ),
+    "MODAL/MODAL_EFFECTIVE_WEIGHT": ResultMapping(
+        "Modal effective weight", None, "", {}, _modal_kinds(None, None)
+    ),
+    "MODAL/MODAL_PARTICIPATION_FACTOR": ResultMapping(
+        "Modal participation factors", None, "", {}, _modal_kinds(None, None)
+    ),
+    "MODAL/MODAL_MASS_FRACTION": ResultMapping(
+        "Modal effective mass fractions",
+        None,
+        "",
+        {},
+        {
+            "FREQUENCY": Q.FREQUENCY,
+            **{f"{n}_{s}": Q.DIMENSIONLESS for n in DOF_NAMES for s in ("FRAC", "SUM")},
+        },
+    ),
+    "MODAL/TOTAL_MASS_FRACTION": ResultMapping(
+        "Total effective mass fraction", None, "", {}, dict.fromkeys(DOF_NAMES, Q.DIMENSIONLESS)
+    ),
+    "MODAL/EFFECTIVE_MASS_MATRIX": ResultMapping(
+        "Effective mass matrix", None, "", transform=_matrix6, size_label="6 x 6"
+    ),
+    "MODAL/RIGID_BODY_MASS_MATRIX": ResultMapping(
+        "Rigid body mass matrix", None, "", transform=_matrix6, size_label="6 x 6"
+    ),
     "SUMMARY/EIGENVALUE": ResultMapping(
         "Eigenvalues",
         None,

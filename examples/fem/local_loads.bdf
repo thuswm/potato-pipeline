@@ -1,0 +1,66 @@
+INIT MASTER(S)
+NASTRAN SYSTEM(319)=1
+ID local,FEMAP
+SOL SESTATIC
+CEND
+  TITLE = static
+  ECHO = NONE
+  DISPLACEMENT(PLOT) = ALL
+  SPCFORCE(PLOT) = ALL
+  OLOAD(PLOT) = ALL
+  FORCE(PLOT,CORNER) = ALL
+  STRESS(PLOT,CORNER) = ALL
+  SPC = 1
+  LOAD = 3
+BEGIN BULK
+$
+$-------2-------3-------4-------5-------6
+HDF5OUT CMPRMTHDNONE
+$
+PARAM,PRGPST,YES
+PARAM,POST,-1
+PARAM,OGEOM,NO
+PARAM,AUTOSPC,YES
+PARAM,GRDPNT,0
+CORD2C         1       0      0.      0.      0.      0.      0.      1.+FEMAPC1
++FEMAPC1      1.      0.      1.        
+CORD2S         2       0      0.      0.      0.      0.      0.      1.+FEMAPC2
++FEMAPC2      1.      0.      1.        
+$ Femap Load Set 3 : AccelerationZ
+GRAV           3       0      1.      0.      0.     10.
+$ Femap Constraint Set 1 : BC
+SPC1           1  123456      67
+SPC1           1  123456      68
+SPC1           1  123456      69
+SPC1           1  123456      70
+$ Femap Property 1 : Box 1
+PSHELL         1       1     .01       1               1              0.
+$ Femap Property 2 : Box 2
+PSHELL         2       1    .008       1               1              0.
+$ Femap Property 3 : Box 3
+PSHELL         3       2    .004       2               2              0.
+$ Femap Property 4 : Box 4
+PSHELL         4       2    .002       2               2              0.
+$ Femap Property 5 : CBUSH 1
+PBUSH          5       K   1.+10   1.+10   1.+10   1.+10   1.+10   1.+10                
+$ Femap Property 6 : CBUSH 2
+PBUSH          6       K   1.+20   1.+20   1.+20   1.+20   1.+20   1.+20                
+$ Femap Material 1 : Steel
+MAT1           1  2.1+11              .3   8000.      0.      0.        
+$ Femap Material 2 : Aluminium
+MAT1           2   7.+10              .3   2500.      0.      0.        
+GRID           1       0     -.5     -.5      0.       0
+GRID          11       0      .5     -.5      0.       0
+GRID          67       0     -.5     -.5      0.       0
+GRID          68       0      .5     -.5      0.       0
+GRID          69       0      .5      .5      0.       0
+GRID          70       0     -.5      .5      0.       0
+GRID          77       0      .5      .5      0.       0
+GRID         133       0     -.5      .5      0.       0
+GRID         345       0      0.      0.      .5       0
+RBE2           1     345  123456       1      11      77     133
+CBUSH          2       5      67       1                               0
+CBUSH          3       5      68      11                               0
+CBUSH          4       5      69      77                               0
+CBUSH          5       5      70     133                               0
+ENDDATA

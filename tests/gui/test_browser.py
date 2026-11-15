@@ -236,9 +236,9 @@ def test_edit_parameter_makes_blocks_stale_and_rerun(page):
 
 def test_error_is_shown_and_log_selects_block(page):
     select(page, "CBUSH forces")
-    result = page.get_by_role("textbox", name="Result *")
-    result.fill("ELEMENTAL/STRESS/NOPE")
-    result.press("Enter")
+    file = page.get_by_role("textbox", name="File *")
+    file.fill("missing/model.h5")
+    file.press("Enter")
     page.wait_for_timeout(300)
     run_all(page)
     assert "apb-state-error" in node(page, "CBUSH forces").get_attribute("class")
@@ -269,3 +269,57 @@ def test_python_block_port_change_updates_canvas(page):
     assert margins.locator(".inputs .input").count() == 5
     assert margins.locator(".apb-in", has_text="value5").count() == 1
     assert page.locator(".drawflow .connection").count() == 24  # existing connections kept
+
+
+def test_result_browser_lists_selects_and_peeks(page, workdir: Path):
+    select(page, "CBUSH forces")
+    # The block's file comes from a pipeline variable: the synthetic joint file.
+    assert "synthetic test file" in page.locator(".apb-h5-info").inner_text()
+    results = page.locator(".apb-h5-results")
+    assert "CBUSH forces" in page.locator(".apb-h5-selected").inner_text()
+    assert "EID present: 1001 to 1004 (4 IDs)" in page.locator(".apb-h5-ids").inner_text()
+
+    # Point the block at a real file: the list follows, the old result is reported missing.
+    box = page.get_by_role("textbox", name="File *")
+    box.fill("fem/modal.h5")
+    box.press("Enter")
+    page.wait_for_timeout(600)
+    assert "MSC Nastran 2023.3 · SOL 103 · modal.bdf" in page.locator(".apb-h5-info").inner_text()
+    assert "Eigenvectors (mode shapes)" in results.inner_text()
+    assert "6 x 6" in results.inner_text()
+    assert page.get_by_text("is not in this file").is_visible()
+
+    # Search, then click a result: it is selected and previewed without running.
+    page.get_by_placeholder("Search results").fill("effective mass")
+    page.wait_for_timeout(400)
+    assert "Eigenvectors" not in results.inner_text()
+    results.get_by_text("Modal effective mass", exact=True).click()
+    page.wait_for_timeout(800)
+    assert "Modal effective mass" in page.locator(".apb-h5-selected").inner_text()
+    assert "not yet run" in page.locator(".apb-peek").inner_text()
+    preview = page.locator(".q-table").first.inner_text()
+    assert "FREQUENCY [Hz]" in preview
+    assert "T1 [t]" in preview  # pipeline default unit system is SI_mm
+    assert "25.7119" in preview
+    assert page.locator(".apb-h5-ids").count() == 0  # no IDs in this result
+
+    # The choice is stored in the pipeline file.
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save", exact=True).click()
+    page.wait_for_timeout(500)
+    saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
+    block = next(b for b in saved["blocks"] if b.get("label") == "CBUSH forces")
+    assert block["params"]["file"] == "fem/modal.h5"
+    assert block["params"]["result"] == "MODAL/MODAL_EFFECTIVE_MASS"
+
+
+def test_result_browser_unreadable_file_keeps_text_fields(page):
+    select(page, "CBUSH forces")
+    box = page.get_by_role("textbox", name="File *")
+    box.fill("missing/model.h5")
+    box.press("Enter")
+    page.wait_for_timeout(600)
+    assert "File not found" in page.locator(".apb-h5-error").inner_text()
+    assert (
+        page.get_by_role("textbox", name="Result *").input_value() == "ELEMENTAL/ELEMENT_FORCE/BUSH"
+    )
