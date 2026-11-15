@@ -23,13 +23,14 @@ from apb.blocks.report.block import WordReport
 from apb.engine.events import EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
+from apb.engine.store import StoreError, format_size
 from apb.engine.variables import VariableError, resolve
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
 from apb.gui.forms import ParamForm, suffix_hint
 from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
-from apb.gui.preview import open_with_system, show_result, show_value
+from apb.gui.preview import open_with_system, show_result, show_value, stored_time
 from apb.gui.python_panel import PythonPanel
 from apb.gui.report_editor import ReportPanel
 from apb.gui.runner import EVENT_STATES, RunController, summary
@@ -107,6 +108,8 @@ class EditorPage:
         self.state.on_change(self._on_state_change)
         ui.timer(0.1, self.runner.drain)
         ui.timer(0.5, self._refresh_states)
+        if initial is not None:
+            self._restore_outputs()
         self._update_title()
         self._show_preview()
 
@@ -126,6 +129,7 @@ class EditorPage:
                 ui.menu_item("Quit", on_click=self.quit)
             with ui.button("Pipeline", icon="tune").props("flat color=white dense"), ui.menu():
                 ui.menu_item("Variables and settings…", on_click=self.edit_pipeline_settings)
+                ui.menu_item("Stored outputs…", on_click=self.show_stored_outputs)
             with ui.button("View", icon="visibility").props("flat color=white dense"), ui.menu():
                 ui.menu_item("Fit to window", on_click=lambda: self.canvas.fit_view())
                 ui.menu_item("Zoom in", on_click=lambda: self.canvas.zoom(1))
@@ -245,6 +249,8 @@ class EditorPage:
                 return
             if cls.description:
                 ui.label(cls.description).classes("text-xs text-slate-600")
+            self.stored_box = ui.column().classes("w-full gap-0")
+            self._render_stored()
             self.issues = ui.column().classes("w-full gap-0")
             self._show_issues()
             ui.label("Parameters").classes("text-xs font-medium text-slate-600 mt-1")
@@ -415,6 +421,8 @@ class EditorPage:
                 self._log(f"✘ {name}: {event.message}", "error", event.block_id)
             case EventKind.BLOCK_SKIPPED:
                 self._log(f"- {name}: skipped ({event.message})", "warn", event.block_id)
+            case EventKind.LOG if event.block_id is None:
+                self._log(event.message, "warn")
             case EventKind.LOG:
                 self._log(f"  {name}: {event.message}", "info", event.block_id)
             case _:
@@ -439,8 +447,9 @@ class EditorPage:
                 )
             return
         self.preview_title.text = f"Preview — {self._block_name(self.selected)}"
+        outdated = self.runner.display_states().get(self.selected) == "stale"
         with self.preview:
-            show_result(self.runner.result(self.selected))
+            show_result(self.runner.result(self.selected), outdated)
 
     def _report_items(self, block_id: str) -> list[report_editing.ItemInfo]:
         """Return the items connected to a report with the columns and values of the last run."""
@@ -450,7 +459,10 @@ class EditorPage:
             if info.connection is not None:
                 result = self.runner.result(info.connection[0])
                 if result is not None:
-                    value = result.outputs.get(info.connection[1])
+                    try:
+                        value = result.outputs.get(info.connection[1])
+                    except StoreError:  # a damaged stored output: treated as not run
+                        value = None
             columns = (
                 report_editing.table_columns(value) if isinstance(value, pd.DataFrame) else None
             )
@@ -466,6 +478,109 @@ class EditorPage:
         changes = self.state.rename_connector(ConnectionKey(*info.connection), name)
         self.runner.mark_edited(block_id)
         return changes
+
+    # ---- stored outputs (spec 08 §3.9) ------------------------------------------------------
+
+    def _render_stored(self) -> None:
+        """Show the stored output line of the selected block's panel, with *Clear output*."""
+        box = getattr(self, "stored_box", None)
+        if box is None or self.selected is None:
+            return
+        box.clear()
+        entry = self.runner.stored_entry(self.selected)
+        if entry is None or not entry.usable:
+            return
+        block_id = self.selected
+        with box, ui.row().classes("w-full items-center no-wrap gap-1 apb-stored"):
+            ui.label(
+                f"Stored output: {stored_time(entry.finished)} · {format_size(entry.size)}"
+            ).classes("text-xs text-slate-500 grow")
+            ui.button(
+                "Clear output", icon="delete_sweep", on_click=lambda: self._clear_block(block_id)
+            ).props("flat dense size=sm").tooltip(
+                "Delete the stored output of this block and of every block downstream of it"
+            )
+
+    async def _clear_block(self, block_id: str) -> None:
+        """Clear a block's stored output and everything downstream (STO-08)."""
+        downstream = self.runner.downstream(block_id)
+        order = [b.id for b in self.state.pipeline.blocks]
+        others = [self._block_name(b) for b in order if b in downstream]
+        question = f"Clear the stored output of '{self._block_name(block_id)}'"
+        question += (
+            f" and of {len(others)} block(s) downstream: {', '.join(others)}?" if others else "?"
+        )
+        if not await confirm(question, ok_label="Clear"):
+            return
+        try:
+            cleared = self.runner.clear([block_id])
+        except StoreError as exc:
+            ui.notify(str(exc), type="negative", multi_line=True)
+            return
+        self._after_clear(f"Cleared the outputs of {len(cleared)} block(s)")
+
+    def _after_clear(self, message: str) -> None:
+        self._states_dirty = True
+        self._log(message, "info")
+        self._render_stored()
+        self._show_preview()
+
+    async def show_stored_outputs(self) -> None:
+        """Pipeline > Stored outputs: where the results are, how much, and *Clear all*."""
+        store = self.runner.executor.store
+        with ui.dialog() as dialog, ui.card().classes("w-[36rem] max-w-full"):
+            ui.label("Stored outputs").classes("text-lg font-medium")
+            if store is None:
+                ui.label(
+                    "This pipeline has not been saved yet. Its results are kept in memory "
+                    "and are stored next to the pipeline file when you save it."
+                ).classes("text-sm")
+            else:
+                entries, problems = store.entries()
+                orphans = store.orphans({b.id for b in self.state.pipeline.blocks})
+                size = store.size()
+                ui.label(str(store.folder)).classes("text-xs break-all apb-stored-folder")
+                facts = f"{len(entries)} block(s) · {format_size(size)}"
+                if problems:
+                    facts += f" · {len(problems)} unreadable"
+                if orphans:
+                    facts += f" · {len(orphans)} for blocks that are not in the pipeline"
+                ui.label(facts).classes("text-sm apb-stored-facts")
+                ui.label(
+                    "Stored outputs are the results of earlier runs. They are used when the "
+                    "inputs have not changed. Clearing them does not delete reports, workbooks "
+                    "or input files."
+                ).classes("text-xs text-slate-600")
+            with ui.row().classes("w-full justify-end"):
+                if store is not None and store.folder.is_dir():
+                    ui.button(
+                        "Open folder",
+                        icon="folder_open",
+                        on_click=lambda: open_with_system(store.folder),
+                    ).props("flat")
+                    ui.button(
+                        "Clear all…",
+                        icon="delete_sweep",
+                        color="negative",
+                        on_click=lambda: dialog.submit("clear"),
+                    ).props("flat")
+                ui.button("Close", on_click=lambda: dialog.submit("close"))
+        choice = await dialog
+        dialog.delete()
+        if choice != "clear" or store is None:
+            return
+        entries, _ = store.entries()
+        if not await confirm(
+            f"Delete the stored outputs of {len(entries)} block(s) in {store.folder}?",
+            ok_label="Clear all",
+        ):
+            return
+        try:
+            cleared = self.runner.clear(None)
+        except StoreError as exc:
+            ui.notify(str(exc), type="negative", multi_line=True)
+            return
+        self._after_clear(f"Cleared all stored outputs ({len(cleared)} block(s))")
 
     def _resolve_variables(self, value: Any) -> Any:
         """Replace ``${variable}`` references; undefined variables are left as they are."""
@@ -588,6 +703,7 @@ class EditorPage:
         self._log(text, "ok" if kind == "positive" else "warn" if kind == "warning" else "error")
         ui.notify(text, type=kind)
         self._states_dirty = True
+        self._render_stored()
         self._show_preview()
 
     # ---- pipeline settings -----------------------------------------------------------------
@@ -762,6 +878,7 @@ class EditorPage:
             ui.notify(str(exc), type="negative", position="top", multi_line=True)
             return
         self._last_folder = path.parent
+        self.runner.attach_store(self.state.path)
         unknown = sorted(
             {b.type_id for b in self.state.pipeline.blocks if b.type_id not in self.state.registry}
         )
@@ -781,9 +898,28 @@ class EditorPage:
         self.selected = None
         self.runner.results.clear()
         self.runner.executor.clear_cache()
+        self.runner.attach_store(self.state.path)
         self._reload_canvas()
         self._show_panel()
+        self._restore_outputs()
         self._show_preview()
+
+    def _restore_outputs(self) -> None:
+        """Show the stored results of the opened pipeline and say what was found (STO-03)."""
+        found = self.runner.restore()
+        states = self.runner.display_states()
+        total = len(self.state.pipeline.blocks)
+        outdated = sum(1 for b in self.runner.results if states.get(b) == "stale")
+        if found:
+            note = f" ({outdated} outdated)" if outdated else ""
+            self._log(f"Stored outputs found for {found} of {total} blocks{note}", "info")
+        for block_id, reason in self.runner.executor.store_problems.items():
+            self._log(
+                f"  Stored output of {self._block_name(block_id)} ignored: {reason}",
+                "warn",
+                block_id,
+            )
+        self._states_dirty = True
 
     async def save(self) -> None:
         """File > Save."""
@@ -816,6 +952,18 @@ class EditorPage:
         self._last_folder = written.parent
         self._states_dirty = True
         ui.notify(f"Saved {written.name}", type="positive", position="bottom-right")
+        self._store_after_save(written)
+
+    def _store_after_save(self, written: Path) -> None:
+        """Use the store of the saved file and write what is done so far (STO-12, STO-13)."""
+        self.runner.attach_store(written)
+        try:
+            self.runner.persist()
+        except Exception as exc:  # saving the pipeline must not fail because of the store
+            self._log(f"Stored outputs could not be updated: {exc}", "warn")
+        if self.runner.executor.store_warning:
+            ui.notify(self.runner.executor.store_warning, type="warning", multi_line=True)
+        self._render_stored()
 
 
 def run_gui(pipeline: Path | None = None, *, port: int = 8765, show: bool = True) -> None:

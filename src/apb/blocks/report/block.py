@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import string
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -78,6 +79,13 @@ class WordReport(Block[WordReportParams]):
     outputs = (Port("file", PortType.TEXT, label="File"),)
     Params = WordReportParams
     always_run = True
+
+    def output_files(
+        self, params: WordReportParams, outputs: Mapping[str, Any], ctx: RunContext
+    ) -> list[Path]:
+        """The report (the block counts as done only while it exists)."""
+        out = Path(params.output_file)
+        return [out if out.is_absolute() else ctx.output_dir / out]
 
     def input_files(self, params: WordReportParams, ctx: RunContext) -> list[Path]:
         """The base document, if one is set."""

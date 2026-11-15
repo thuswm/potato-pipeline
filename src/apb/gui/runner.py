@@ -8,14 +8,16 @@ page calls from a timer in its own (event loop) context.
 from __future__ import annotations
 
 import queue
-from collections.abc import Callable
+from collections.abc import Callable, Collection
+from pathlib import Path
 from typing import Any, Literal
 
 from nicegui import run
 
 from apb.engine.events import BlockState, EventKind, RunEvent
 from apb.engine.executor import BlockResult, Executor, PipelineValidationError, RunResult
-from apb.engine.graph import ValidationIssue
+from apb.engine.graph import ValidationIssue, prepare
+from apb.engine.store import OutputStore, StoredEntry
 from apb.gui.editor import EditorState
 
 #: Notification types of NiceGUI used for run summaries.
@@ -88,6 +90,47 @@ class RunController:
         """Stop after the current block."""
         self.executor.stop()
 
+    # ---- stored outputs (spec 08) ------------------------------------------------------
+
+    def attach_store(self, pipeline_file: Path | None) -> None:
+        """Use the store of a pipeline file (``None`` = unsaved pipeline: memory only)."""
+        self.executor.attach_store(
+            OutputStore.for_pipeline(pipeline_file) if pipeline_file is not None else None
+        )
+
+    def restore(self) -> int:
+        """Show the stored results of the pipeline's blocks; returns how many there are."""
+        restored = self.executor.restore(self.state.pipeline)
+        self.results.update(restored)
+        return len(restored)
+
+    def persist(self) -> int:
+        """Write the up-to-date outputs to the store (after Save); returns how many."""
+        return self.executor.persist(self.state.pipeline, self.state.base_dir)
+
+    def downstream(self, block_id: str) -> set[str]:
+        """Return the blocks that depend on a block."""
+        return prepare(self.state.pipeline, self.state.registry).downstream(block_id)
+
+    def clear(self, block_ids: Collection[str] | None = None) -> list[str]:
+        """Clear stored and in-memory outputs: everything, or blocks and what is downstream.
+
+        Returns:
+            The IDs of the blocks that had outputs.
+
+        Raises:
+            StoreError: If stored data cannot be removed.
+        """
+        cleared = self.executor.clear_outputs(self.state.pipeline, block_ids)
+        for block_id in cleared:
+            self.results.pop(block_id, None)
+            self.edited.discard(block_id)
+        return cleared
+
+    def stored_entry(self, block_id: str) -> StoredEntry | None:
+        """Return the stored entry of a block, if any."""
+        return self.executor.stored_entry(block_id)
+
     def mark_edited(self, block_id: str) -> None:
         """Remember that a block changed since the last run."""
         self.edited.add(block_id)
@@ -128,12 +171,14 @@ def summary(result: RunResult) -> tuple[str, NotifyType]:
     for r in result.results.values():
         counts[r.state] = counts.get(r.state, 0) + 1
     done, errors = counts.get(BlockState.DONE, 0), counts.get(BlockState.ERROR, 0)
+    up_to_date = sum(r.cached for r in result.results.values())
     skipped = counts.get(BlockState.SKIPPED, 0)
     if result.cancelled:
         return f"Run stopped: {done} done, {skipped} not run", "warning"
     if errors:
         return f"Run finished with {errors} error(s): {done} done, {skipped} skipped", "negative"
-    return f"Run finished: {done} block(s) done", "positive"
+    extra = f" ({up_to_date} up to date)" if up_to_date else ""
+    return f"Run finished: {done} block(s) done{extra}", "positive"
 
 
 def describe_value(value: Any) -> str:

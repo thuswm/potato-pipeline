@@ -26,6 +26,7 @@ Change log:
 | 05 | [Word report block](05-word-report.md) | Generating `.docx` reports; later user-supplied Word templates |
 | 06 | [GUI node editor](06-gui.md) | Browser GUI, canvas, property panel, running pipelines |
 | 07 | [Concrete test case](07-test-case.md) | The analyst's modal + global/local loads case as example pipeline and acceptance test |
+| 08 | [Stored outputs](08-stored-outputs.md) | Block outputs on disk (Parquet), reopening a pipeline as already run, clearing outputs |
 
 Each feature spec has the same structure: *Purpose · Requirements · Design · Out of scope (v1) · Open questions*.
 
@@ -42,7 +43,7 @@ Agreed order. Each step: spec update → approval → code → commit.
 | 2 | Small GUI fixes: New folder in Save as; block type shown on every block and in the property panel; Quit command that stops the server; one term ("block", "connector") everywhere | 06 |
 | 3 | Python block: view the code in the property panel, open the file, start from a template; a template never overwrites an existing file | 04 |
 | 4 | Report section editor (with item names and previews); requirement check block; the concrete test case as example pipeline `examples/test_case.apb.json` with an example margin script | 05 §3.4, 03 §3.4, 07 |
-| 5 | Block outputs stored on disk (Parquet via `pyarrow`) so a reopened pipeline is recognised as already run; "Clear outputs" | 01 |
+| 5 | Block outputs stored on disk (Parquet via `pyarrow`) so a reopened pipeline is recognised as already run; "Clear outputs" | 01 §3.4, 08 |
 | 6 | Nastran analysis block: points at the `.bdf`, run mode never / if input changed / always, outputs `.h5` and `.f06`, reports fatal errors and warnings from the f06 | new |
 
 Later (noted, not scheduled): load table → model update block; mode shape plots; Abaqus

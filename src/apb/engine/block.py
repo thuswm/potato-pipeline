@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, ClassVar
@@ -151,6 +151,18 @@ class Block[P: BaseModel](ABC):
 
     def input_files(self, params: P, ctx: RunContext) -> list[Path]:
         """Return files read by the block; a change of one of them invalidates the cache."""
+        return []
+
+    def output_files(self, params: P, outputs: Mapping[str, Any], ctx: RunContext) -> list[Path]:
+        """Return the files the block wrote (reports, workbooks).
+
+        A block that writes files counts as ``done`` only while they exist (spec 08 §3.4).
+
+        Args:
+            params: Validated parameters.
+            outputs: The outputs the run returned.
+            ctx: Run context (resolves relative paths).
+        """
         return []
 
     @classmethod

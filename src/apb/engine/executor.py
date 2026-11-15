@@ -3,7 +3,8 @@
 The executor keeps an in-memory cache per session: a block is re-run only if its cache key
 changed. The key covers the block type and version, its resolved parameters, the keys of
 the blocks feeding it and the size/modification time (and, for small files, the content
-hash) of the files it reads.
+hash) of the files it reads. With an :class:`~apb.engine.store.OutputStore` attached the
+outputs are also written to disk and found again when the pipeline is reopened (spec 08).
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import logging
 import threading
 import time
 import traceback
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,14 @@ from apb.engine.events import BlockState, EventKind, EventSink, RunEvent
 from apb.engine.graph import PreparedBlock, PreparedGraph, ValidationIssue, prepare
 from apb.engine.model import PipelineModel
 from apb.engine.registry import BlockRegistry
+from apb.engine.store import (
+    OutputStore,
+    StoredEntry,
+    StoredOutputs,
+    StoreError,
+    StoreUnavailableError,
+    now_text,
+)
 from apb.engine.types import copy_value, value_matches
 
 _log = logging.getLogger(__name__)
@@ -54,16 +63,33 @@ class BlockResult:
         cache_key: Key the outputs belong to.
         cached: Outputs were taken from the cache.
         duration: Run time in seconds.
+        restored: Outputs come from the stored outputs of an earlier session.
+        finished: When the block finished (ISO 8601), if known.
     """
 
     state: BlockState
-    outputs: dict[str, Any] = field(default_factory=dict)
+    outputs: Mapping[str, Any] = field(default_factory=dict)
     error: str = ""
     traceback: str = ""
     log: list[str] = field(default_factory=list)
     cache_key: str = ""
     cached: bool = False
     duration: float = 0.0
+    restored: bool = False
+    finished: str = ""
+
+
+@dataclass
+class _Cached:
+    """One block's outputs in the in-memory cache."""
+
+    key: str
+    outputs: Mapping[str, Any]
+    log: list[str]
+    duration: float
+    finished: str
+    written: list[str] = field(default_factory=list)
+    restored: bool = False
 
 
 @dataclass
@@ -104,27 +130,76 @@ def _file_stamp(path: Path) -> str:
     return f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
 
 
+def _recorded(base: Path, path: Path) -> str:
+    """Return a written file as stored: relative to the pipeline folder if inside it."""
+    try:
+        return path.resolve().relative_to(base).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
+def _files_exist(base: Path, recorded: Collection[str]) -> bool:
+    """Return whether all recorded written files still exist."""
+    return all((base / name).exists() for name in recorded)
+
+
 class Executor:
     """Runs pipelines and caches block outputs between runs."""
 
-    def __init__(self, registry: BlockRegistry, sink: EventSink | None = None) -> None:
+    def __init__(
+        self,
+        registry: BlockRegistry,
+        sink: EventSink | None = None,
+        store: OutputStore | None = None,
+        *,
+        use_stored: bool = True,
+    ) -> None:
         """Create an executor.
 
         Args:
             registry: Available block types.
             sink: Receives run events (GUI, CLI output). Exceptions in the sink are ignored.
+            store: Where outputs are kept on disk (``None`` = memory only).
+            use_stored: Take up-to-date outputs from the store; with ``False`` everything is
+                recomputed, and the new outputs are still written (``--no-cache``).
         """
         self.registry = registry
         self._sink = sink
-        self._cache: dict[str, tuple[str, dict[str, Any]]] = {}
+        self._cache: dict[str, _Cached] = {}
         self._lock = threading.Lock()
         self.cancel_event = threading.Event()
+        self.store: OutputStore | None = None
+        self.use_stored = use_stored
+        self.store_problems: dict[str, str] = {}
+        """Entries of the store that could not be read: block id -> reason."""
+        self.store_warning = ""
+        """Set once if the store folder cannot be written (outputs stay in memory)."""
+        self._entries: dict[str, StoredEntry] | None = None
+        self._store_off = False
+        self.attach_store(store)
 
     # ---- public API ---------------------------------------------------------------------
 
     def clear_cache(self) -> None:
-        """Forget all cached outputs."""
+        """Forget all outputs kept in memory (the stored outputs are not touched)."""
         self._cache.clear()
+
+    def attach_store(self, store: OutputStore | None) -> None:
+        """Use another output store (``None`` = memory only); entries are read again."""
+        self.store = store
+        self._entries = None
+        self._store_off = False
+        self.store_problems = {}
+        self.store_warning = ""
+
+    def index_problems(self) -> dict[str, str]:
+        """Return the stored entries that could not be read (block ID -> reason)."""
+        self._index()
+        return dict(self.store_problems)
+
+    def stored_entry(self, block_id: str) -> StoredEntry | None:
+        """Return the stored entry of a block, if there is a readable one."""
+        return self._index().get(block_id)
 
     def stop(self) -> None:
         """Ask a running run to stop after the current block."""
@@ -138,8 +213,9 @@ class Executor:
     ) -> dict[str, BlockState]:
         """Return the state of every block without running anything.
 
-        A block is ``DONE`` if its cached outputs are up to date, ``STALE`` if it has cached
-        outputs whose key changed, and ``IDLE`` if it has never run.
+        A block is ``DONE`` if its outputs (in memory or stored) are up to date, ``STALE`` if
+        it has outputs whose key changed, and ``IDLE`` if it has none. A block that writes
+        files is only ``DONE`` while those files exist.
 
         Args:
             pipeline: The pipeline.
@@ -151,16 +227,128 @@ class Executor:
         """
         graph = prepare(pipeline, self.registry, overrides)
         keys = self._cache_keys(graph, graph.order, self._context_factory(pipeline, pipeline_dir))
+        index = self._index()
+        base = pipeline_dir.resolve()
         states: dict[str, BlockState] = {}
         for block_id in graph.blocks:
+            key = keys.get(block_id)
             cached = self._cache.get(block_id)
-            if cached is None:
-                states[block_id] = BlockState.IDLE
-            elif keys.get(block_id) == cached[0]:
-                states[block_id] = BlockState.DONE
+            entry = index.get(block_id)
+            if cached is not None:
+                fresh = key == cached.key and _files_exist(base, cached.written)
+            elif entry is not None:
+                fresh = (
+                    entry.usable
+                    and key == entry.cache_key
+                    and _files_exist(base, entry.written_files)
+                )
             else:
-                states[block_id] = BlockState.STALE
+                states[block_id] = BlockState.IDLE
+                continue
+            states[block_id] = BlockState.DONE if fresh else BlockState.STALE
         return states
+
+    def restore(self, pipeline: PipelineModel) -> dict[str, BlockResult]:
+        """Return the stored results of the pipeline's blocks, to show them without running.
+
+        The outputs are read from disk when first used. Entries made by another tool
+        version are left out. See also :attr:`store_problems`.
+
+        Args:
+            pipeline: The pipeline.
+
+        Returns:
+            Block ID -> result (``restored``), for every block with a usable stored entry.
+        """
+        index = self._index()
+        results: dict[str, BlockResult] = {}
+        for block in pipeline.blocks:
+            entry = index.get(block.id)
+            if entry is not None and entry.usable:
+                results[block.id] = BlockResult(
+                    BlockState.DONE,
+                    outputs=StoredOutputs(entry),
+                    log=list(entry.log),
+                    cache_key=entry.cache_key,
+                    cached=True,
+                    duration=entry.duration,
+                    restored=True,
+                    finished=entry.finished,
+                )
+        return results
+
+    def persist(self, pipeline: PipelineModel, pipeline_dir: Path) -> int:
+        """Write the up-to-date in-memory outputs to the store (first save of a pipeline).
+
+        Also removes the entries of blocks that are no longer in the pipeline (STO-13).
+
+        Args:
+            pipeline: The pipeline.
+            pipeline_dir: Its directory.
+
+        Returns:
+            The number of entries written.
+        """
+        if self.store is None or self._store_off:
+            return 0
+        graph = prepare(pipeline, self.registry)
+        keys = self._cache_keys(graph, graph.order, self._context_factory(pipeline, pipeline_dir))
+        written = 0
+        for block_id, cached in list(self._cache.items()):
+            block = graph.blocks.get(block_id)
+            entry = self._index().get(block_id)
+            if (
+                block is None
+                or block.cls is None
+                or keys.get(block_id) != cached.key
+                or (entry is not None and entry.usable and entry.cache_key == cached.key)
+            ):
+                continue
+            if self._write_entry(block_id, block.cls.type_id, block.cls.version, cached, None):
+                written += 1
+        try:
+            for block_id in self.store.orphans(set(graph.blocks)):
+                self.store.clear([block_id])
+                self._index().pop(block_id, None)
+        except StoreError as exc:
+            _log.warning("Orphaned entries not removed: %s", exc)
+        return written
+
+    def clear_outputs(
+        self, pipeline: PipelineModel, block_ids: Collection[str] | None = None
+    ) -> list[str]:
+        """Forget stored and in-memory outputs: everything, or blocks and what is downstream.
+
+        Args:
+            pipeline: The pipeline.
+            block_ids: Blocks to clear together with all blocks downstream of them;
+                ``None`` clears everything.
+
+        Returns:
+            The IDs of the blocks that had outputs.
+
+        Raises:
+            StoreError: If stored data cannot be removed.
+        """
+        with self._lock:
+            if block_ids is None:
+                cleared = set(self._cache) | set(self._index())
+                self._cache.clear()
+                if self.store is not None:
+                    cleared |= set(self.store.clear())
+            else:
+                graph = prepare(pipeline, self.registry)
+                targets = set(block_ids)
+                for block_id in block_ids:
+                    if block_id in graph.blocks:
+                        targets |= graph.downstream(block_id)
+                cleared = {b for b in targets if b in self._cache or b in self._index()}
+                for block_id in targets:
+                    self._cache.pop(block_id, None)
+                if self.store is not None:
+                    cleared |= set(self.store.clear(targets))
+            self._entries = None
+            return sorted(cleared)
 
     def run(
         self,
@@ -307,10 +495,33 @@ class Executor:
         if failed_upstream:
             return self._skip(block.id, f"Upstream block(s) not done: {', '.join(failed_upstream)}")
 
+        base = make_ctx.pipeline_dir
         cached = self._cache.get(block.id)
-        if cached is not None and cached[0] == key and not block.cls.always_run:
+        if cached is not None and cached.key == key and not block.cls.always_run:
             self._emit(RunEvent(EventKind.BLOCK_CACHED, block.id, "Up to date (cached)"))
-            return BlockResult(BlockState.DONE, outputs=cached[1], cache_key=key, cached=True)
+            return self._from_cache(cached, key)
+        entry = self._index().get(block.id) if self.use_stored else None
+        if (
+            entry is not None
+            and entry.usable
+            and entry.cache_key == key
+            and not block.cls.always_run
+            and _files_exist(base, entry.written_files)
+        ):
+            cached = _Cached(
+                key,
+                StoredOutputs(entry),
+                list(entry.log),
+                entry.duration,
+                entry.finished,
+                list(entry.written_files),
+                restored=True,
+            )
+            self._cache[block.id] = cached
+            self._emit(
+                RunEvent(EventKind.BLOCK_CACHED, block.id, f"Up to date (stored {entry.finished})")
+            )
+            return self._from_cache(cached, key)
 
         log: list[str] = []
         ctx = make_ctx(block.id, log)
@@ -324,10 +535,10 @@ class Executor:
             outputs = block.cls().run(block.params, self._gather_inputs(graph, block, results), ctx)
             self._check_outputs(block, outputs)
         except BlockCancelledError as exc:
-            self._cache.pop(block.id, None)
+            self._forget(block.id)
             return BlockResult(BlockState.SKIPPED, error=str(exc), log=log)
         except Exception as exc:
-            self._cache.pop(block.id, None)
+            self._forget(block.id)
             tb = traceback.format_exc()
             message = f"{type(exc).__name__}: {exc}"
             self._emit(RunEvent(EventKind.BLOCK_FAILED, block.id, message, detail=tb))
@@ -339,11 +550,105 @@ class Executor:
                 duration=time.perf_counter() - start,
             )
         duration = time.perf_counter() - start
-        self._cache[block.id] = (key, outputs)
+        finished = now_text()
+        try:
+            files = block.cls().output_files(block.params, outputs, ctx)
+        except Exception:  # a broken hook must not fail a block that did its work
+            files = []
+        cached = _Cached(key, outputs, log, duration, finished, [_recorded(base, f) for f in files])
+        self._cache[block.id] = cached
+        self._store_entry(block, cached, log)
         self._emit(RunEvent(EventKind.BLOCK_FINISHED, block.id, f"Done in {duration:.2f} s"))
         return BlockResult(
-            BlockState.DONE, outputs=outputs, log=log, cache_key=key, duration=duration
+            BlockState.DONE,
+            outputs=outputs,
+            log=log,
+            cache_key=key,
+            duration=duration,
+            finished=finished,
         )
+
+    @staticmethod
+    def _from_cache(cached: _Cached, key: str) -> BlockResult:
+        """Return the result of a block taken from the cache."""
+        return BlockResult(
+            BlockState.DONE,
+            outputs=cached.outputs,
+            log=list(cached.log),
+            cache_key=key,
+            cached=True,
+            duration=cached.duration,
+            restored=cached.restored,
+            finished=cached.finished,
+        )
+
+    # ---- stored outputs -----------------------------------------------------------------
+
+    def _index(self) -> dict[str, StoredEntry]:
+        """Return the stored entries by block ID (read once per attached store)."""
+        if self.store is None:
+            return {}
+        if self._entries is None:
+            self._entries, self.store_problems = self.store.entries()
+        return self._entries
+
+    def _forget(self, block_id: str) -> None:
+        """Drop the outputs of a block that failed or was stopped, in memory and on disk."""
+        self._cache.pop(block_id, None)
+        entries = self._index()
+        if self.store is not None and block_id in entries:
+            del entries[block_id]
+            try:
+                self.store.clear([block_id])
+            except StoreError as exc:
+                _log.warning("Stored output of %s not removed: %s", block_id, exc)
+
+    def _store_entry(self, block: PreparedBlock, cached: _Cached, log: list[str]) -> None:
+        """Write the outputs of a finished block; problems are noted, never raised."""
+        assert block.cls is not None
+        if self.store is None or self._store_off:
+            return
+        self._write_entry(block.id, block.cls.type_id, block.cls.version, cached, log)
+
+    def _write_entry(
+        self,
+        block_id: str,
+        type_id: str,
+        type_version: int,
+        cached: _Cached,
+        log: list[str] | None,
+    ) -> bool:
+        """Write one entry; returns whether it was written."""
+        assert self.store is not None
+        try:
+            entry = self.store.save(
+                block_id,
+                type_id=type_id,
+                type_version=type_version,
+                cache_key=cached.key,
+                outputs=cached.outputs,
+                log=cached.log,
+                duration=cached.duration,
+                written_files=cached.written,
+                finished=cached.finished,
+            )
+        except StoreUnavailableError as exc:
+            self._store_off = True
+            self.store_warning = (
+                f"Results cannot be stored next to the pipeline: {exc}. "
+                "They are kept in memory only"
+            )
+            self._emit(RunEvent(EventKind.LOG, None, self.store_warning))
+            return False
+        except StoreError as exc:
+            note = f"Outputs not stored: {exc}"
+            if log is not None:
+                log.append(note)
+            self._emit(RunEvent(EventKind.LOG, block_id, note))
+            self._index().pop(block_id, None)  # an older entry would no longer be current
+            return False
+        self._index()[block_id] = entry
+        return True
 
     @staticmethod
     def _check_outputs(block: PreparedBlock, outputs: Any) -> None:
@@ -383,6 +688,11 @@ class _ContextFactory:
         self._unit_system = pipeline.settings.default_unit_system
         self.pipeline_file: Path | None = None
         self.block_files: dict[str, list[Path]] = {}
+
+    @property
+    def pipeline_dir(self) -> Path:
+        """Directory of the pipeline file."""
+        return self._pipeline_dir
 
     def __call__(self, block_id: str, log: list[str] | None = None) -> RunContext:
         """Return a context for ``block_id``; log lines are also appended to ``log``."""

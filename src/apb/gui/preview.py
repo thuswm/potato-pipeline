@@ -15,6 +15,7 @@ from nicegui import ui
 
 from apb.engine.events import BlockState
 from apb.engine.executor import BlockResult
+from apb.engine.store import StoreError
 from apb.units import Quantity, get_units, header_with_unit
 
 #: Rows shown in a table preview (the full table is used by the pipeline).
@@ -105,20 +106,54 @@ def show_value(name: str, value: Any) -> None:
         ui.label(repr(value)[:2000]).classes("text-sm font-mono")
 
 
-def show_result(result: BlockResult | None) -> None:
-    """Render a block's latest result: error, outputs (one tab each) and log."""
+def stored_time(finished: str) -> str:
+    """Return ``2026-11-15T17:08:12+01:00`` as ``2026-11-15 17:08`` for display."""
+    return finished[:16].replace("T", " ")
+
+
+def result_origin(result: BlockResult, outdated: bool = False) -> str:
+    """Say where a result comes from (spec 08 §3.9).
+
+    Args:
+        result: The block's result.
+        outdated: The block's inputs or parameters changed since the result was made.
+
+    Returns:
+        E.g. ``"Done in 0.19 s"``, ``"Done · stored 2026-11-15 17:08"`` or ``"Outdated · …"``.
+    """
+    when = f"stored {stored_time(result.finished)}" if result.finished else "stored"
+    if result.state is not BlockState.DONE:
+        return {BlockState.ERROR: "Error", BlockState.SKIPPED: "Skipped"}.get(
+            result.state, str(result.state)
+        )
+    if outdated:
+        source = (
+            when
+            if result.restored
+            else (f"made {stored_time(result.finished)}" if result.finished else "earlier")
+        )
+        return f"Outdated · {source} — parameters or inputs changed since"
+    if result.restored:
+        return f"Done · {when}"
+    return "Done (cached)" if result.cached else f"Done in {result.duration:.2f} s"
+
+
+def show_result(result: BlockResult | None, outdated: bool = False) -> None:
+    """Render a block's latest result: error, outputs (one tab each) and log.
+
+    Args:
+        result: The result, or ``None`` if the block has none.
+        outdated: The block's inputs or parameters changed since the result was made.
+    """
     if result is None:
         ui.label("Not run yet. Use Run, or Run to here for this block.").classes(
             "text-sm text-slate-500"
         )
         return
-    state_text = {
-        BlockState.DONE: "Done"
-        + (" (cached)" if result.cached else f" in {result.duration:.2f} s"),
-        BlockState.ERROR: "Error",
-        BlockState.SKIPPED: "Skipped",
-    }.get(result.state, str(result.state))
-    ui.label(state_text).classes("text-xs text-slate-500")
+    origin = ui.label(result_origin(result, outdated)).classes(
+        "text-xs apb-origin " + ("text-amber-700" if outdated else "text-slate-500")
+    )
+    origin.tooltip("Where this result comes from")
     if result.state is BlockState.ERROR:
         ui.label(result.error).classes("text-sm text-red-700 whitespace-pre-wrap")
         if result.traceback:
@@ -133,7 +168,10 @@ def show_result(result: BlockResult | None) -> None:
         with ui.tab_panels(tabs, value=tab_items[names[0]]).classes("w-full"):
             for n in names:
                 with ui.tab_panel(tab_items[n]).classes("p-1"):
-                    show_value(n, result.outputs[n])
+                    try:
+                        show_value(n, result.outputs[n])
+                    except StoreError as exc:
+                        ui.label(str(exc)).classes("text-sm text-red-700 apb-store-error")
     if result.log:
         with ui.expansion(f"Block log ({len(result.log)} lines)").classes("w-full").props("dense"):
             ui.label("\n".join(result.log)).classes("text-xs font-mono whitespace-pre-wrap")

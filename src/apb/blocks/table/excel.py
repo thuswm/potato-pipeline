@@ -7,7 +7,7 @@ pipeline engine.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +185,13 @@ class WriteExcel(Block[WriteExcelParams]):
     outputs = (Port("file", PortType.TEXT, label="File"),)
     Params = WriteExcelParams
     always_run = True
+
+    def output_files(
+        self, params: WriteExcelParams, outputs: Mapping[str, Any], ctx: RunContext
+    ) -> list[Path]:
+        """The workbook (the block counts as done only while it exists)."""
+        path = Path(params.file)
+        return [path if path.is_absolute() else ctx.output_dir / path]
 
     def run(
         self, params: WriteExcelParams, inputs: dict[str, Any], ctx: RunContext

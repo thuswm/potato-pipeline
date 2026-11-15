@@ -41,23 +41,16 @@ class ServerUrl(str):
     proc: subprocess.Popen[bytes]
 
 
-@pytest.fixture
-def server(workdir: Path, request: pytest.FixtureRequest) -> Iterator[ServerUrl]:
-    """The GUI server; ``indirect`` parametrisation chooses the pipeline to open."""
-    pipeline = getattr(request, "param", "fastener_loads.apb.json")
+def launch_gui(workdir: Path, pipeline: str | None) -> ServerUrl:
+    """Start ``apb gui`` on a free port (optionally with a pipeline) and wait until it answers."""
     port = _free_port()
+    command = [sys.executable, "-m", "apb.cli", "gui", "--no-browser", "--port", str(port)]
+    if pipeline is not None:
+        command.insert(4, str(workdir / pipeline))
+    log = workdir / f"gui-{port}.log"
     proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "apb.cli",
-            "gui",
-            str(workdir / pipeline),
-            "--no-browser",
-            "--port",
-            str(port),
-        ],
-        stdout=(workdir / "gui.log").open("w"),
+        command,
+        stdout=log.open("w"),
         stderr=subprocess.STDOUT,
         # Without PYTEST_CURRENT_TEST, so that NiceGUI runs as a normal server.
         env={k: v for k, v in os.environ.items() if not k.startswith("PYTEST")}
@@ -69,15 +62,25 @@ def server(workdir: Path, request: pytest.FixtureRequest) -> Iterator[ServerUrl]
     while time.time() < deadline:
         with socket.socket() as s:
             if s.connect_ex(("127.0.0.1", port)) == 0:
-                break
+                return url
         time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("GUI server did not start:\n" + (workdir / "gui.log").read_text())
-    yield url
-    if proc.poll() is None:
-        proc.terminate()
-    proc.wait(timeout=10)
+    proc.kill()
+    pytest.fail("GUI server did not start:\n" + log.read_text())
+
+
+@pytest.fixture
+def server(workdir: Path, request: pytest.FixtureRequest) -> Iterator[ServerUrl]:
+    """The GUI server; ``indirect`` parametrisation chooses the pipeline to open."""
+    started: list[ServerUrl] = []
+    pipeline = getattr(request, "param", "fastener_loads.apb.json")
+    first = launch_gui(workdir, pipeline)
+    started.append(first)
+    first.restart = lambda name=pipeline: started.append(launch_gui(workdir, name)) or started[-1]  # type: ignore[attr-defined]
+    yield first
+    for url in started:
+        if url.proc.poll() is None:
+            url.proc.terminate()
+        url.proc.wait(timeout=10)
 
 
 @pytest.fixture
@@ -715,3 +718,146 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
     open_section(page, 7)  # the modal effective mass table: columns known from the run
     assert "FREQUENCY" in page.locator(".apb-columns").inner_text()
     assert page.locator(".apb-format-column input").count() == 8
+
+
+# ---- stored outputs (spec 08 §3.9) -------------------------------------------------------
+
+
+def state_of(page, label: str) -> str:
+    classes = node(page, label).get_attribute("class") or ""
+    return next(c for c in classes.split() if c.startswith("apb-state-")).removeprefix("apb-state-")
+
+
+def reopen(page, server) -> None:
+    """Stop the server and start a new one on the same folder: the tool was closed and opened."""
+    server.proc.terminate()
+    server.proc.wait(timeout=10)
+    page.goto(server.restart())
+    page.wait_for_selector(".drawflow-node")
+    page.wait_for_timeout(1500)  # the states are refreshed twice a second
+
+
+def log_text(page) -> str:
+    return page.locator(".apb-log-line").all_inner_texts().__str__()
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_reopened_pipeline_shows_stored_results_without_running(page, server, workdir: Path):
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+    assert (workdir / ".apb" / "test_case" / "req" / "meta.json").is_file()
+    assert (workdir / ".apb" / ".gitignore").read_text() == "*\n"
+
+    reopen(page, server)
+    assert states(page) == {"apb-state-done"}  # recognised as run, nothing was run
+    assert "Stored outputs found for 12 of 12 blocks" in log_text(page)
+    assert not (workdir / "output" / "x").exists()
+
+    select(page, "Frequency requirement")
+    origin = page.locator(".apb-origin").first.inner_text()
+    assert origin.startswith("Done · stored 20")
+    preview = page.locator(".q-tab-panels").first
+    assert (
+        "REQ-DYN-001 First eigenfrequency" in preview.inner_text()
+        and "PASS" in preview.inner_text()
+    )
+    page.get_by_role("tab", name="margin").click()
+    page.wait_for_timeout(300)
+    assert "0.285593" in page.locator(".q-tab-panels").first.inner_text()
+    select(page, "Global margins")
+    assert "Joint B (M5 aluminium)" in page.locator(".q-table").first.inner_text()
+
+    # Run: the blocks that are up to date come from the store; the writers run again.
+    run_all(page)
+    assert "10 up to date" in log_text(page)
+    assert states(page) == {"apb-state-done"}
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_changes_after_reopening_make_results_outdated(page, server):
+    run_all(page)
+    reopen(page, server)
+    select(page, "Required frequency")
+    value = page.get_by_role("textbox", name="Value *")
+    value.fill("30")
+    value.press("Enter")
+    page.wait_for_timeout(1000)
+    assert state_of(page, "Required frequency") == "stale"
+    assert state_of(page, "Frequency requirement") == "stale"
+    assert state_of(page, "Modal results") == "done"
+    select(page, "Frequency requirement")
+    assert "Outdated" in page.locator(".apb-origin").first.inner_text()
+    assert "REQ-DYN-001" in page.locator(".q-tab-panels").first.inner_text()  # still viewable
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+    page.get_by_role("tab", name="status").click()
+    page.wait_for_timeout(300)
+    assert "FAIL" in page.locator(".q-tab-panels").first.inner_text()
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_clear_output_of_a_block_clears_everything_downstream(page, workdir: Path):
+    run_all(page)
+    select(page, "Global margins")
+    assert "Stored output: 20" in page.locator(".apb-stored").inner_text()
+    page.get_by_role("button", name="Clear output").click()
+    dialog = page.locator(".q-dialog")
+    assert "Clear the stored output of 'Global margins'" in dialog.inner_text()
+    assert "downstream: Test case report" in dialog.inner_text()
+    dialog.get_by_role("button", name="Clear", exact=True).click()
+    page.wait_for_timeout(1000)
+    assert state_of(page, "Global margins") == "idle"
+    assert state_of(page, "Test case report") == "idle"
+    assert state_of(page, "Global CBUSH forces") == "done"
+    assert state_of(page, "Local margins") == "done"
+    assert not (workdir / ".apb" / "test_case" / "global_margins").exists()
+    assert (workdir / ".apb" / "test_case" / "local_margins").exists()
+    assert page.get_by_text("Not run yet").count() == 1
+    assert page.locator(".apb-stored").count() == 0  # nothing stored for this block now
+    assert (workdir / "output" / "test_case_report.docx").exists()  # written files stay
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_stored_outputs_dialog_and_clear_all(page, workdir: Path):
+    run_all(page)
+    page.get_by_role("button", name="Pipeline", exact=True).click()
+    page.get_by_text("Stored outputs…", exact=True).click()
+    dialog = page.locator(".q-dialog")
+    assert ".apb/test_case" in dialog.locator(".apb-stored-folder").inner_text()
+    assert "12 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
+    dialog.get_by_role("button", name="Clear all…").click()
+    page.wait_for_selector("text=Delete the stored outputs of 12 block(s)")
+    page.get_by_role("button", name="Clear all", exact=True).click()
+    page.wait_for_timeout(1000)
+    assert {state_of(page, n) for n in ("Modal results", "Global margins", "Test case report")} == {
+        "idle"
+    }
+    assert not (workdir / ".apb").exists()
+    assert (workdir / "output" / "test_case_report.docx").exists()
+
+
+def test_an_unsaved_pipeline_is_stored_at_the_first_save(page, workdir: Path):
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("New", exact=True).click()
+    page.wait_for_timeout(500)
+    page.locator(".q-drawer--left .q-expansion-item__content .q-item", has_text="Constant").click()
+    page.wait_for_selector(".drawflow-node")
+    value = page.get_by_role("textbox", name="Value *")  # the new block's panel is open
+    value.fill("2.5")
+    value.press("Enter")
+    page.wait_for_timeout(500)
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+    assert not (workdir / ".apb").exists()  # nothing next to an unsaved pipeline
+
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save as…", exact=True).click()
+    dialog = page.locator(".q-dialog")
+    dialog.get_by_label("File name").fill("scratch.apb.json")
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(1000)
+    entries = list((workdir / ".apb" / "scratch").glob("*/meta.json"))
+    assert len(entries) == 1  # the block that was done is stored now
+    assert states(page) == {"apb-state-done"}

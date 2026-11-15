@@ -20,6 +20,7 @@ from apb.engine import (
     load_pipeline,
     prepare,
 )
+from apb.engine.store import OutputStore, StoreError, format_size
 from apb.engine.variables import parse_assignment
 
 app = typer.Typer(help="Analysis Pipeline Builder", no_args_is_help=True, add_completion=False)
@@ -59,6 +60,8 @@ def _print_event(event: RunEvent, names: dict[str, str], verbose: bool = False) 
                 typer.echo(event.detail, err=True)
         case EventKind.BLOCK_SKIPPED:
             typer.secho(f"- {name}: skipped ({event.message})", fg=typer.colors.YELLOW)
+        case EventKind.LOG if event.block_id is None:
+            typer.secho(f"! {event.message}", fg=typer.colors.YELLOW)
         case EventKind.LOG:
             typer.echo(f"  {name}: {event.message}")
         case _:
@@ -80,17 +83,36 @@ def run(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show Python tracebacks of errors")
     ] = False,
+    no_cache: Annotated[
+        bool, typer.Option("--no-cache", help="Recompute every block (stored results are ignored)")
+    ] = False,
 ) -> None:
-    """Run a pipeline. Exit code 1 if a block fails."""
+    """Run a pipeline. Exit code 1 if a block fails.
+
+    Results of earlier runs are stored next to the pipeline (folder .apb) and reused for
+    blocks whose inputs did not change. Runs with --set do not use or change the store.
+    """
     model = _load(pipeline)
     names = {b.id: b.label or b.type_id for b in model.blocks}
-    executor = Executor(default_registry(), sink=lambda e: _print_event(e, names, verbose))
+    overrides = _overrides(set_)
+    store = None if overrides else OutputStore.for_pipeline(pipeline)
+    executor = Executor(
+        default_registry(),
+        sink=lambda e: _print_event(e, names, verbose),
+        store=store,
+        use_stored=not no_cache,
+    )
+    for block_id, reason in executor.index_problems().items():
+        typer.secho(
+            f"! Stored output of {names.get(block_id, block_id)} ignored: {reason}",
+            fg=typer.colors.YELLOW,
+        )
     try:
         result = executor.run(
             model,
             pipeline.parent,
             until=until,
-            overrides=_overrides(set_),
+            overrides=overrides,
             output_dir=output_dir,
             pipeline_file=pipeline.resolve(),
         )
@@ -105,6 +127,54 @@ def run(
         typer.secho(f"{len(failed)} block(s) not completed", fg=typer.colors.RED, err=True)
         raise typer.Exit(1)
     typer.secho("Pipeline completed", fg=typer.colors.GREEN)
+
+
+@app.command()
+def outputs(
+    pipeline: Annotated[Path, typer.Argument(help="Pipeline file (*.apb.json)")],
+) -> None:
+    """List the stored outputs of a pipeline: block, state, time, size."""
+    model = _load(pipeline)
+    store = OutputStore.for_pipeline(pipeline)
+    executor = Executor(default_registry(), store=store)
+    states = executor.states(model, pipeline.parent)
+    entries, problems = store.entries()
+    typer.echo(f"Store: {store.folder} ({format_size(store.size())})")
+    for block in model.blocks:
+        entry = entries.get(block.id)
+        state = states.get(block.id, BlockState.IDLE)
+        when = f"{entry.finished}  {format_size(entry.size)}" if entry else ""
+        label = block.label or block.type_id
+        typer.echo(f"{block.id:<16} {state.value:<6} {when}  {label}".rstrip())
+    for block_id, reason in problems.items():
+        typer.secho(f"! {block_id}: unreadable ({reason})", fg=typer.colors.YELLOW)
+    known = {b.id for b in model.blocks}
+    orphans = store.orphans(known)
+    if orphans:
+        typer.echo(f"Entries of blocks that are not in the pipeline: {', '.join(orphans)}")
+
+
+@app.command("clear-outputs")
+def clear_outputs(
+    pipeline: Annotated[Path, typer.Argument(help="Pipeline file (*.apb.json)")],
+    block: Annotated[
+        list[str] | None,
+        typer.Option("--block", help="Clear this block and everything downstream (repeatable)"),
+    ] = None,
+) -> None:
+    """Delete the stored outputs of a pipeline (all, or some blocks and what is downstream)."""
+    model = _load(pipeline)
+    unknown = [b for b in block or [] if b not in {x.id for x in model.blocks}]
+    if unknown:
+        typer.secho(f"No such block: {', '.join(unknown)}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    executor = Executor(default_registry(), store=OutputStore.for_pipeline(pipeline))
+    try:
+        cleared = executor.clear_outputs(model, block or None)
+    except StoreError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"Cleared {len(cleared)} block(s): {', '.join(cleared) or 'nothing was stored'}")
 
 
 @app.command()

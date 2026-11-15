@@ -25,6 +25,7 @@ how a pipeline is executed, cached and saved.
 | ENG-14 | Pipeline-level **variables** (e.g. `h5_file`, `allowable`) that block parameters can reference as `${name}`; overridable from the CLI | S |
 | ENG-15 | Pipeline setting `default_unit_system` (`SI` / `SI_mm`), used as default by input blocks (spec 00 §5.1) | M |
 | ENG-16 | Macro blocks (sub-pipeline as reusable block) | L |
+| ENG-18 | Block outputs are stored on disk and restored when a pipeline is opened; stored outputs can be cleared (spec 08) | M |
 | ENG-17 | Blocks that write files (Excel, report) are marked `always_run` and bypass the cache, so a deleted or edited output file is always rewritten | M |
 
 ## 3. Design
@@ -95,8 +96,12 @@ v1 runs blocks sequentially in a worker thread (GUI stays responsive). Parallel 
 
 Cache key = SHA-256 of: `type_id`, `version`, canonical JSON of params, cache keys of upstream
 outputs, and for each `input_files()` entry its size + modification time (+ content hash if
-small). v1 cache is **in-memory** per session; the GUI marks blocks `stale` when their key
-changes. A persistent on-disk cache is *later*.
+small). The cache is **in memory** per session and, since review round 3, also **stored
+on disk** next to the pipeline so that a reopened pipeline is recognised as already run
+(spec 08): a block is `done` if its stored key is equal, `stale` if the key changed, `idle`
+if nothing is stored. The GUI marks blocks `stale` when their key changes. Blocks that write
+files may implement `Block.output_files(params, outputs, ctx)` (the files they wrote) so that
+a deleted report makes them `stale`.
 
 ### 3.5 File format (`*.apb.json`)
 
@@ -136,7 +141,7 @@ Exit code ≠ 0 if any block fails.
 
 ## 4. Out of scope (v1)
 
-Parallel execution, persistent disk cache, loops/conditionals in the graph, macro blocks
+Parallel execution, a central/shared output store, loops/conditionals in the graph, macro blocks
 (see below).
 
 **Macro blocks (later, foreseen):** a sub-pipeline saved as a reusable block, so the standard

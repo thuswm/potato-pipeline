@@ -24,6 +24,7 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 | GUI-14 | Pipeline variables editor (ENG-14) | S |
 | GUI-15 | Copy / paste blocks; multi-select | L |
 | GUI-16 | Light/dark theme | L |
+| GUI-21 | **Stored outputs** (spec 08 §3.9): states and previews of a reopened pipeline come from the stored outputs; the preview says where a result comes from; *Pipeline > Stored outputs…* and *Clear output* in the block panel | M |
 | GUI-17 | The file dialog can create a **new folder** in the folder it shows (§3.5) | M |
 | GUI-18 | Every block on the canvas shows its **block type** under its label, also when the label equals the type name; the property panel states the block type and category explicitly (§3.5) | M |
 | GUI-19 | **File > Quit** closes the application: asks about unsaved changes and a running pipeline, stops the server and tells the user the tab can be closed (§3.5) | M |
