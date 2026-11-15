@@ -16,8 +16,7 @@ from nicegui import app, ui
 
 from apb import __version__
 from apb.blocks.nastran.blocks import Hdf5Results
-from apb.blocks.python.block import PythonBlock, PythonParams
-from apb.blocks.python.scripting import ScriptError, write_skeleton
+from apb.blocks.python.block import PythonBlock
 from apb.engine.events import EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
@@ -27,7 +26,8 @@ from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
 from apb.gui.forms import ParamForm, suffix_hint
 from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
-from apb.gui.preview import show_result, show_value
+from apb.gui.preview import open_with_system, show_result, show_value
+from apb.gui.python_panel import PythonPanel
 from apb.gui.runner import EVENT_STATES, RunController, summary
 from apb.units import UnitSystem
 
@@ -227,8 +227,9 @@ class EditorPage:
             label = ui.input("Label", value=block.label).props("dense outlined").classes("w-full")
             label.on("blur", lambda: self._rename(block.id, label.value))
             label.on("keydown.enter", lambda: self._rename(block.id, label.value))
+            category = cls.category.replace("/", " / ") if cls else ""
             type_line = ui.label(
-                f"Block type: {cls.title} · {cls.category.replace('/', ' / ')}"
+                f"Block type: {cls.title}" + (f" · {category}" if category != cls.title else "")
                 if cls
                 else f"Block type: unknown ({block.type_id})"
             ).classes("text-xs text-slate-500 apb-block-type")
@@ -254,6 +255,18 @@ class EditorPage:
                     show_peek=lambda table, error: self._show_peek(block.id, table, error),
                     log=lambda text: self._log(f"  {self._block_name(block.id)}: {text}"),
                 ).build()
+            elif cls is PythonBlock:  # script view and templates (spec 04 §3.5)
+                PythonPanel(
+                    block.params,
+                    on_change=lambda name, value: self._set_param(block.id, name, value),
+                    pick_file=self._pick_file,
+                    resolve=self._resolve_variables,
+                    base_dir=self.state.base_dir,
+                    relative_path=self.state.relative_path,
+                    edit_script=self._edit_script,
+                    open_in_editor=open_with_system,
+                    rebuild=self._show_panel,
+                ).build()
             else:
                 ParamForm(
                     cls.Params,
@@ -261,8 +274,6 @@ class EditorPage:
                     on_change=lambda name, value: self._set_param(block.id, name, value),
                     pick_file=self._pick_file,
                 ).build()
-            if cls is PythonBlock:
-                self._python_tools(block.id)
             inputs, outputs = self.state.ports(block)
             for title, ports in (("Inputs", inputs), ("Outputs", outputs)):
                 if ports:
@@ -285,36 +296,6 @@ class EditorPage:
                 with ui.row().classes("items-start no-wrap gap-1"):
                     ui.icon("error_outline", color="red-7", size="xs").classes("mt-0.5")
                     ui.label(issue.message).classes("text-xs text-red-700")
-
-    def _python_tools(self, block_id: str) -> None:
-        block = self.state.pipeline.block(block_id)
-        try:
-            params = PythonParams.model_validate(block.params)
-        except Exception:
-            return
-        if not params.script:
-            return
-        path = Path(params.script)
-        path = path if path.is_absolute() else self.state.base_dir / path
-        with ui.row().classes("gap-1 mt-1"):
-            if path.is_file():
-                ui.button(
-                    "Edit script", icon="code", on_click=lambda: self._edit_script(path)
-                ).props("dense outline")
-            else:
-
-                def create() -> None:
-                    try:
-                        write_skeleton(path, params.inputs, params.outputs)
-                    except ScriptError as exc:
-                        ui.notify(str(exc), type="warning")
-                        return
-                    ui.notify(f"Created {path.name}", type="positive")
-                    self._show_panel()
-
-                ui.button("Create script", icon="note_add", on_click=create).props(
-                    "dense outline"
-                ).tooltip("Create the file with a run() matching the ports")
 
     async def _edit_script(self, path: Path) -> None:
         with ui.dialog().props("maximized") as dialog, ui.card().classes("w-full h-full"):

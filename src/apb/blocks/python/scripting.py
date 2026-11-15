@@ -6,6 +6,7 @@ skeleton generator and the signature check.
 
 from __future__ import annotations
 
+import ast
 import inspect
 import itertools
 import keyword
@@ -14,6 +15,8 @@ import sys
 import traceback
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -70,6 +73,34 @@ _PLACEHOLDERS: dict[PortType, str] = {
 }
 
 
+#: Explains the script contract; at the top of every generated script.
+SCRIPT_NOTE = """Script for an Analysis Pipeline Builder Python block. The block calls ``run``
+with one argument per input port and expects a dict with one entry per output port. Tables
+arrive as pandas DataFrames (units in ``df.attrs["units"]``), scalars as plain numbers.
+Use print() for messages: they appear in the block's log."""
+
+
+def port_hint(port_type: PortType) -> str:
+    """Return the type hint used for an input argument of this port type."""
+    return _HINTS[port_type]
+
+
+def port_placeholder(port_type: PortType) -> str:
+    """Return the Python expression used as placeholder value of an output."""
+    return _PLACEHOLDERS[port_type]
+
+
+def ports_to_params(ports: Sequence[PortSpec]) -> list[dict[str, Any]]:
+    """Return ports in the form stored in the pipeline file (``optional`` only if true)."""
+    out: list[dict[str, Any]] = []
+    for p in ports:
+        item: dict[str, Any] = {"name": p.name, "type": p.type.value}
+        if p.optional:
+            item["optional"] = True
+        out.append(item)
+    return out
+
+
 def script_skeleton(
     inputs: Sequence[PortSpec], outputs: Sequence[PortSpec], title: str = "Custom calculation"
 ) -> str:
@@ -100,10 +131,7 @@ def script_skeleton(
     result = ", ".join(f'"{p.name}": {p.name}' for p in outputs)
     return f'''"""{title}.
 
-Script for an Analysis Pipeline Builder Python block. The block calls ``run`` with one
-argument per input port and expects a dict with one entry per output port. Tables arrive
-as pandas DataFrames (units in ``df.attrs["units"]``), scalars as plain numbers.
-Use print() for messages: they appear in the block's log.
+{SCRIPT_NOTE}
 """
 
 from __future__ import annotations
@@ -140,11 +168,120 @@ def write_skeleton(
     Raises:
         ScriptError: If the file exists and ``overwrite`` is false.
     """
-    if path.exists() and not overwrite:
-        raise ScriptError(f"{path} already exists")
-    path.parent.mkdir(parents=True, exist_ok=True)
     title = path.stem.replace("_", " ").capitalize()
-    path.write_text(script_skeleton(inputs, outputs, title), encoding="utf-8", newline="\n")
+    write_new_file(path, script_skeleton(inputs, outputs, title), overwrite=overwrite)
+
+
+def write_new_file(path: Path, text: str, *, overwrite: bool = False) -> None:
+    """Write a script file; an existing file is never replaced unless ``overwrite`` (PY-13).
+
+    The file is created in exclusive mode, so a file that appeared after the caller last
+    looked is not replaced either.
+
+    Args:
+        path: File to create (missing folders are created).
+        text: File content.
+        overwrite: Replace an existing file (command line ``--force`` only).
+
+    Raises:
+        ScriptError: If the file exists and ``overwrite`` is false.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("w" if overwrite else "x", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+    except FileExistsError:
+        raise ScriptError(f"{path} already exists") from None
+
+
+# --------------------------------------------------------------------------------------
+# Static check (no execution)
+# --------------------------------------------------------------------------------------
+
+
+def read_script(path: Path) -> str:
+    """Read a script file as text.
+
+    Raises:
+        ScriptError: If the file is missing or cannot be read as UTF-8 text.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise ScriptError(f"File not found: {path}") from None
+    except UnicodeDecodeError:
+        raise ScriptError(f"{path.name} is not a UTF-8 text file") from None
+    except OSError as exc:
+        raise ScriptError(f"Cannot read {path.name}: {exc.strerror or exc}") from None
+
+
+def modified_text(path: Path) -> str:
+    """Return the modification time of a file as ``2026-11-15 14:20`` (``""`` if unknown)."""
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+    except OSError:
+        return ""
+
+
+@dataclass(frozen=True)
+class ScriptCheck:
+    """Result of the static check of a script (PY-14).
+
+    Attributes:
+        problems: Readable problems; empty if the script looks right.
+    """
+
+    problems: tuple[str, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        """``True`` if no problem was found."""
+        return not self.problems
+
+
+def check_script_source(
+    source: str, inputs: Sequence[PortSpec], name: str = "script"
+) -> ScriptCheck:
+    """Check a script against the declared input ports **without running it** (PY-14).
+
+    Looks for syntax errors, a top-level ``run`` function, and arguments of ``run`` that do
+    not match the declared inputs (same rules as :func:`check_signature`). Which keys the
+    returned dict has is not checked.
+
+    Args:
+        source: Script text.
+        inputs: Declared input ports.
+        name: File name used in messages.
+
+    Returns:
+        The problems found.
+    """
+    try:
+        tree = ast.parse(source, filename=name)
+    except SyntaxError as exc:
+        line = f", line {exc.lineno}" if exc.lineno else ""
+        return ScriptCheck((f"Syntax error in {name}{line}: {exc.msg}",))
+    funcs = [
+        n
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) and n.name == ENTRY_FUNCTION
+    ]
+    if not funcs:
+        return ScriptCheck((f"{name} defines no {ENTRY_FUNCTION}() function",))
+    args = funcs[-1].args
+    positional = [*args.posonlyargs, *args.args]
+    required = {a.arg for a in positional[: len(positional) - len(args.defaults)]}
+    required |= {a.arg for a, d in zip(args.kwonlyargs, args.kw_defaults, strict=True) if d is None}
+    accepted = {a.arg for a in [*positional, *args.kwonlyargs]}
+    declared = {p.name for p in inputs}
+    problems = []
+    for port in inputs:
+        if port.name not in accepted and args.kwarg is None:
+            problems.append(f"run() has no argument '{port.name}' for the input port '{port.name}'")
+    problems += [
+        f"run() argument '{arg}' has no matching input port" for arg in sorted(required - declared)
+    ]
+    return ScriptCheck(tuple(problems))
 
 
 # --------------------------------------------------------------------------------------

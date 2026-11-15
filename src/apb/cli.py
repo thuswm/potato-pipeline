@@ -140,14 +140,31 @@ def blocks() -> None:
 
 @app.command("new-script")
 def new_script(
-    pipeline: Annotated[Path, typer.Argument(help="Pipeline file (*.apb.json)")],
-    block_id: Annotated[str, typer.Argument(help="ID of the Python block")],
+    pipeline: Annotated[Path | None, typer.Argument(help="Pipeline file (*.apb.json)")] = None,
+    block_id: Annotated[str | None, typer.Argument(help="ID of the Python block")] = None,
     force: Annotated[bool, typer.Option(help="Overwrite an existing script")] = False,
+    template: Annotated[
+        str, typer.Option(help="Template to start from (see --list-templates)")
+    ] = "blank",
+    list_templates: Annotated[bool, typer.Option(help="List the templates and exit")] = False,
 ) -> None:
-    """Create the script of a Python block with a run() matching its ports."""
-    from apb.blocks.python.block import PythonBlock, PythonParams
-    from apb.blocks.python.scripting import ScriptError, write_skeleton
+    """Create the script of a Python block with a run() matching its ports.
 
+    With --template the script starts from a template. A block without ports gets the
+    ports of the template (the pipeline file is updated); otherwise the ports are kept.
+    """
+    from apb.blocks.python.block import PythonBlock
+    from apb.blocks.python.scripting import PortSpec, ScriptError, ports_to_params
+    from apb.blocks.python.templates import create_script, template_titles
+    from apb.engine.model import save_pipeline
+
+    if list_templates:
+        for key, text in template_titles().items():
+            typer.echo(f"{key}: {text}")
+        return
+    if pipeline is None or block_id is None:
+        typer.secho("Give the pipeline file and the block id", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
     model = _load(pipeline)
     try:
         inst = model.block(block_id)
@@ -157,17 +174,25 @@ def new_script(
     if inst.type_id != PythonBlock.type_id:
         typer.secho(f"Block {block_id!r} is not a Python block", fg=typer.colors.RED, err=True)
         raise typer.Exit(2)
-    params = PythonParams.model_validate(inst.params)
-    if not params.script:
+    script = str(inst.params.get("script", ""))
+    if not script:
         typer.secho("The block uses inline code, not a script file", fg=typer.colors.RED, err=True)
         raise typer.Exit(2)
-    path = Path(params.script)
+    path = Path(script)
     path = path if path.is_absolute() else pipeline.parent / path
+    ins = [PortSpec.model_validate(p) for p in inst.params.get("inputs", [])]
+    outs = [PortSpec.model_validate(p) for p in inst.params.get("outputs", [])]
     try:
-        write_skeleton(path, params.inputs, params.outputs, overwrite=force)
+        new_ins, new_outs = create_script(path, template, ins, outs, overwrite=force)
     except ScriptError as exc:
-        typer.secho(f"{exc} (use --force to overwrite)", fg=typer.colors.RED, err=True)
+        hint = " (use --force to overwrite)" if "already exists" in str(exc) else ""
+        typer.secho(f"{exc}{hint}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
+    if (new_ins, new_outs) != (ins, outs):
+        inst.params["inputs"] = ports_to_params(new_ins)
+        inst.params["outputs"] = ports_to_params(new_outs)
+        save_pipeline(model, pipeline)
+        typer.echo(f"Added the ports of the template to block {block_id!r} in {pipeline}")
     typer.secho(f"Created {path}", fg=typer.colors.GREEN)
 
 

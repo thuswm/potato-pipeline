@@ -22,6 +22,11 @@ proves useful can later be promoted into a standard block (see §3.4).
 | PY-08 | Option to store short code **inline** in the pipeline file instead (pre-imported `np`, `pd`, `plt`, `math`) | S |
 | PY-10 | Editing the script (in the GUI or in an external editor) marks the block stale (file is in `input_files()`) | M |
 | PY-09 | "Export as block" — generate a skeleton `Block` subclass from a Python block | L |
+| PY-11 | **Code view:** the property panel shows the script of a Python block (read-only, syntax highlighted) with its file name, folder and modification time, and buttons to open it in the user's own editor or to edit it in the GUI (§3.5) | M |
+| PY-12 | **Templates:** a new Python block can start from a template (a ready-made `run()` with example code and, for the specialised templates, default ports) as an alternative to choosing an existing file (§3.5) | M |
+| PY-13 | **A script that exists is never overwritten** by a template or skeleton, in the GUI or on the command line without `--force`; the GUI has no overwrite option at all (§3.5) | M |
+| PY-14 | The panel shows whether `run()` matches the declared ports and reports syntax errors, **without executing the script** (static check) (§3.5) | M |
+| PY-15 | Templates of the user (a folder of `.py` files offered next to the built-in ones) | L |
 
 ## 3. Design
 
@@ -96,10 +101,98 @@ A standard block is just a Python class (spec 01 §3.1) in a package registered 
 into a `Block` subclass with a Pydantic `Params` model → it appears in the library for
 everyone who installs the package.
 
+### 3.5 Review round 3: code view and templates (PY-11 … PY-15)
+
+**Start of a Python block.** A newly added Python block has no script yet. Its panel shows a
+"Script" section with three ways to start:
+
+1. **Use existing file…** — file dialog (as today). The ports are *not* touched: declare
+   them to match the script, or use *Check* (below) to see what differs.
+2. **New from template…** — choose a template, then a file name in a dialog that offers
+   "New folder" (spec 06 GUI-17). Creates the file, stores the path in the block and shows
+   it in the code view. If the chosen name already exists it is **refused** with the
+   message "*name* already exists — use *Use existing file…* to link it", not replaced.
+3. **Inline code** — the existing option for short snippets (PY-08), unchanged.
+
+**Built-in templates** (`apb.blocks.python.templates`; each is one `.py` text with
+placeholders for the port names, so the result is ordinary Python):
+
+| Template | Default ports | Content |
+|----------|---------------|---------|
+| Blank (matches ports) | none; uses the declared ports | what `apb new-script` creates today (PY-05b) |
+| Table calculation | in: `table` (Table), `allowable` (Scalar); out: `result` (Table) | adds a margin column per row from a column and an allowable; shows units handling (`df.attrs["units"]`) |
+| Table summary | in: `table`; out: `max_value` (Scalar), `where` (Text) | reduces a column to a worst value and where it occurs |
+| Plot | in: `table`; out: `plot` (Figure) | matplotlib figure from a table column |
+
+Default ports are applied **only when the block has no ports declared yet**; otherwise the
+template body is generated for the ports that are declared (as the skeleton is today), so
+declared ports and connectors are never changed by choosing a template. After a template was
+applied the code is just a file: later changes of the ports do not rewrite it.
+
+**Code view (PY-11).** Once the block has a script file the "Script" section shows:
+
+```
+Script   scripts/fastener_margins.py          [ Choose another… ]
+         /home/…/examples/scripts · changed 2026-11-15 14:20
+         run() matches the ports ✔                      [ Check ]
+         +----------------------------------------------+
+         | """Fastener margins.                         |  read-only,
+         | …                                            |  highlighted,
+         | def run(loads: pd.DataFrame, …               |  scrollable
+         +----------------------------------------------+
+         [ Open in editor ]  [ Edit here ]
+```
+
+- *Open in editor* opens the file with the program the system has registered for `.py`
+  files (same mechanism as the *Open* buttons for Excel and Word results).
+- *Edit here* is the existing editor dialog (save writes the file; the block turns stale
+  because the script is an input file, PY-10).
+- The view reads the file every time the panel is built and after *Check* or *Edit here*, so
+  changes made in an external editor show up after *Check* (no file watching in v1).
+- A missing script shows "File not found" and the start choices again; a script that cannot
+  be read (permissions, encoding) shows the error instead of the code.
+- The view shows the whole file in a scroll area of fixed height.
+
+**Static check (PY-14).** *Check* (and building the panel) parses the script with `ast`;
+nothing is imported or executed, so opening a pipeline from someone else and selecting a
+block is safe (§3.3). It reports: a syntax error with its line number; no `run` function;
+argument names of `run()` that differ from the declared input ports (missing / unknown).
+Whether the returned dict has the declared output keys is *not* checked (too fragile): that
+stays a run-time error (PY-07).
+
+**Never overwritten (PY-13).**
+- Files are created in exclusive mode (`open(path, "x")`), so an existing file — also one
+  that appeared after the dialog was shown — makes the creation fail with a message.
+- The GUI has no "replace" or "reset to template" action. To start over, the user removes
+  the file in the file system or links another file.
+- `apb new-script` keeps its refusal; `--force` remains for the command line only. It gets
+  the option `--template NAME`, and `apb new-script --list-templates` prints the names.
+
+**Implementation notes.**
+- Code: `blocks/python/templates.py` (templates, port matching, `create_script`),
+  `blocks/python/scripting.py` (`check_script_source`, `write_new_file`, `read_script`),
+  `gui/python_panel.py` (panel). Templates are Python data in `templates.py` with `@role@`
+  placeholders in the body, not separate files.
+- A specialised template written for *declared* ports matches each role to the first unused
+  port of the same type (a port of type `Any` fits every role). If a role has no match the
+  template is **refused** with a message naming the missing port ("add the port, or choose
+  the blank template"), nothing is created. Declared ports without a role are still
+  arguments of `run()` / keys of the returned dict, so the script always matches the ports.
+- `apb new-script --template` on a block without ports adds the template's ports and saves
+  the pipeline file; with declared ports the pipeline file is not touched.
+- The "Use existing file…" and "Choose another…" actions only change the `script` path.
+
+**Not in v1:** templates supplied by the user from a folder (PY-15) — it depends on how
+toolboxes and shared data are organised (spec README, "Later") and is decided together with
+the toolbox restructure. A script does not record which template it came from.
+
 ## 4. Out of scope (v1)
 
 Sandboxing, per-block virtual environments / extra pip packages, Jupyter integration.
 
 ## 5. Open questions
 
-None (external `.py` files decided in review round 2).
+1. ~~Python block: external `.py` files?~~ Decided in review round 2.
+2. Are the four built-in templates the right starting set? A template is one text file in
+   `apb/blocks/python/templates/`, so more are easy to add. A candidate is a *Requirement
+   check* (value against a limit, pass/fail) once the check block of plan step 4 exists.

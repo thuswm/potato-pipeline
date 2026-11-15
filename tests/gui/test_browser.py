@@ -404,3 +404,95 @@ def test_quit_without_changes_needs_no_confirmation(page, server):
     page.wait_for_selector("text=You can close this tab")
     server.proc.wait(timeout=15)
     assert server.proc.returncode is not None
+
+
+def python_block_panel_text(page) -> str:
+    return page.locator(".apb-script").inner_text()
+
+
+def test_python_block_shows_code_and_checks_the_script(page, workdir: Path):
+    select(page, "Fastener margins")
+    code = page.locator(".apb-script-code")
+    assert "def run(" in code.inner_text()
+    assert "Fastener margins" in code.inner_text()
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+    assert "changed 20" in page.locator(".apb-script-info").inner_text()
+    assert page.get_by_role("button", name="Open in editor").is_visible()
+    assert page.get_by_role("button", name="Edit here").is_visible()
+
+    # An edit in an external editor shows up after "Check"; nothing is executed.
+    script = workdir / "scripts" / "fastener_margins.py"
+    script.write_text(
+        script.read_text(encoding="utf-8").replace(
+            "safety_factor: float,", "safety_factor: float,\n    extra,"
+        ),
+        encoding="utf-8",
+    )
+    page.get_by_role("button", name="Check").click()
+    page.wait_for_timeout(500)
+    assert (
+        "run() argument 'extra' has no matching input port"
+        in page.locator(".apb-script-check").inner_text()
+    )
+    assert "extra," in page.locator(".apb-script-code").inner_text()
+
+    script.write_text("def run(:\n", encoding="utf-8")
+    page.get_by_role("button", name="Check").click()
+    page.wait_for_timeout(500)
+    assert (
+        "Syntax error in fastener_margins.py, line 1"
+        in page.locator(".apb-script-check").inner_text()
+    )
+
+
+def add_python_block(page) -> None:
+    page.locator(".q-drawer--left .q-expansion-item__content .q-item", has_text="Python").click()
+    page.wait_for_timeout(600)
+
+
+def test_new_python_block_from_template_and_never_overwrites(page, workdir: Path):
+    add_python_block(page)
+    assert "The block has no script yet" in python_block_panel_text(page)
+    assert page.get_by_role("button", name="Use existing file…").is_visible()
+
+    # A template, then a name that exists: refused, the file is untouched.
+    page.get_by_role("button", name="New from template…").click()
+    page.get_by_text("Table summary — ").click()
+    page.get_by_role("button", name="Next…").click()
+    dialog = page.locator(".q-dialog")
+    existing = workdir / "scripts" / "fastener_margins.py"
+    before = existing.read_text(encoding="utf-8")
+    dialog.get_by_label("File name").fill("fastener_margins.py")
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(600)
+    assert page.locator(".q-notification", has_text="already exists").count() == 1
+    assert existing.read_text(encoding="utf-8") == before
+    assert "The block has no script yet" in python_block_panel_text(page)
+
+    # A new name: file created, linked, ports added, code shown.
+    page.get_by_role("button", name="New from template…").click()
+    page.get_by_text("Table summary — ").click()
+    page.get_by_role("button", name="Next…").click()
+    dialog.get_by_label("File name").fill("worst_shear.py")
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(1000)
+    created = workdir / "scripts" / "worst_shear.py"
+    assert created.is_file()
+    assert "def run(table: pd.DataFrame)" in page.locator(".apb-script-code").inner_text()
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+    block = page.locator(".drawflow-node", has=page.locator(".apb-sub", has_text="Python")).last
+    assert block.locator(".apb-in", has_text="table").count() == 1
+    assert block.locator(".apb-out", has_text="max_value").count() == 1
+    assert block.locator(".apb-out", has_text="where").count() == 1
+    assert "scripts/worst_shear.py" in page.get_by_role("textbox", name="Script").input_value()
+
+
+def test_python_block_use_existing_file(page, workdir: Path):
+    add_python_block(page)
+    page.get_by_role("button", name="Use existing file…").click()
+    dialog = page.locator(".q-dialog")
+    dialog.get_by_text("fastener_margins.py").click()
+    page.wait_for_timeout(800)
+    assert "def run(" in page.locator(".apb-script-code").inner_text()
+    # The block has no ports, the script needs some: shown by the check, ports not touched.
+    assert "has no matching input port" in page.locator(".apb-script-check").inner_text()
