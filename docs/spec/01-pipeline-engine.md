@@ -26,6 +26,8 @@ how a pipeline is executed, cached and saved.
 | ENG-15 | Pipeline setting `default_unit_system` (`SI` / `SI_mm`), used as default by input blocks (spec 00 §5.1) | M |
 | ENG-16 | Macro blocks (sub-pipeline as reusable block) | L |
 | ENG-18 | Block outputs are stored on disk and restored when a pipeline is opened; stored outputs can be cleared (spec 08) | M |
+| ENG-19 | The key of a block includes the fingerprints of the files its upstream blocks deliver (`output_files`) and is computed just before the block runs, so a block downstream of an analysis that re-ran in the same run is recomputed (spec 09 §3.7) | M |
+| ENG-20 | `Block.always_runs(params)`: whether a block bypasses the cache may depend on its parameters (run mode `always`) | M |
 | ENG-17 | Blocks that write files (Excel, report) are marked `always_run` and bypass the cache, so a deleted or edited output file is always rewritten | M |
 
 ## 3. Design

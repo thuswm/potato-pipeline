@@ -32,6 +32,7 @@ pyNastran is deliberately **not** used.
 | NAS-17 | The reader is tested against real MSC Nastran 2023.3 files kept in the repository (`examples/fem/`) | M |
 | NAS-18 | Grid point weight generator output as a mass / centre of gravity table (§3.8) | S |
 | NAS-19 | Browse and read the model data (`/NASTRAN/INPUT`, e.g. CBUSH connectivity) through the same browser | L |
+| NAS-20 | The result blocks (results, eigenvalues, RBE2 loads, point masses) accept the `.h5` path from a connector (`file` input), so an analysis block can feed them (spec 09 §3.8) | M |
 
 ## 3. Design
 

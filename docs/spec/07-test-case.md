@@ -43,6 +43,16 @@ joint definitions `examples/test_case/locations.csv`, Nastran files `examples/fe
 4. Next version: *load table → model update → Nastran run* in front of the analysis block
    (spec README, "Later").
 
+**Analysis blocks (step 6, spec 09).** Each of the three result blocks gets a *Nastran
+analysis* block in front of it, in run mode `never` (the analysis is not repeated: the
+supplied `.bdf`/`.f06`/`.h5` are used as they are). The analysis block delivers the `.h5`
+to the result block through a connector and checks the `.f06`: `modal` and `global_loads`
+are clean (`OK`), `local_loads` has the warning 9058 (`WARNINGS`). The messages of the three
+analyses are stacked into one table in the report ("Nastran messages") — one row: the 9058
+warning of the local loads. Switching a block to `if_changed` would run the analysis again
+when the `.bdf` changes (needs Nastran on the computer and the command/path set in the
+block or the config file, spec 09 §3.3).
+
 ## 3. Locations
 
 A **location** is a place where the *same set of loads* is assessed, e.g. several joints that

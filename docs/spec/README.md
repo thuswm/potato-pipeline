@@ -27,6 +27,7 @@ Change log:
 | 06 | [GUI node editor](06-gui.md) | Browser GUI, canvas, property panel, running pipelines |
 | 07 | [Concrete test case](07-test-case.md) | The analyst's modal + global/local loads case as example pipeline and acceptance test |
 | 08 | [Stored outputs](08-stored-outputs.md) | Block outputs on disk (Parquet), reopening a pipeline as already run, clearing outputs |
+| 09 | [Nastran analysis block](09-nastran-analysis.md) | Running MSC Nastran from the pipeline, run modes, f06 check, the shared solver base |
 
 Each feature spec has the same structure: *Purpose · Requirements · Design · Out of scope (v1) · Open questions*.
 
@@ -37,14 +38,14 @@ Priority: **M** = must have in v1, **S** = should have in v1, **L** = later vers
 
 Agreed order. Each step: spec update → approval → code → commit.
 
-| Step | Content | Spec |
-|------|---------|------|
-| 1 | HDF5 result browser, peek preview, reader corrections, real reference files | 02 §3.7–3.9 |
-| 2 | Small GUI fixes: New folder in Save as; block type shown on every block and in the property panel; Quit command that stops the server; one term ("block", "connector") everywhere | 06 |
-| 3 | Python block: view the code in the property panel, open the file, start from a template; a template never overwrites an existing file | 04 |
-| 4 | Report section editor (with item names and previews); requirement check block; the concrete test case as example pipeline `examples/test_case.apb.json` with an example margin script | 05 §3.4, 03 §3.4, 07 |
-| 5 | Block outputs stored on disk (Parquet via `pyarrow`) so a reopened pipeline is recognised as already run; "Clear outputs" | 01 §3.4, 08 |
-| 6 | Nastran analysis block: points at the `.bdf`, run mode never / if input changed / always, outputs `.h5` and `.f06`, reports fatal errors and warnings from the f06 | new |
+| Step | Content | Spec | Status |
+|------|---------|------|--------|
+| 1 | HDF5 result browser, peek preview, reader corrections, real reference files | 02 §3.7–3.9 | done `a0ad326` |
+| 2 | Small GUI fixes: New folder in Save as; block type shown on every block and in the property panel; Quit command that stops the server; one term ("block", "connector") everywhere | 06 | done `255b34e` |
+| 3 | Python block: view the code in the property panel, open the file, start from a template; a template never overwrites an existing file | 04 | done `024fcbf` |
+| 4 | Report section editor (with item names and previews); requirement check block; the concrete test case as example pipeline `examples/test_case.apb.json` with an example margin script | 05 §3.4, 03 §3.4, 07 | done `fd7f443` |
+| 5 | Block outputs stored on disk (Parquet via `pyarrow`) so a reopened pipeline is recognised as already run; "Clear outputs" | 01 §3.4, 08 | done `e2edf44` |
+| 6 | Nastran analysis block: points at the `.bdf`, run mode never / if input changed / always, outputs `.h5` and `.f06`, reports fatal errors and warnings from the f06; analysis blocks (mode *never*) added to the test case | 09, 07 | spec agreed, in progress |
 
 Later (noted, not scheduled): load table → model update block; mode shape plots; Abaqus
 blocks; Word template as block input; start/exit as an application that hides the server;
