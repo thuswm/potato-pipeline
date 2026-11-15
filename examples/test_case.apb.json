@@ -1,0 +1,600 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "title": "Test case: modal analysis and CBUSH margins (real Nastran files)",
+    "author": "",
+    "created": "2026-11-15",
+    "description": ""
+  },
+  "settings": {
+    "default_unit_system": "SI"
+  },
+  "variables": {
+    "min_frequency": 20.0,
+    "safety_factor": 1.5,
+    "doc_number": "APB-TC-001",
+    "revision": "A"
+  },
+  "blocks": [
+    {
+      "id": "modal",
+      "type_id": "nastran.hdf5_results",
+      "type_version": 1,
+      "label": "Modal results",
+      "params": {
+        "file": "fem/modal.h5",
+        "result": "MODAL/MODAL_EFFECTIVE_MASS",
+        "unit_system": "SI"
+      },
+      "position": [
+        40.0,
+        40.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "f1",
+      "type_id": "table.pick",
+      "type_version": 1,
+      "label": "Lowest frequency",
+      "params": {
+        "column": "FREQUENCY",
+        "row": "min"
+      },
+      "position": [
+        330.0,
+        40.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "fmin",
+      "type_id": "table.constant",
+      "type_version": 1,
+      "label": "Required frequency",
+      "params": {
+        "value": "${min_frequency}",
+        "unit": "Hz"
+      },
+      "position": [
+        330.0,
+        140.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "req",
+      "type_id": "check.requirement",
+      "type_version": 1,
+      "label": "Frequency requirement",
+      "params": {
+        "requirement": "REQ-DYN-001 First eigenfrequency",
+        "comparison": "greater_than"
+      },
+      "position": [
+        620.0,
+        70.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "xlsx",
+      "type_id": "table.write_excel",
+      "type_version": 1,
+      "label": "Modal workbook",
+      "params": {
+        "file": "output/test_case_modal.xlsx",
+        "sheet_names": [
+          "Effective mass"
+        ]
+      },
+      "position": [
+        330.0,
+        250.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "locs",
+      "type_id": "table.read_csv",
+      "type_version": 1,
+      "label": "Locations",
+      "params": {
+        "file": "test_case/locations.csv"
+      },
+      "position": [
+        40.0,
+        420.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "sf",
+      "type_id": "table.constant",
+      "type_version": 1,
+      "label": "Safety factor",
+      "params": {
+        "value": "${safety_factor}"
+      },
+      "position": [
+        40.0,
+        520.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "global_forces",
+      "type_id": "nastran.hdf5_results",
+      "type_version": 1,
+      "label": "Global CBUSH forces",
+      "params": {
+        "file": "fem/global_loads.h5",
+        "result": "ELEMENTAL/ELEMENT_FORCE/BUSH",
+        "unit_system": "SI"
+      },
+      "position": [
+        330.0,
+        360.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "global_margins",
+      "type_id": "python.script",
+      "type_version": 1,
+      "label": "Global margins",
+      "params": {
+        "script": "scripts/cbush_margins.py",
+        "inputs": [
+          {
+            "name": "forces",
+            "type": "Table"
+          },
+          {
+            "name": "locations",
+            "type": "Table"
+          },
+          {
+            "name": "safety_factor",
+            "type": "Scalar"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "margins",
+            "type": "Table"
+          },
+          {
+            "name": "min_ms",
+            "type": "Scalar"
+          }
+        ]
+      },
+      "position": [
+        620.0,
+        360.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "local_forces",
+      "type_id": "nastran.hdf5_results",
+      "type_version": 1,
+      "label": "Local CBUSH forces",
+      "params": {
+        "file": "fem/local_loads.h5",
+        "result": "ELEMENTAL/ELEMENT_FORCE/BUSH",
+        "unit_system": "SI"
+      },
+      "position": [
+        330.0,
+        600.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "local_margins",
+      "type_id": "python.script",
+      "type_version": 1,
+      "label": "Local margins",
+      "params": {
+        "script": "scripts/cbush_margins.py",
+        "inputs": [
+          {
+            "name": "forces",
+            "type": "Table"
+          },
+          {
+            "name": "locations",
+            "type": "Table"
+          },
+          {
+            "name": "safety_factor",
+            "type": "Scalar"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "margins",
+            "type": "Table"
+          },
+          {
+            "name": "min_ms",
+            "type": "Scalar"
+          }
+        ]
+      },
+      "position": [
+        620.0,
+        600.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "report",
+      "type_id": "report.word",
+      "type_version": 1,
+      "label": "Test case report",
+      "params": {
+        "output_file": "output/test_case_report.docx",
+        "metadata": {
+          "title": "Test case: modal analysis and CBUSH margins",
+          "document_number": "${doc_number}",
+          "revision": "${revision}",
+          "author": "Analysis Pipeline Builder example"
+        },
+        "sections": [
+          {
+            "kind": "title"
+          },
+          {
+            "kind": "heading",
+            "text": "1 Introduction"
+          },
+          {
+            "kind": "paragraph",
+            "text": "This report presents a modal analysis and the margins of safety of the CBUSH elements of an example structure (fake data, real MSC Nastran result files). The first eigenfrequency must be higher than {min_frequency:.1f}; the safety factor on the CBUSH loads is {safety_factor:.2f}."
+          },
+          {
+            "kind": "units"
+          },
+          {
+            "kind": "heading",
+            "text": "2 Modal analysis"
+          },
+          {
+            "kind": "paragraph",
+            "text": "The first eigenfrequency is {f1:.2f}: the requirement is {req_status}."
+          },
+          {
+            "kind": "table",
+            "item": "requirement",
+            "caption": "Frequency requirement",
+            "formats": {
+              "VALUE": "0.00",
+              "LIMIT": "0.0",
+              "MARGIN": "0.00"
+            },
+            "highlight": "STATUS == 'FAIL'"
+          },
+          {
+            "kind": "table",
+            "item": "effective_mass",
+            "caption": "Modal effective mass",
+            "columns": [
+              "MODE",
+              "FREQUENCY",
+              "T1",
+              "T2",
+              "T3",
+              "R1",
+              "R2",
+              "R3"
+            ],
+            "formats": {
+              "FREQUENCY": "0.00"
+            },
+            "default_format": "0.0"
+          },
+          {
+            "kind": "heading",
+            "text": "3 Global loads"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Margins of safety of the CBUSH elements at each location for the global load case (safety factor {safety_factor:.2f})."
+          },
+          {
+            "kind": "table",
+            "item": "global_margins",
+            "caption": "Global loads: margins of safety",
+            "columns": [
+              "SUBCASE",
+              "EID",
+              "LOCATION",
+              "TENSION",
+              "SHEAR",
+              "MS"
+            ],
+            "formats": {
+              "TENSION": "0",
+              "SHEAR": "0",
+              "MS": "0.00"
+            },
+            "highlight": "MS < 0"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Minimum margin of safety: {min_ms_global:.2f}."
+          },
+          {
+            "kind": "heading",
+            "text": "4 Local loads"
+          },
+          {
+            "kind": "paragraph",
+            "text": "All loads of the local load case are zero in the supplied model (it has no mass), so no margin of safety is defined."
+          },
+          {
+            "kind": "table",
+            "item": "local_margins",
+            "caption": "Local loads: margins of safety",
+            "columns": [
+              "SUBCASE",
+              "EID",
+              "LOCATION",
+              "TENSION",
+              "SHEAR",
+              "MS"
+            ],
+            "formats": {
+              "TENSION": "0",
+              "SHEAR": "0",
+              "MS": "0.00"
+            },
+            "highlight": "MS < 0"
+          },
+          {
+            "kind": "traceability"
+          }
+        ]
+      },
+      "position": [
+        940.0,
+        300.0
+      ],
+      "notes": ""
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "source": {
+        "block": "modal",
+        "port": "table"
+      },
+      "target": {
+        "block": "f1",
+        "port": "table"
+      },
+      "name": ""
+    },
+    {
+      "id": "c2",
+      "source": {
+        "block": "f1",
+        "port": "value"
+      },
+      "target": {
+        "block": "req",
+        "port": "value"
+      },
+      "name": ""
+    },
+    {
+      "id": "c3",
+      "source": {
+        "block": "fmin",
+        "port": "value"
+      },
+      "target": {
+        "block": "req",
+        "port": "limit"
+      },
+      "name": ""
+    },
+    {
+      "id": "c4",
+      "source": {
+        "block": "modal",
+        "port": "table"
+      },
+      "target": {
+        "block": "xlsx",
+        "port": "tables"
+      },
+      "name": ""
+    },
+    {
+      "id": "c5",
+      "source": {
+        "block": "global_forces",
+        "port": "table"
+      },
+      "target": {
+        "block": "global_margins",
+        "port": "forces"
+      },
+      "name": ""
+    },
+    {
+      "id": "c6",
+      "source": {
+        "block": "locs",
+        "port": "table"
+      },
+      "target": {
+        "block": "global_margins",
+        "port": "locations"
+      },
+      "name": ""
+    },
+    {
+      "id": "c7",
+      "source": {
+        "block": "sf",
+        "port": "value"
+      },
+      "target": {
+        "block": "global_margins",
+        "port": "safety_factor"
+      },
+      "name": ""
+    },
+    {
+      "id": "c8",
+      "source": {
+        "block": "local_forces",
+        "port": "table"
+      },
+      "target": {
+        "block": "local_margins",
+        "port": "forces"
+      },
+      "name": ""
+    },
+    {
+      "id": "c9",
+      "source": {
+        "block": "locs",
+        "port": "table"
+      },
+      "target": {
+        "block": "local_margins",
+        "port": "locations"
+      },
+      "name": ""
+    },
+    {
+      "id": "c10",
+      "source": {
+        "block": "sf",
+        "port": "value"
+      },
+      "target": {
+        "block": "local_margins",
+        "port": "safety_factor"
+      },
+      "name": ""
+    },
+    {
+      "id": "c11",
+      "source": {
+        "block": "modal",
+        "port": "table"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "effective_mass"
+    },
+    {
+      "id": "c12",
+      "source": {
+        "block": "f1",
+        "port": "value"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "f1"
+    },
+    {
+      "id": "c13",
+      "source": {
+        "block": "fmin",
+        "port": "value"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "min_frequency"
+    },
+    {
+      "id": "c14",
+      "source": {
+        "block": "req",
+        "port": "result"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "requirement"
+    },
+    {
+      "id": "c15",
+      "source": {
+        "block": "req",
+        "port": "status"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "req_status"
+    },
+    {
+      "id": "c16",
+      "source": {
+        "block": "sf",
+        "port": "value"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "safety_factor"
+    },
+    {
+      "id": "c17",
+      "source": {
+        "block": "global_margins",
+        "port": "margins"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "global_margins"
+    },
+    {
+      "id": "c18",
+      "source": {
+        "block": "global_margins",
+        "port": "min_ms"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "min_ms_global"
+    },
+    {
+      "id": "c19",
+      "source": {
+        "block": "local_margins",
+        "port": "margins"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "local_margins"
+    }
+  ],
+  "macros": []
+}

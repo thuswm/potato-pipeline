@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from apb.blocks.report.editing import check_sections, describe, item_info_from_value
 from apb.blocks.report.sections import Section
 from apb.blocks.report.writer import ReportBuilder, ReportError, default_base_document
 from apb.engine.block import Block, FilePath, RunContext
@@ -82,6 +83,27 @@ class WordReport(Block[WordReportParams]):
         """The base document, if one is set."""
         return [ctx.resolve_path(params.base_document)] if params.base_document else []
 
+    @staticmethod
+    def _check(params: WordReportParams, items: dict[str, Any]) -> None:
+        """Refuse to run if the sections do not fit the connected items (REP-18).
+
+        The same check as the section editor shows before the run.
+        """
+        infos = {name: item_info_from_value(name, value) for name, value in items.items()}
+        problems = check_sections(params.sections, infos)
+        if not problems:
+            return
+        lines = []
+        for p in problems:
+            if p.index < 0:
+                lines.append(f"- {p.message}")
+            else:
+                what = describe(params.sections[p.index].model_dump())
+                lines.append(f"- Section {p.index + 1} ({what}): {p.message}")
+        raise ReportError(
+            "The report sections do not fit the connected items:\n" + "\n".join(lines)
+        )
+
     def run(
         self, params: WordReportParams, inputs: dict[str, Any], ctx: RunContext
     ) -> dict[str, Any]:
@@ -101,6 +123,7 @@ class WordReport(Block[WordReportParams]):
         items = dict(zip(names, inputs["items"], strict=True))
         metadata = params.metadata.model_dump()
         metadata["date"] = metadata["date"] or dt.date.today().isoformat()
+        self._check(params, items)
 
         builder = ReportBuilder(items, metadata, base, ctx.default_unit_system, ctx.log)
         builder.pipeline_file = ctx.pipeline_file

@@ -6,6 +6,7 @@ Started with ``apb gui [pipeline]``. Each browser tab gets its own editor.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -17,6 +18,8 @@ from nicegui import app, ui
 from apb import __version__
 from apb.blocks.nastran.blocks import Hdf5Results
 from apb.blocks.python.block import PythonBlock
+from apb.blocks.report import editing as report_editing
+from apb.blocks.report.block import WordReport
 from apb.engine.events import EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
@@ -28,6 +31,7 @@ from apb.gui.forms import ParamForm, suffix_hint
 from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
 from apb.gui.preview import open_with_system, show_result, show_value
 from apb.gui.python_panel import PythonPanel
+from apb.gui.report_editor import ReportPanel
 from apb.gui.runner import EVENT_STATES, RunController, summary
 from apb.units import UnitSystem
 
@@ -255,6 +259,17 @@ class EditorPage:
                     show_peek=lambda table, error: self._show_peek(block.id, table, error),
                     log=lambda text: self._log(f"  {self._block_name(block.id)}: {text}"),
                 ).build()
+            elif cls is WordReport:  # section editor (spec 05 §3.4)
+                ReportPanel(
+                    block.params,
+                    on_change=lambda name, value: self._set_param(block.id, name, value),
+                    pick_file=self._pick_file,
+                    resolve=self._resolve_variables,
+                    items=lambda: self._report_items(block.id),
+                    rename_item=lambda info, name: self._rename_item(block.id, info, name),
+                    confirm=confirm,
+                    rebuild=self._show_panel,
+                ).build()
             elif cls is PythonBlock:  # script view and templates (spec 04 §3.5)
                 PythonPanel(
                     block.params,
@@ -426,6 +441,31 @@ class EditorPage:
         self.preview_title.text = f"Preview — {self._block_name(self.selected)}"
         with self.preview:
             show_result(self.runner.result(self.selected))
+
+    def _report_items(self, block_id: str) -> list[report_editing.ItemInfo]:
+        """Return the items connected to a report with the columns and values of the last run."""
+        out: list[report_editing.ItemInfo] = []
+        for info in self.state.item_infos(block_id):
+            value: Any = None
+            if info.connection is not None:
+                result = self.runner.result(info.connection[0])
+                if result is not None:
+                    value = result.outputs.get(info.connection[1])
+            columns = (
+                report_editing.table_columns(value) if isinstance(value, pd.DataFrame) else None
+            )
+            out.append(dataclasses.replace(info, columns=columns, value=value))
+        return out
+
+    def _rename_item(
+        self, block_id: str, info: report_editing.ItemInfo, name: str
+    ) -> dict[str, str]:
+        """Name the connector of a report item; returns the names that changed."""
+        if info.connection is None:
+            raise EditError("This item does not come from a connector")
+        changes = self.state.rename_connector(ConnectionKey(*info.connection), name)
+        self.runner.mark_edited(block_id)
+        return changes
 
     def _resolve_variables(self, value: Any) -> Any:
         """Replace ``${variable}`` references; undefined variables are left as they are."""

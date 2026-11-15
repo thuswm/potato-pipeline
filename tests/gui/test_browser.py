@@ -42,7 +42,9 @@ class ServerUrl(str):
 
 
 @pytest.fixture
-def server(workdir: Path) -> Iterator[ServerUrl]:
+def server(workdir: Path, request: pytest.FixtureRequest) -> Iterator[ServerUrl]:
+    """The GUI server; ``indirect`` parametrisation chooses the pipeline to open."""
+    pipeline = getattr(request, "param", "fastener_loads.apb.json")
     port = _free_port()
     proc = subprocess.Popen(
         [
@@ -50,7 +52,7 @@ def server(workdir: Path) -> Iterator[ServerUrl]:
             "-m",
             "apb.cli",
             "gui",
-            str(workdir / "fastener_loads.apb.json"),
+            str(workdir / pipeline),
             "--no-browser",
             "--port",
             str(port),
@@ -428,7 +430,7 @@ def test_python_block_shows_code_and_checks_the_script(page, workdir: Path):
         ),
         encoding="utf-8",
     )
-    page.get_by_role("button", name="Check").click()
+    page.get_by_role("button", name="Check", exact=True).click()
     page.wait_for_timeout(500)
     assert (
         "run() argument 'extra' has no matching input port"
@@ -437,7 +439,7 @@ def test_python_block_shows_code_and_checks_the_script(page, workdir: Path):
     assert "extra," in page.locator(".apb-script-code").inner_text()
 
     script.write_text("def run(:\n", encoding="utf-8")
-    page.get_by_role("button", name="Check").click()
+    page.get_by_role("button", name="Check", exact=True).click()
     page.wait_for_timeout(500)
     assert (
         "Syntax error in fastener_margins.py, line 1"
@@ -496,3 +498,220 @@ def test_python_block_use_existing_file(page, workdir: Path):
     assert "def run(" in page.locator(".apb-script-code").inner_text()
     # The block has no ports, the script needs some: shown by the check, ports not touched.
     assert "has no matching input port" in page.locator(".apb-script-check").inner_text()
+
+
+# ---- report section editor (spec 05 §3.4) ------------------------------------------------
+
+
+def save_file(page) -> None:
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save", exact=True).click()
+    page.wait_for_timeout(600)
+
+
+def report_params(workdir: Path) -> dict:
+    saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
+    return next(b for b in saved["blocks"] if b["type_id"] == "report.word")["params"]
+
+
+def section_row(page, index: int):
+    return page.locator(".apb-section").nth(index)
+
+
+def open_section(page, index: int) -> None:
+    section_row(page, index).locator(".apb-section-summary").click()
+    page.wait_for_timeout(500)
+
+
+def summaries(page) -> list[str]:
+    return [t.strip() for t in page.locator(".apb-section-summary").all_inner_texts()]
+
+
+def test_report_editor_lists_items_and_sections(page):
+    select(page, "Fastener report")
+    names = [i.input_value() for i in page.locator(".apb-item-name input").all()]
+    assert names == [
+        "load_table",
+        "critical_margins",
+        "plot",
+        "min_ms",
+        "allowable_tension",
+        "allowable_shear",
+        "safety_factor",
+    ]
+    assert "Table · Fastener load table" in page.locator(".apb-item").first.inner_text()
+    assert "Figure · Fastener margins (plot)" in page.locator(".apb-item").nth(2).inner_text()
+    found = summaries(page)
+    assert found[0] == "Title"
+    assert found[1] == "H1 · 1 Introduction"
+    assert found[4] == "H1 · 2 Fastener loads"
+    assert found[6] == "Table · load_table · “Fastener loads per load case”"
+    assert found[-1] == "Traceability"
+    assert page.locator(".apb-unused").count() == 0  # every item is used by the example report
+    assert page.locator(".apb-section-warning:visible").count() == 0
+
+
+def test_report_editor_add_move_duplicate_delete_and_save(page, workdir: Path):
+    select(page, "Fastener report")
+    before = len(summaries(page))
+    open_section(page, 1)  # the first heading
+    page.get_by_role("button", name="Add section").click()
+    page.locator(".q-menu").get_by_text("Heading", exact=True).click()  # after the open section
+    page.wait_for_timeout(500)
+    assert summaries(page)[2] == "H1 · New heading"
+    text = page.locator(".apb-text-text input").first
+    text.fill("1.1 Scope")
+    text.press("Tab")
+    page.wait_for_timeout(400)
+    assert summaries(page)[2] == "H1 · 1.1 Scope"
+
+    section_row(page, 2).get_by_label("Move up").click()
+    page.wait_for_timeout(400)
+    assert summaries(page)[1:3] == ["H1 · 1.1 Scope", "H1 · 1 Introduction"]
+    section_row(page, 1).get_by_label("Duplicate").click()
+    page.wait_for_timeout(400)
+    assert summaries(page)[1:4] == ["H1 · 1.1 Scope", "H1 · 1.1 Scope", "H1 · 1 Introduction"]
+    section_row(page, 2).get_by_label("Delete").click()
+    page.wait_for_timeout(400)
+    assert len(summaries(page)) == before + 1
+    assert summaries(page)[1:3] == ["H1 · 1.1 Scope", "H1 · 1 Introduction"]
+
+    save_file(page)
+    sections = report_params(workdir)["sections"]
+    assert sections[1] == {"kind": "heading", "text": "1.1 Scope", "level": 1}
+    assert sections[2]["text"] == "1 Introduction"
+    assert len(sections) == before + 1
+
+
+def test_report_editor_table_columns_formats_and_warnings(page, workdir: Path):
+    run_all(page)
+    select(page, "Fastener report")
+    open_section(page, 8)  # table critical_margins
+    columns = page.locator(".apb-columns")
+    assert "EID" in columns.inner_text() and "TENSION" in columns.inner_text()
+    # The formats of the chosen columns are listed with the unit of the table column.
+    formats = page.locator(".apb-formats")
+    assert "TENSION [N]" in formats.inner_text()
+    assert page.locator(".apb-format-column input").count() == 5
+    box = page.locator(".apb-format-column input").nth(3)  # EID, SUBCASE, TENSION, SHEAR, MS
+    assert box.input_value() == "0.0"
+    box.fill("0.0.0")
+    box.press("Tab")
+    page.wait_for_timeout(300)
+    assert page.locator(".apb-formats .q-field--error").count() == 1  # invalid: not stored
+    box.fill("0.000")
+    box.press("Tab")
+    page.wait_for_timeout(400)
+    save_file(page)
+    assert report_params(workdir)["sections"][8]["formats"]["SHEAR"] == "0.000"
+
+    # A column that is not in the table gives a warning on the section before any run.
+    caption_box = page.locator(".apb-text-caption input").first
+    caption_box.fill("Critical {nope}")
+    caption_box.press("Tab")
+    page.wait_for_timeout(400)
+    assert "Unknown placeholder {nope}" in page.locator(".apb-text-status").first.inner_text()
+    title = section_row(page, 8).locator(".apb-section-warning").get_attribute("title")
+    assert "Unknown placeholder {nope}" in title
+
+
+def test_report_editor_insert_value_and_live_preview(page):
+    run_all(page)
+    select(page, "Fastener report")
+    open_section(page, 10)  # paragraph: The minimum margin of safety is {min_ms:.2f}.
+    status = page.locator(".apb-text-status").first
+    assert "→ The minimum margin of safety is 0.23." in status.inner_text()
+    area = page.locator(".apb-text-text textarea").first
+    area.fill("Minimum: ")
+    area.press("End")
+    page.get_by_label("Insert value").first.click()
+    page.locator(".q-menu").get_by_text("min_ms", exact=True).click()
+    page.wait_for_timeout(600)
+    assert area.input_value() == "Minimum: {min_ms:.2f}"
+    assert "→ Minimum: 0.23" in status.inner_text()
+    assert summaries(page)[10] == "Minimum: {min_ms:.2f}"
+
+
+def test_report_editor_rename_item_updates_references(page, workdir: Path):
+    select(page, "Fastener report")
+    plot = page.locator(".apb-item-name input").nth(2)
+    assert plot.input_value() == "plot"
+    plot.fill("margin_plot")
+    plot.press("Enter")
+    page.wait_for_selector("text=reference(s) in the sections will be changed")
+    page.get_by_role("button", name="Rename").click()
+    page.wait_for_timeout(800)
+    assert [i.input_value() for i in page.locator(".apb-item-name input").all()][2] == "margin_plot"
+    assert "Figure · margin_plot" in summaries(page)[9]
+    assert page.locator(".apb-section-warning:visible").count() == 0
+    save_file(page)
+    saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
+    assert next(
+        c
+        for c in saved["connections"]
+        if c["target"]["block"] == "report" and c.get("name") == "margin_plot"
+    )
+    assert report_params(workdir)["sections"][9]["item"] == "margin_plot"
+    run_all(page)  # the report still builds with the new name
+    assert states(page) == {"apb-state-done"}
+
+
+def test_report_editor_refuses_a_name_in_use_and_flags_missing_items(page):
+    select(page, "Fastener report")
+    box = page.locator(".apb-item-name input").nth(3)
+    box.fill("plot")
+    box.press("Enter")
+    page.wait_for_selector("text=already used by another item")
+    assert page.locator(".apb-item-name input").nth(3).input_value() == "min_ms"
+    # A new table section has no item yet: the warning says so.
+    page.get_by_role("button", name="Add section").click()
+    page.locator(".q-menu").get_by_text("Table", exact=True).click()
+    page.wait_for_timeout(500)
+    last = page.locator(".apb-section").last
+    assert "Table · (no item)" in last.inner_text()
+    assert "Choose an item" in last.locator(".apb-section-warning").get_attribute("title")
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
+    assert counts(page) == (12, 19)
+    assert node(page, "Frequency requirement").locator(".apb-sub").inner_text() == (
+        "Requirement check"
+    )
+    run_all(page)
+    assert states(page) == {"apb-state-done"}
+    assert (workdir / "output" / "test_case_report.docx").exists()
+    assert (workdir / "output" / "test_case_modal.xlsx").exists()
+
+    select(page, "Frequency requirement")
+    preview = page.locator(".q-tab-panels").first
+    assert "REQ-DYN-001 First eigenfrequency" in preview.inner_text()
+    assert "PASS" in preview.inner_text()
+    assert "VALUE [Hz]" in preview.inner_text()
+    page.get_by_role("tab", name="margin").click()
+    page.wait_for_timeout(300)
+    assert "0.285593" in page.locator(".q-tab-panels").first.inner_text()
+
+    select(page, "Global margins")
+    assert "def run(" in page.locator(".apb-script-code").inner_text()
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+
+    # The report editor knows the items by the names given on the connectors.
+    select(page, "Test case report")
+    names = [i.input_value() for i in page.locator(".apb-item-name input").all()]
+    assert names == [
+        "effective_mass",
+        "f1",
+        "min_frequency",
+        "requirement",
+        "req_status",
+        "safety_factor",
+        "global_margins",
+        "min_ms_global",
+        "local_margins",
+    ]
+    assert page.locator(".apb-unused").count() == 0
+    assert page.locator(".apb-section-warning:visible").count() == 0
+    open_section(page, 7)  # the modal effective mass table: columns known from the run
+    assert "FREQUENCY" in page.locator(".apb-columns").inner_text()
+    assert page.locator(".apb-format-column input").count() == 8

@@ -15,7 +15,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from apb.blocks.report.editing import ItemInfo, valid_item_name
 from apb.engine.block import AnyBlockType
+from apb.engine.graph import prepare
 from apb.engine.model import (
     BlockInstance,
     Connection,
@@ -25,7 +27,7 @@ from apb.engine.model import (
     save_pipeline,
 )
 from apb.engine.registry import BlockRegistry
-from apb.engine.types import Port, types_compatible
+from apb.engine.types import Port, PortType, types_compatible
 
 PIPELINE_SUFFIX = ".apb.json"
 
@@ -361,6 +363,88 @@ class EditorState:
         ]
         if len(self.pipeline.connections) != before:
             self._changed()
+
+    # ---- items of a block with a multiple input (report) ---------------------------------
+
+    def item_infos(self, block_id: str, port: str = "items") -> list[ItemInfo]:
+        """Describe the values connected to a ``multiple`` input, with their names.
+
+        Args:
+            block_id: The block, e.g. a Word report.
+            port: Its ``multiple`` input port.
+
+        Returns:
+            One entry per connector, in connector order, with the name the engine gives the
+            value, its type and its source (no run values; see :class:`ItemInfo`).
+        """
+        graph = prepare(self.pipeline, self.registry)
+        names = graph.input_names(block_id).get(port, [])
+        conns = [c for c in graph.incoming(block_id) if c.target.port == port]
+        infos: list[ItemInfo] = []
+        for name, conn in zip(names, conns, strict=True):
+            src = self.pipeline.block(conn.source.block)
+            outputs = self.ports(src)[1]
+            out = next((p for p in outputs if p.name == conn.source.port), None)
+            cls = self.block_class(src)
+            label = src.label or (cls.title if cls else src.type_id)
+            infos.append(
+                ItemInfo(
+                    name=name,
+                    type=out.type if out else PortType.ANY,
+                    source=f"{label} ({conn.source.port})" if len(outputs) > 1 else label,
+                    connection=(
+                        conn.source.block,
+                        conn.source.port,
+                        conn.target.block,
+                        conn.target.port,
+                    ),
+                    explicit=bool(conn.name),
+                )
+            )
+        return infos
+
+    def rename_connector(self, key: ConnectionKey, name: str) -> dict[str, str]:
+        """Set the explicit name of a connector into a ``multiple`` input (REP-15).
+
+        Args:
+            key: The connector.
+            name: New name (letters, digits and ``_``, starting with a letter); empty
+                removes the explicit name, so the derived name is used again.
+
+        Returns:
+            Old name -> new name of every item whose name changed. This is more than the
+            renamed item when names were derived: with ``margins`` and ``margins_2``,
+            naming the first one makes the second one ``margins``.
+
+        Raises:
+            EditError: If the name is invalid, or if another item already has it (the
+                value would silently get a ``_2`` suffix instead).
+        """
+        conn = next((c for c in self.pipeline.connections if ConnectionKey.of(c) == key), None)
+        if conn is None:
+            raise EditError("This connector does not exist")
+        name = name.strip()
+        if name and not valid_item_name(name):
+            raise EditError("Names consist of letters, digits and _ and start with a letter")
+
+        def names() -> dict[tuple[str, str, str, str], str]:
+            return {
+                i.connection: i.name
+                for i in self.item_infos(key.target_block, key.target_port)
+                if i.connection
+            }
+
+        mine = (key.source_block, key.source_port, key.target_block, key.target_port)
+        before = names()
+        old = conn.name
+        conn.name = name
+        after = names()
+        if name and after[mine] != name:
+            conn.name = old
+            raise EditError(f"The name {name!r} is already used by another item")
+        if old != name:
+            self._changed()
+        return {before[c]: after[c] for c in before if before[c] != after[c]}
 
     def _creates_cycle(self, source: str, target: str) -> bool:
         sorter: graphlib.TopologicalSorter[str] = graphlib.TopologicalSorter()

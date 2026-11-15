@@ -33,6 +33,7 @@ blocks. All table blocks take and return `pandas.DataFrame`s.
 | `units.convert` | Convert units | `value` (Any: table or scalar with unit) → same | `to` (`SI` / `SI_mm`); uses the units metadata (spec 00 §5.1) |
 | `table.set_units` | Set units | `table` → `table` | `unit_system`, `units` (column → unit label, e.g. `MPa`), `replace` (for tables from Excel/CSV) |
 | `table.load_case_table` | Load case table | `table`, `labels` (optional names table) → `table` | `id_columns` (default `EID`), `case_column` (default `SUBCASE`), `value_columns`, `envelope` (list of `max`/`min`/`abs_max`, each adds `<NAME>` and `<NAME>_CASE`), `layout` (`side_by_side` / `flat`), `labels` (case ID → name, overrides the input) |
+| `check.requirement` | Requirement check | `value`, `limit` (optional) → `result` (table), `status` (text), `margin` | `requirement`, `comparison`, `limit`, `unit` (see §3.4) |
 | `table.case_labels` | Load case names | – → `table` | `labels` (subcase ID → name); output `SUBCASE, LABEL`, connects to `load_case_table.labels` or joins onto any result |
 
 Expressions use pandas' `query`/`eval`, which are restricted expression languages (no
@@ -92,6 +93,37 @@ This is the main Excel task today and gets first-class support:
 - Always runs (ENG-17), so a deleted or edited workbook is rewritten on the next run.
 - Two-level headers (side-by-side load case table): top level written once as a merged cell
   with unit, load case names below, header rows frozen.
+
+### 3.4 Requirement check (`check.requirement`)
+
+Compares one value with a requirement and says pass or fail — the typical "the first
+eigenfrequency must be higher than X Hz" of a report. It does not stop the pipeline when the
+requirement is not met: the report must still be produced, showing the FAIL.
+
+| | |
+|---|---|
+| Category | Checks |
+| Inputs | `value: Scalar`; `limit: Scalar` (optional — overrides the `limit` parameter, e.g. from a Constant block) |
+| Outputs | `result: Table` (one row, CHK-04), `status: Text` (`PASS` / `FAIL`), `margin: Scalar` |
+| Params | `requirement` (text: id and description, e.g. `REQ-DYN-001 First eigenfrequency`), `comparison` (`greater_than`, `greater_equal`, `less_than`, `less_equal`), `limit` (number or `${variable}`; empty if the `limit` input is connected), `unit` (unit label shown when neither value nor limit carries one) |
+
+| ID | Requirement | Prio |
+|----|-------------|------|
+| CHK-01 | `PASS` if `value <comparison> limit` holds on the numbers; equality passes only for `greater_equal` / `less_equal` | M |
+| CHK-02 | **Margin of safety** `MS = value / limit − 1` for `greater_*`, `MS = limit / value − 1` for `less_*`; `PASS` corresponds to `MS > 0` (`≥ 0` with equality allowed). If the margin is undefined (limit ≤ 0 for `greater_*`, value ≤ 0 for `less_*`) it is empty (NaN) and a line in the block log says why; the status is still decided by CHK-01 | M |
+| CHK-03 | Units: if the value carries a unit and the limit is given as a number, the number is read in the unit of the value (logged: "limit 20 interpreted as Hz"). If value and limit both carry units they must be equal, otherwise the block fails and recommends *Convert units* (spec 00 §5.1) | M |
+| CHK-04 | The result table has the columns `REQUIREMENT`, `VALUE`, `CONDITION` (`>`, `≥`, `<`, `≤`), `LIMIT`, `MARGIN`, `STATUS`; `VALUE` and `LIMIT` carry the unit, `MARGIN` is dimensionless; it can go to the report as a table, to Excel, or be stacked with other checks (`table.concat`) into one requirements table | M |
+| CHK-05 | A failed requirement is logged with the prefix `WARNING:` (like the synthetic-file notice); the block itself is `done`, not in error. A missing value (NaN) or missing limit is an error | M |
+| CHK-06 | `status` and `margin` can be used in report text, e.g. "The requirement is {status} (margin {margin:.2f})." — with several checks give the connectors names (spec 05 §3.4, *Items*) | M |
+| CHK-07 | Checks on whole tables (every row against its own limit, with the worst row reported) — the margin table of the Python block covers this for now | L |
+
+Implementation: `apb.blocks.check.requirement`; the block is in the library category
+*Checks*. The value passed to the `limit` input wins over the `limit` parameter; a `limit`
+given as `Constant` with a unit (as in the test case) needs no unit interpretation.
+
+Example (test case, spec 07): `table.pick` takes the smallest `FREQUENCY` of the modal
+results (25.71 Hz), `check.requirement` with `greater_than` and limit `${min_frequency}`
+(20 Hz) gives `PASS`, margin 0.286.
 
 ## 4. Out of scope (v1)
 

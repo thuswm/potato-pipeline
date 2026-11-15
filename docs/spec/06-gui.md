@@ -14,7 +14,7 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 | GUI-04 | Connectors between incompatible port types are refused with a visible hint | M |
 | GUI-05 | **Block library** panel: block types grouped by category, with search; drag or click to add | M |
 | GUI-06 | **Property panel** for the selected block, auto-generated from its Pydantic `Params` model (text, number, bool, enum → drop-down, path → file picker, list, code → code editor) | M |
-| GUI-07 | Blocks may provide a custom property panel when the auto-form is not enough (e.g. report sections editor, Python code editor) | M |
+| GUI-07 | Blocks may provide a custom property panel when the auto-form is not enough: Nastran result browser (spec 02 §3.7), Python script view (spec 04 §3.5), report section editor (spec 05 §3.4) | M |
 | GUI-08 | **Run** (whole pipeline) and **Run to here** (selected block); Stop | M |
 | GUI-09 | Block state shown by colour/icon: idle, stale, running, done, error, skipped | M |
 | GUI-10 | **Output preview** for the selected block: table preview (paged), scalar value, text, figure image | M |
