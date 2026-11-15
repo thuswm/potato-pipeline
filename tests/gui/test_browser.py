@@ -35,8 +35,14 @@ def workdir(tmp_path: Path) -> Path:
     return tmp_path / "examples"
 
 
+class ServerUrl(str):
+    """URL of the test server; ``proc`` is the server process."""
+
+    proc: subprocess.Popen[bytes]
+
+
 @pytest.fixture
-def server(workdir: Path) -> Iterator[str]:
+def server(workdir: Path) -> Iterator[ServerUrl]:
     port = _free_port()
     proc = subprocess.Popen(
         [
@@ -55,7 +61,8 @@ def server(workdir: Path) -> Iterator[str]:
         env={k: v for k, v in os.environ.items() if not k.startswith("PYTEST")}
         | {"PYTHONUTF8": "1"},
     )
-    url = f"http://127.0.0.1:{port}/"
+    url = ServerUrl(f"http://127.0.0.1:{port}/")
+    url.proc = proc
     deadline = time.time() + 30
     while time.time() < deadline:
         with socket.socket() as s:
@@ -66,7 +73,8 @@ def server(workdir: Path) -> Iterator[str]:
         proc.kill()
         pytest.fail("GUI server did not start:\n" + (workdir / "gui.log").read_text())
     yield url
-    proc.terminate()
+    if proc.poll() is None:
+        proc.terminate()
     proc.wait(timeout=10)
 
 
@@ -323,3 +331,76 @@ def test_result_browser_unreadable_file_keeps_text_fields(page):
     assert (
         page.get_by_role("textbox", name="Result *").input_value() == "ELEMENTAL/ELEMENT_FORCE/BUSH"
     )
+
+
+def test_block_type_is_shown_on_blocks_and_in_the_panel(page):
+    # The block type line is drawn even when the label equals the type name (GUI-18).
+    names = node(page, "Load case names")
+    assert names.locator(".apb-sub").inner_text() == "Load case names"
+    assert node(page, "CBUSH forces").locator(".apb-sub").inner_text() == "Nastran HDF5 results"
+    select(page, "Load case names")
+    line = page.locator(".apb-block-type")
+    assert line.inner_text() == "Block type: Load case names · Table / Load cases"
+    line.hover()
+    page.wait_for_timeout(500)
+    assert "block id" in page.locator(".q-tooltip").inner_text()
+
+
+def test_save_as_can_create_a_new_folder(page, workdir: Path):
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save as…", exact=True).click()
+    dialog = page.locator(".q-dialog")
+    dialog.get_by_label("New folder").click()
+    page.get_by_label("Folder name").fill("results")
+    page.get_by_role("button", name="Create").click()
+    page.wait_for_timeout(500)
+    assert (workdir / "results").is_dir()
+    assert dialog.locator("text=results").first.is_visible()  # the dialog is now in the folder
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(800)
+    assert (workdir / "results" / "fastener_loads.apb.json").is_file()
+
+
+def test_new_folder_refuses_bad_names(page, workdir: Path):
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save as…", exact=True).click()
+    dialog = page.locator(".q-dialog")
+    for bad in ("a/b", "data"):  # separator; exists already
+        dialog.get_by_label("New folder").click()
+        page.get_by_label("Folder name").fill(bad)
+        page.get_by_role("button", name="Create").click()
+        page.wait_for_timeout(400)
+        assert page.locator(".q-notification").count() >= 1
+    assert not (workdir / "a").exists()
+
+
+def test_quit_warns_about_unsaved_changes_then_stops_the_server(page, server):
+    node(page, "Shear allowable").locator(".apb-head").click()
+    page.wait_for_timeout(400)
+    value = page.get_by_role("textbox", name="Value *")
+    value.fill("1800")
+    value.press("Enter")
+    page.wait_for_timeout(500)
+    assert "*" in page.locator(".q-header").inner_text()
+
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Quit", exact=True).click()
+    assert "Unsaved changes in: fastener_loads.apb.json" in page.locator(".q-dialog").inner_text()
+    page.get_by_role("button", name="Cancel").click()
+    page.wait_for_timeout(500)
+    assert server.proc.poll() is None  # still running
+
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Quit", exact=True).click()
+    page.get_by_role("button", name="Quit without saving").click()
+    page.wait_for_selector("text=You can close this tab")
+    assert server.proc.wait(timeout=15) == 0 or server.proc.returncode is not None
+    page.evaluate("window.onbeforeunload = null")
+
+
+def test_quit_without_changes_needs_no_confirmation(page, server):
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Quit", exact=True).click()
+    page.wait_for_selector("text=You can close this tab")
+    server.proc.wait(timeout=15)
+    assert server.proc.returncode is not None

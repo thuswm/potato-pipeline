@@ -73,7 +73,7 @@ export default {
     nodeHtml(spec) {
       const rows = (ports, cls) =>
         ports.map((p) => `<div class="${cls}" title="${esc(p.type)}">${esc(p.label)}</div>`).join("");
-      const sub = spec.label !== spec.type_title ? `<div class="apb-sub">${esc(spec.type_title)}</div>` : "";
+      const sub = `<div class="apb-sub">${esc(spec.type_title)}</div>`;
       return (
         `<div class="apb-head"><div class="apb-label">${esc(spec.label)}</div>${sub}</div>` +
         `<div class="apb-ports"><div class="apb-ins">${rows(spec.inputs, "apb-in")}</div>` +
@@ -89,7 +89,7 @@ export default {
           const dot = el.querySelector(`.${side}s .${side}_${i + 1}`);
           if (!dot) return;
           dot.classList.add(`apb-port-${p.type}`);
-          const extra = (p.multiple ? ", several connections" : "") + (p.optional ? ", optional" : "");
+          const extra = (p.multiple ? ", several connectors" : "") + (p.optional ? ", optional" : "");
           dot.title = `${p.label}: ${p.type}${extra}`;
         });
       mark(spec.inputs, "input");

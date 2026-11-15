@@ -5,13 +5,14 @@ Started with ``apb gui [pipeline]``. Each browser tab gets its own editor.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from nicegui import ui
+from nicegui import app, ui
 
 from apb import __version__
 from apb.blocks.nastran.blocks import Hdf5Results
@@ -31,6 +32,15 @@ from apb.gui.runner import EVENT_STATES, RunController, summary
 from apb.units import UnitSystem
 
 HEADER_HEIGHT = 52
+
+#: The editors of all open browser tabs (needed by File > Quit).
+_PAGES: list[EditorPage] = []
+
+_CLOSED_HTML = (
+    '<div style="font-family:sans-serif;text-align:center;margin-top:20vh">'
+    "<h2>Analysis Pipeline Builder has been closed</h2>"
+    "<p>You can close this tab.</p></div>"
+)
 MAX_LOG_LINES = 500
 
 
@@ -45,6 +55,9 @@ class EditorPage:
             initial: Pipeline file to open, if any.
         """
         self.state = EditorState(registry)
+        self.client = ui.context.client
+        _PAGES.append(self)
+        self.client.on_disconnect(lambda: _PAGES.remove(self) if self in _PAGES else None)
         self.runner = RunController(self.state, self._on_run_event)
         self.selected: str | None = None
         self._offset = 0
@@ -105,6 +118,8 @@ class EditorPage:
                 ui.separator()
                 ui.menu_item("Save", on_click=self.save)
                 ui.menu_item("Save as…", on_click=self.save_as)
+                ui.separator()
+                ui.menu_item("Quit", on_click=self.quit)
             with ui.button("Pipeline", icon="tune").props("flat color=white dense"), ui.menu():
                 ui.menu_item("Variables and settings…", on_click=self.edit_pipeline_settings)
             with ui.button("View", icon="visibility").props("flat color=white dense"), ui.menu():
@@ -169,7 +184,7 @@ class EditorPage:
             search.on_value_change(filter_library)
             ui.label(
                 "Click a block to add it. Drag from an output dot to an input dot to "
-                "connect. Select a block or connection and press Delete to remove it."
+                "connect. Select a block or connector and press Delete to remove it."
             ).classes("text-xs text-slate-500 mt-3")
 
     def _build_panel(self) -> None:
@@ -192,7 +207,7 @@ class EditorPage:
                 )
                 n_blocks = len(self.state.pipeline.blocks)
                 n_conn = len(self.state.pipeline.connections)
-                ui.label(f"{n_blocks} blocks, {n_conn} connections").classes(
+                ui.label(f"{n_blocks} blocks, {n_conn} connectors").classes(
                     "text-xs text-slate-400"
                 )
                 return
@@ -212,7 +227,12 @@ class EditorPage:
             label = ui.input("Label", value=block.label).props("dense outlined").classes("w-full")
             label.on("blur", lambda: self._rename(block.id, label.value))
             label.on("keydown.enter", lambda: self._rename(block.id, label.value))
-            ui.label(f"{block.type_id} · id {block.id}").classes("text-xs text-slate-500")
+            type_line = ui.label(
+                f"Block type: {cls.title} · {cls.category.replace('/', ' / ')}"
+                if cls
+                else f"Block type: unknown ({block.type_id})"
+            ).classes("text-xs text-slate-500 apb-block-type")
+            type_line.tooltip(f"{block.type_id} · block id {block.id}")
             if cls is None:
                 ui.label(
                     "This block type is not installed; its parameters cannot be edited."
@@ -332,7 +352,7 @@ class EditorPage:
             )
             if removed:
                 ui.notify(
-                    f"{len(removed)} connection(s) removed: their ports changed", type="warning"
+                    f"{len(removed)} connector(s) removed: their ports changed", type="warning"
                 )
         self._show_issues()
 
@@ -671,6 +691,31 @@ class EditorPage:
         self.preview_title.text = f"Preview — {label.strip()}"
 
     # ---- files -------------------------------------------------------------------------------
+
+    async def quit(self) -> None:
+        """File > Quit: stop the application after checking running work and unsaved changes.
+
+        Nothing is saved automatically, so unsaved changes in any open tab are reported.
+        """
+        if any(p.runner.running for p in _PAGES) and not await confirm(
+            "A run is in progress. Stop it and quit?", ok_label="Stop and quit"
+        ):
+            return
+        unsaved = [p.state.display_name.removesuffix(" *") for p in _PAGES if p.state.dirty]
+        if unsaved and not await confirm(
+            f"Unsaved changes in: {', '.join(unsaved)}. Quit without saving?",
+            ok_label="Quit without saving",
+        ):
+            return
+        for page in list(_PAGES):
+            page.runner.stop()
+            page.client.run_javascript(
+                "window.onbeforeunload = null; "
+                f"document.body.innerHTML = {json.dumps(_CLOSED_HTML)}; "
+                "document.title = 'Closed';"
+            )
+        await asyncio.sleep(0.5)  # let the browsers show the message before the server ends
+        app.shutdown()
 
     async def _discard_ok(self) -> bool:
         return not self.state.dirty or await confirm("The pipeline has unsaved changes.")

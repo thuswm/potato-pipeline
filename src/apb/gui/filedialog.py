@@ -13,6 +13,33 @@ from pathlib import Path
 from nicegui import ui
 
 
+def make_folder(parent: Path, name: str) -> Path:
+    """Create a sub-folder (GUI-17).
+
+    Args:
+        parent: Existing folder to create it in.
+        name: Name of the new folder.
+
+    Returns:
+        Path of the new folder.
+
+    Raises:
+        ValueError: If the name is empty, contains a path separator, is ``.``/``..``, or
+            the folder already exists, or if the folder cannot be created.
+    """
+    name = name.strip()
+    if not name or name in {".", ".."} or any(c in name for c in "/\\") or ":" in name:
+        raise ValueError("Enter a folder name without path separators")
+    target = parent / name
+    if target.exists():
+        raise ValueError(f"{name} already exists")
+    try:
+        target.mkdir()
+    except OSError as exc:
+        raise ValueError(f"Cannot create {name}: {exc.strerror or exc}") from exc
+    return target
+
+
 def _roots() -> list[Path]:
     """Drive letters on Windows, ``/`` elsewhere."""
     if os.name == "nt":
@@ -56,6 +83,9 @@ class FileDialog(ui.dialog):
                 ui.button(icon="home", on_click=lambda: self._go(Path.home())).props(
                     "flat dense"
                 ).tooltip("Home folder")
+                ui.button(icon="create_new_folder", on_click=self._new_folder).props(
+                    'flat dense aria-label="New folder"'
+                ).tooltip("New folder")
                 for root in _roots() if os.name == "nt" else []:
                     ui.button(str(root)[:2], on_click=lambda r=root: self._go(r)).props(
                         "flat dense"
@@ -76,6 +106,24 @@ class FileDialog(ui.dialog):
 
     def _up(self) -> None:
         self._go(self.folder.parent)
+
+    async def _new_folder(self) -> None:
+        """Ask for a name, create the folder in the current one and open it (GUI-17)."""
+        with ui.dialog() as ask, ui.card():
+            ui.label("New folder").classes("font-medium")
+            name = ui.input("Folder name").props("dense outlined autofocus")
+            name.on("keydown.enter", lambda: ask.submit(name.value))
+            with ui.row().classes("w-full justify-end"):
+                ui.button("Cancel", on_click=lambda: ask.submit(None)).props("flat")
+                ui.button("Create", on_click=lambda: ask.submit(name.value))
+        chosen = await ask
+        ask.delete()
+        if chosen is None:
+            return
+        try:
+            self._go(make_folder(self.folder, str(chosen)))
+        except ValueError as exc:
+            ui.notify(str(exc), type="warning")
 
     def _refresh(self) -> None:
         self.path_label.text = str(self.folder)

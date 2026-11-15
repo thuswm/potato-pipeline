@@ -10,6 +10,17 @@ The Analysis Pipeline Builder lets the analyst build this chain **once** as a gr
 pipeline (Simulink-style boxes and connectors) and **re-run it** whenever the input changes,
 regenerating all intermediate results and the Word report.
 
+### 1.1 Vocabulary
+
+| Term | Meaning |
+|------|---------|
+| **Block** | One step of a pipeline, drawn as a box on the canvas (not "box" or "node") |
+| **Block type** | The kind of block, chosen from the block library (e.g. "Nastran HDF5 results") |
+| **Port** | An input or output of a block |
+| **Connector** | The line carrying data from an output port to an input port |
+| **Pipeline** | Blocks and connectors, saved as one `.apb.json` file |
+| **Toolbox** | A collection of block types (later: a folder that can be extended) |
+
 ## 2. Goals
 
 | ID | Goal | Prio |

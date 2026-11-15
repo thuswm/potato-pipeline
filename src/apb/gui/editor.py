@@ -341,10 +341,10 @@ class EditorState:
         if existing and not in_port.multiple:
             raise EditError(
                 f"Input '{in_port.display_name}' is already connected; "
-                "remove the existing connection first"
+                "remove the existing connector first"
             )
         if self._creates_cycle(src.id, dst.id):
-            raise EditError("This connection would create a loop")
+            raise EditError("This connector would create a loop")
         conn = Connection(
             source=PortRef(block=src.id, port=out_port.name),
             target=PortRef(block=dst.id, port=in_port.name),
