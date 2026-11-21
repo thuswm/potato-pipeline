@@ -121,7 +121,9 @@ The right-hand panel is hard to read and cluttered.
       resizable 400 px panel, short paths, titles; `tools/panel_screenshots.py`
 - [x] 4.4 Word report: side panel summary + editor dialog (Sections | Items | Document)
 - [x] 4.5 Nastran analysis: status on top, computer settings under Advanced
-- [ ] 4.6+ One sub-step per panel (spec note → code → screenshots → user check), e.g.
+- [x] 4.6 HDF5 results (taller list, short file line) and RBE2/eigenvalue/mass forms
+      (connected file line, subcase drop-down)
+- [ ] 4.7+ One sub-step per panel (spec note → code → screenshots → user check), e.g.
       HDF5 results, Nastran analysis, Python, Word report, requirement check, table blocks,
       fastener loads, Excel, Constants
 - [ ] 4.x Commit after each panel or group of panels, as the user asks

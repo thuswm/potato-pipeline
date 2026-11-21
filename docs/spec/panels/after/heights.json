@@ -5,7 +5,7 @@
   },
   "nastran.hdf5_results": {
     "block": "Modal results",
-    "height_px": 841
+    "height_px": 913
   },
   "table.pick": {
     "block": "Lowest frequency",

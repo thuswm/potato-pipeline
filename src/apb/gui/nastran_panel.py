@@ -21,7 +21,7 @@ from apb.blocks.nastran.blocks import Hdf5ResultsParams
 from apb.blocks.nastran.h5reader import NastranH5Error, ResultDetail, ResultInfo
 from apb.engine.variables import VariableError
 from apb.gui import h5viewer
-from apb.gui.forms import ParamForm, short_path
+from apb.gui.forms import ParamForm, connected_line, describe, short_path
 from apb.units import UnitSystem
 
 #: Dataset rows read for the preview from the file.
@@ -220,13 +220,13 @@ class Hdf5ResultsPanel:
             self.form.field("file")
         else:
             name, path = link
-            ui.label(f"Result file from block '{name}'").classes("text-xs text-slate-700")
-            shown = ui.label(
-                short_path(path, self.base_dir) if path else "(that block has not run yet)"
-            ).classes("text-[10px] " + ("text-slate-500" if path else "text-amber-700"))
-            if path:
-                shown.tooltip(path)
-        self.body = ui.column().classes("w-full gap-2")
+            connected_line(
+                "Result file",
+                name,
+                short_path(path, self.base_dir) if path else "",
+                tip=path or "",
+            )
+        self.body = ui.column().classes("w-full gap-1.5")
         self._build_body()
 
     def _build_body(self) -> None:
@@ -256,24 +256,22 @@ class Hdf5ResultsPanel:
                     self.form.field(name)
                 return
 
-            if info_text:
-                ui.label(info_text).classes("text-xs text-slate-500 apb-h5-info")
-            if path is not None:
-                ui.button(
-                    "Open in viewer",
-                    icon="open_in_new",
-                    on_click=lambda p=path: self.open_viewer(p),
-                ).props("dense flat no-caps size=sm").classes("apb-h5-open-viewer").tooltip(
-                    "Look through the whole file in the HDF5 viewer (new tab)"
-                )
-            ui.label("Results in file").classes("text-xs font-medium text-slate-600")
+            with ui.row().classes("w-full items-start no-wrap gap-1"):
+                ui.label(info_text).classes("text-xs text-slate-500 grow apb-h5-info")
+                if path is not None:
+                    ui.button(
+                        icon="open_in_new", on_click=lambda p=path: self.open_viewer(p)
+                    ).props('dense flat round size=sm aria-label="Open in viewer"').classes(
+                        "apb-h5-open-viewer"
+                    ).tooltip("Open in viewer: look through the whole file in the HDF5 viewer")
+            ui.label("Results in file").classes("apb-section-title mt-1")
             search = (
                 ui.input(placeholder="Search results", value=self._search)
                 .props("dense outlined clearable")
                 .classes("w-full")
             )
             self.list = ui.column().classes(
-                "w-full max-h-72 overflow-auto border rounded p-1 gap-0 apb-h5-results"
+                "w-full max-h-[26rem] overflow-auto border rounded p-1 gap-0 apb-h5-results"
             )
 
             def on_search(e: Any) -> None:
@@ -299,6 +297,7 @@ class Hdf5ResultsPanel:
                     )
                 self.form.field("unit_system")
                 return
+            ui.label(f"Filters · {detail.title}").classes("apb-section-title mt-1")
             self._filters(detail)
 
     def _render_list(self) -> None:
@@ -368,7 +367,8 @@ class Hdf5ResultsPanel:
             return
         select = (
             ui.select(options, value=list(current), label=label, multiple=True)
-            .props(f'dense outlined use-chips hint="{hint}"')
+            .props("dense outlined use-chips")
             .classes("w-full")
         )
+        describe(select, hint, placeholder=False)
         select.on_value_change(lambda e: self._changed(name, list(e.value or [])))

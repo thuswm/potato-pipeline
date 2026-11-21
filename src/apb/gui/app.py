@@ -10,7 +10,7 @@ import dataclasses
 import json
 import threading
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ import pandas as pd
 from nicegui import app, core, run, ui
 
 from apb import __version__
+from apb.blocks.nastran import h5reader
 from apb.blocks.nastran.analysis import NastranRun
 from apb.blocks.nastran.blocks import Hdf5Results
 from apb.blocks.python.block import PythonBlock
@@ -35,7 +36,7 @@ from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.constants_panel import ConstantsPanel
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
-from apb.gui.forms import ParamForm, suffix_hint
+from apb.gui.forms import ParamForm, short_path, suffix_hint
 from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
 from apb.gui.preview import open_with_system, show_result, show_value, stored_time
 from apb.gui.python_panel import PythonPanel
@@ -380,11 +381,14 @@ class EditorPage:
                     confirm=lambda question: confirm(question, ok_label="Delete"),
                 ).build()
             else:
+                replaced, choices = self._form_extras(block.id, cls)
                 ParamForm(
                     cls.Params,
                     block.params,
                     on_change=lambda name, value: self._set_param(block.id, name, value),
                     pick_file=self._pick_file,
+                    choices=choices,
+                    replaced=replaced,
                 ).build(advanced=cls.advanced_params)
             self._ports_section(block)
 
@@ -745,6 +749,47 @@ class EditorPage:
             ui.notify(str(exc), type="negative", multi_line=True)
             return
         self._after_clear(f"Cleared all stored outputs ({len(cleared)} block(s))")
+
+    def _form_extras(
+        self, block_id: str, cls: Any
+    ) -> tuple[dict[str, tuple[str, str, str]], Callable[[str], list[Any] | None] | None]:
+        """Connected inputs that replace parameters, and choices from the result file.
+
+        HDF5 blocks whose file comes from a connector show a "from block" line instead of
+        the file field (PNL-07); their ``subcases`` are offered from the file (PNL-11).
+        """
+        replaced: dict[str, tuple[str, str, str]] = {}
+        if "file" not in cls.Params.model_fields or not cls.type_id.startswith("nastran.hdf5"):
+            return replaced, None
+        link = self._connected_file(block_id)
+        path: Path | None = None
+        if link is not None:
+            name, delivered = link
+            replaced["file"] = (
+                name,
+                short_path(delivered, self.state.base_dir) if delivered else "",
+                delivered or "",
+            )
+            path = Path(delivered) if delivered else None
+        else:
+            typed = str(
+                self._resolve_variables(
+                    self.state.pipeline.block(block_id).params.get("file") or ""
+                )
+            )
+            if typed:
+                candidate = Path(typed).expanduser()
+                path = candidate if candidate.is_absolute() else self.state.base_dir / candidate
+
+        def choices(name: str) -> list[Any] | None:
+            if name != "subcases" or path is None or not path.is_file():
+                return None
+            try:
+                return [s for s in h5reader.subcases(path) if s > 0]
+            except Exception:  # unreadable file: plain text field
+                return None
+
+        return replaced, choices
 
     def _connected_file(self, block_id: str) -> tuple[str, str | None] | None:
         """Return ``(block name, file)`` if a block delivers the result file of ``block_id``.

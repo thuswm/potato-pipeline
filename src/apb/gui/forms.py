@@ -24,7 +24,7 @@ import contextlib
 import json
 import re
 import types
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin
@@ -105,6 +105,26 @@ def describe(widget: Any, hint: str, placeholder: bool = True) -> None:
         widget.props(f"placeholder={json.dumps(example)}")
 
 
+def connected_line(label: str, block: str, detail: str = "", tip: str = "") -> None:
+    """Show that a connector delivers a parameter's value, instead of its field (PNL-07).
+
+    Args:
+        label: The parameter, e.g. ``"Result file"``.
+        block: Name of the block the connector comes from.
+        detail: The value if known (e.g. a short path), else "not run yet" is shown.
+        tip: Tooltip, e.g. the full path.
+    """
+    with ui.row().classes("w-full items-start no-wrap gap-1 apb-connected"):
+        ui.icon("link", size="xs").classes("text-blue-600 mt-0.5")
+        with ui.column().classes("gap-0 min-w-0"):
+            ui.label(f"{label} from block '{block}'").classes("text-xs text-slate-700")
+            shown = ui.label(detail or "(that block has not run yet)").classes(
+                "text-[11px] " + ("text-slate-500" if detail else "text-amber-700")
+            )
+            if tip:
+                shown.tooltip(tip)
+
+
 def default_of(field: FieldInfo) -> Any:
     """Return a field's default in stored (JSON) form, or ``None`` if it is required."""
     if field.is_required():
@@ -162,6 +182,10 @@ class ParamForm:
         values: Stored parameters of the block.
         on_change: Called with ``(name, value)``; value ``UNSET`` removes the parameter.
         pick_file: Async callback asking the user for a file; returns a stored path or None.
+        choices: Returns the values a list parameter can take (e.g. the subcases in the
+            file), or ``None``; a parameter with choices gets a multi-select (PNL-11).
+        replaced: Parameter -> ``(block, value, tooltip)`` for parameters delivered by a
+            connected input; they are shown as a "from block" line (PNL-07).
     """
 
     def __init__(
@@ -170,11 +194,16 @@ class ParamForm:
         values: dict[str, Any],
         on_change: Callable[[str, Any], None],
         pick_file: Callable[[str], Any] | None = None,
+        *,
+        choices: Callable[[str], list[Any] | None] | None = None,
+        replaced: Mapping[str, tuple[str, str, str]] | None = None,
     ) -> None:
         self.model = model
         self.values = values
         self.on_change = on_change
         self.pick_file = pick_file
+        self.choices = choices
+        self.replaced = dict(replaced or {})
 
     def build(self, advanced: Sequence[str] = ()) -> None:
         """Create the widgets in the current NiceGUI context.
@@ -232,6 +261,14 @@ class ParamForm:
         widget = extra.get("apb_widget")
         label = field_label(name, field) + ("" if not field.is_required() else " *")
         hint = field.description or ""
+        if name in self.replaced:
+            block, shown, tip = self.replaced[name]
+            connected_line(field_label(name, field), block, shown, tip)
+            return
+        options = self.choices(name) if self.choices and kind == "list" else None
+        if options is not None and not isinstance(value, str):
+            self._choose_many(label, hint, value, setter, options)
+            return
         if kind == "text" and widget == "file":
             self._file(label, hint, value, setter)
         elif kind == "text" and widget == "code":
@@ -362,6 +399,21 @@ class ParamForm:
         )
         sel.on_value_change(lambda e: setter(None if e.value == "__none__" else e.value))
         self._hint(sel, hint)
+
+    def _choose_many(
+        self, label: str, hint: str, value: Any, setter: Setter, options: list[Any]
+    ) -> None:
+        """Multi-select of the values present (e.g. subcases in the file), PNL-11."""
+        current = list(value or [])
+        mapping: dict[Any, str] = {o: str(o) for o in options}
+        mapping.update({v: f"{v} (not in file)" for v in current if v not in mapping})
+        sel = (
+            ui.select(mapping, value=current, label=label, multiple=True)
+            .props("dense outlined use-chips clearable")
+            .classes("w-full apb-choices")
+        )
+        sel.on_value_change(lambda e: setter(list(e.value or [])))
+        describe(sel, hint, placeholder=False)
 
     def _list(self, label: str, hint: str, value: Any, setter: Setter, item: type) -> None:
         text = ", ".join(str(v) for v in value) if isinstance(value, list) else (value or "")

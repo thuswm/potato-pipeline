@@ -159,3 +159,15 @@ they relate to the input), *Open .f06* / *Open folder*, run mode, fail on. *Adva
 (folded, "· n changed"): command, path, options, time limit, ignored message numbers,
 information messages. The run-mode explanation is only in the ⓘ of the run mode. A found
 program is shown with a short path (full path as tooltip). 1275 px → 525 px.
+
+### 4.6 Nastran HDF5 results and RBE2 loads — done (2026-11-21)
+
+- *HDF5 results*: a connected file is a "from block" line with a short path (PNL-07); the
+  file information and the *Open in viewer* icon share one row; the results list is about
+  twice as tall (26 rem, ~18 results visible); the filters follow under the title
+  "Filters · *result*"; their help texts are behind the ⓘ.
+- The generated form got two general options used by the other HDF5 blocks (RBE2 loads,
+  eigenvalues, point masses): a parameter delivered by a connected input is shown as a
+  "from block" line instead of its field (PNL-07), and a list parameter can offer the values
+  present (PNL-11): `subcases` is a drop-down of the subcases in the result file (free
+  text when the file cannot be read, or for a `${variable}`).

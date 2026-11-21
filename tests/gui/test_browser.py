@@ -1210,3 +1210,19 @@ def test_report_side_panel_summary_and_editor_tabs(page):
     close_editor(page)
     problems = page.locator(".apb-report-problems").inner_text()
     assert "1 problem" in problems and "Choose an item" in problems
+
+
+def test_rbe2_loads_offers_the_subcases_of_the_file(page, workdir: Path):
+    select(page, "RBE2 loads")
+    subcases = page.locator(".apb-choices")  # spec 11 PNL-11: a drop-down, not text
+    subcases.click()
+    page.wait_for_timeout(300)
+    options = page.locator(".q-menu .q-item").all_inner_texts()
+    assert [o.strip() for o in options] == ["1", "2", "3", "4"]  # synthetic joint file
+    page.locator(".q-menu .q-item").nth(1).click()
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(400)
+    save_file(page)
+    saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
+    rbe2 = next(b for b in saved["blocks"] if b.get("label") == "RBE2 loads")
+    assert rbe2["params"]["subcases"] == [2]
