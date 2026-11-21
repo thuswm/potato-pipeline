@@ -45,6 +45,58 @@ from apb.units import UnitSystem
 
 HEADER_HEIGHT = 52
 
+#: Width of the property panel: default and the range it can be dragged to (spec 11 PNL-05).
+PANEL_WIDTH = 400
+PANEL_MIN = 300
+PANEL_MAX = 800
+
+#: Styles of the property panel (spec 11 PNL-01, PNL-12).
+PANEL_CSS = """
+    .apb-section-title { font-size: 11px; font-weight: 600; letter-spacing: .05em;
+                         text-transform: uppercase; color: #64748b; }
+    .apb-panel-header { position: sticky; top: -12px; z-index: 5; background: white;
+                        margin: -12px -12px 0 -12px; padding: 8px 12px 6px 12px;
+                        width: calc(100% + 24px); border-bottom: 1px solid #e2e8f0; }
+    .apb-panel-resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
+                        cursor: col-resize; z-index: 3000; }
+    .apb-panel-resize:hover, .apb-panel-resize.active { background: #93c5fd; }
+    .apb-panel .q-field--dense .q-field__control { min-height: 36px; }
+"""
+
+#: Drag the left border of the property panel; the width is kept per browser (PNL-05).
+PANEL_RESIZE_JS = f"""
+(() => {{
+  const drawer = document.querySelector('.q-drawer--right');
+  if (!drawer || drawer.querySelector('.apb-panel-resize')) return;
+  const handle = document.createElement('div');
+  handle.className = 'apb-panel-resize';
+  handle.title = 'Drag to change the width of the panel';
+  drawer.appendChild(handle);
+  let saved = 0;
+  try {{ saved = parseInt(localStorage.getItem('apbPanelWidth') || '0'); }} catch (e) {{}}
+  if (saved) emitEvent('apb_panel_width', saved);
+  handle.addEventListener('mousedown', (down) => {{
+    down.preventDefault();
+    handle.classList.add('active');
+    let width = drawer.offsetWidth;
+    const move = (e) => {{
+      width = Math.max({PANEL_MIN}, Math.min({PANEL_MAX}, window.innerWidth - e.clientX));
+      drawer.style.width = width + 'px';
+    }};
+    const up = () => {{
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      handle.classList.remove('active');
+      drawer.style.width = '';
+      try {{ localStorage.setItem('apbPanelWidth', String(width)); }} catch (e) {{}}
+      emitEvent('apb_panel_width', width);
+    }};
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }});
+}})();
+"""
+
 #: The editors of all open browser tabs (needed by File > Quit).
 _PAGES: list[EditorPage] = []
 
@@ -96,6 +148,7 @@ class EditorPage:
             .apb-main {{ height: calc(100vh - {HEADER_HEIGHT}px); }}
             .q-page {{ padding: 0; }}
             .apb-log-line {{ font-family: monospace; font-size: 11.5px; white-space: pre-wrap; }}
+            {PANEL_CSS}
         """)
         self._build_header()
         self._build_library(registry)
@@ -221,9 +274,24 @@ class EditorPage:
             ).classes("text-xs text-slate-500 mt-3")
 
     def _build_panel(self) -> None:
-        with ui.right_drawer(value=True, bordered=True).classes("p-3 bg-white").props("width=340"):
-            self.panel = ui.column().classes("w-full gap-2")
+        with (
+            ui.right_drawer(value=True, bordered=True)
+            .classes("p-3 bg-white")
+            .props(f"width={PANEL_WIDTH}") as self.drawer
+        ):
+            self.panel = ui.column().classes("w-full gap-1.5 apb-panel")
+        ui.on("apb_panel_width", lambda e: self._set_panel_width(e.args))
+        ui.run_javascript(PANEL_RESIZE_JS)
         self._show_panel()
+
+    def _set_panel_width(self, width: Any) -> None:
+        """Apply the width dragged by the user (PNL-05), within the allowed range."""
+        try:
+            value = int(float(width[0] if isinstance(width, list) else width))
+        except (TypeError, ValueError, IndexError):
+            return
+        value = max(PANEL_MIN, min(PANEL_MAX, value))
+        self.drawer.props(f"width={value}")
 
     # ---- block panel ----------------------------------------------------------------------
 
@@ -246,39 +314,17 @@ class EditorPage:
                 return
             block = self.state.pipeline.block(self.selected)
             cls = self.state.block_class(block)
-            with ui.row().classes("w-full items-center no-wrap"):
-                ui.label(cls.title if cls else "Unknown block").classes(
-                    "font-medium text-slate-700"
-                )
-                ui.space()
-                ui.button(icon="play_arrow", on_click=lambda: self.run_pipeline(block.id)).props(
-                    "flat dense color=positive"
-                ).tooltip("Run to here")
-                ui.button(icon="delete", on_click=lambda: self.delete_block(block.id)).props(
-                    "flat dense color=negative"
-                ).tooltip("Delete block")
-            label = ui.input("Label", value=block.label).props("dense outlined").classes("w-full")
-            label.on("blur", lambda: self._rename(block.id, label.value))
-            label.on("keydown.enter", lambda: self._rename(block.id, label.value))
-            category = cls.category.replace("/", " / ") if cls else ""
-            type_line = ui.label(
-                f"Block type: {cls.title}" + (f" · {category}" if category != cls.title else "")
-                if cls
-                else f"Block type: unknown ({block.type_id})"
-            ).classes("text-xs text-slate-500 apb-block-type")
-            type_line.tooltip(f"{block.type_id} · block id {block.id}")
+            self._panel_header(block, cls)
             if cls is None:
                 ui.label(
                     "This block type is not installed; its parameters cannot be edited."
                 ).classes("text-sm text-red-700")
                 return
-            if cls.description:
-                ui.label(cls.description).classes("text-xs text-slate-600")
             self.stored_box = ui.column().classes("w-full gap-0")
             self._render_stored()
             self.issues = ui.column().classes("w-full gap-0")
             self._show_issues()
-            ui.label("Parameters").classes("text-xs font-medium text-slate-600 mt-1")
+            ui.label("Settings").classes("apb-section-title mt-1")
             if cls is Hdf5Results:  # own panel with the result browser (spec 02 §3.7)
                 Hdf5ResultsPanel(
                     block.params,
@@ -339,11 +385,68 @@ class EditorPage:
                     block.params,
                     on_change=lambda name, value: self._set_param(block.id, name, value),
                     pick_file=self._pick_file,
-                ).build()
-            inputs, outputs = self.state.ports(block)
+                ).build(advanced=cls.advanced_params)
+            self._ports_section(block)
+
+    def _panel_header(self, block: Any, cls: Any) -> None:
+        """Fixed header: label, block type with ⓘ description, Run and Delete (PNL-01)."""
+        with ui.column().classes("w-full gap-0 apb-panel-header"):
+            with ui.row().classes("w-full items-center no-wrap gap-0"):
+                label = (
+                    ui.input(value=block.label or (cls.title if cls else block.type_id))
+                    .props(
+                        'dense borderless aria-label="Label" '
+                        "input-class='text-base font-medium text-slate-800'"
+                    )
+                    .classes("grow apb-block-label")
+                )
+                label.tooltip("Label of the block on the canvas; click to rename")
+                label.on("blur", lambda: self._rename(block.id, label.value))
+                label.on("keydown.enter", lambda: self._rename(block.id, label.value))
+                ui.button(icon="play_arrow", on_click=lambda: self.run_pipeline(block.id)).props(
+                    "flat dense round color=positive"
+                ).tooltip("Run to here")
+                ui.button(icon="delete", on_click=lambda: self.delete_block(block.id)).props(
+                    "flat dense round color=negative"
+                ).tooltip("Delete block")
+            description: ui.label | None = None
+            with ui.row().classes("w-full items-center no-wrap gap-1"):
+                category = cls.category.replace("/", " / ") if cls else ""
+                type_line = ui.label(
+                    f"Block type: {cls.title}" + (f" · {category}" if category != cls.title else "")
+                    if cls
+                    else f"Block type: unknown ({block.type_id})"
+                ).classes("text-xs text-slate-500 apb-block-type")
+                type_line.tooltip(f"{block.type_id} · block id {block.id}")
+                if cls is not None and cls.description:
+
+                    def toggle() -> None:
+                        if description is not None:
+                            description.set_visibility(not description.visible)
+
+                    ui.button(icon="info_outline", on_click=toggle).props(
+                        'flat dense round size=xs color=grey-6 aria-label="About this block"'
+                    ).classes("apb-block-info").tooltip(cls.description)
+            if cls is not None and cls.description:
+                description = ui.label(cls.description).classes(
+                    "text-xs text-slate-600 apb-block-description"
+                )
+                description.set_visibility(False)
+
+    def _ports_section(self, block: Any) -> None:
+        """The block's ports in a folded section (PNL-10)."""
+        inputs, outputs = self.state.ports(block)
+        if not inputs and not outputs:
+            return
+        summary = f"Ports · {len(inputs)} in, {len(outputs)} out"
+        with (
+            ui.expansion(summary, value=False)
+            .classes("w-full apb-ports")
+            .props("dense header-class='apb-section-title px-0'")
+        ):
             for title, ports in (("Inputs", inputs), ("Outputs", outputs)):
                 if ports:
-                    ui.label(title).classes("text-xs font-medium text-slate-600 mt-2")
+                    ui.label(title).classes("text-xs font-medium text-slate-600 mt-1")
                     for p in ports:
                         extra = " · several" if p.multiple else ""
                         extra += " · optional" if p.optional else ""
@@ -551,13 +654,15 @@ class EditorPage:
             return
         block_id = self.selected
         with box, ui.row().classes("w-full items-center no-wrap gap-1 apb-stored"):
+            ui.icon("save", size="xs").classes("text-slate-400")
             ui.label(
                 f"Stored output: {stored_time(entry.finished)} · {format_size(entry.size)}"
-            ).classes("text-xs text-slate-500 grow")
-            ui.button(
-                "Clear output", icon="delete_sweep", on_click=lambda: self._clear_block(block_id)
-            ).props("flat dense size=sm").tooltip(
-                "Delete the stored output of this block and of every block downstream of it"
+            ).classes("text-xs text-slate-500 grow whitespace-nowrap")
+            ui.button(icon="delete_sweep", on_click=lambda: self._clear_block(block_id)).props(
+                'flat dense round size=sm aria-label="Clear output"'
+            ).tooltip(
+                "Clear output: delete the stored output of this block and of every block "
+                "downstream of it"
             )
 
     async def _clear_block(self, block_id: str) -> None:

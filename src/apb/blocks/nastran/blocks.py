@@ -71,7 +71,7 @@ class Hdf5ResultsParams(_H5Params):
     result: str = Field(description="Result dataset, e.g. ELEMENTAL/STRESS/QUAD4")
     subcases: list[int] = Field(default_factory=list, description="Subcases; empty = all")
     ids: str = Field(
-        default="", description="GRID/element IDs, e.g. '1001-1200, 3005'; empty = all"
+        title="IDs", default="", description="GRID/element IDs, e.g. '1001-1200, 3005'; empty = all"
     )
     columns: list[str] = Field(default_factory=list, description="Value columns; empty = all")
 
@@ -128,7 +128,9 @@ class Hdf5Rbe2LoadsParams(_H5Params):
     side: Literal["independent", "dependent"] = Field(
         default="dependent", description="Report forces at the independent or dependent grids"
     )
-    eids: str = Field(default="", description="RBE2 element IDs; empty = all")
+    eids: str = Field(
+        title="RBE2 element IDs", default="", description="RBE2 element IDs; empty = all"
+    )
     subcases: list[int] = Field(default_factory=list, description="Subcases; empty = all")
 
 
@@ -143,6 +145,7 @@ class Hdf5Rbe2Loads(_H5Block[Hdf5Rbe2LoadsParams]):
     )
     outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = Hdf5Rbe2LoadsParams
+    advanced_params = ("source",)
 
     def run(
         self, params: Hdf5Rbe2LoadsParams, inputs: dict[str, Any], ctx: RunContext

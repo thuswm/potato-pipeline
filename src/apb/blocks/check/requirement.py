@@ -83,7 +83,9 @@ class RequirementParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requirement: str = Field(
-        default="", description="Id and description, e.g. 'REQ-DYN-001 First eigenfrequency'"
+        title="Requirement (ID and text)",
+        default="",
+        description="Id and description, e.g. 'REQ-DYN-001 First eigenfrequency'",
     )
     comparison: Comparison = Field(
         default="greater_than", description="How the value must relate to the limit"
@@ -123,6 +125,7 @@ class RequirementCheck(Block[RequirementParams]):
         Port("margin", PortType.SCALAR, label="Margin"),
     )
     Params = RequirementParams
+    advanced_params = ("unit",)
 
     def run(
         self, params: RequirementParams, inputs: dict[str, Any], ctx: RunContext

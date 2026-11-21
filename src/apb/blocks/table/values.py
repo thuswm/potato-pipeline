@@ -59,7 +59,7 @@ class ConvertParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    to: UnitSystem = Field(description="Target unit system")
+    to: UnitSystem = Field(title="Convert to", description="Target unit system")
 
 
 class ConvertUnits(Block[ConvertParams]):
@@ -96,7 +96,9 @@ class SetUnitsParams(BaseModel):
     units: dict[str, str] = Field(
         default_factory=dict, description="Column -> unit label, e.g. {'LOAD': 'N'}"
     )
-    replace: bool = Field(default=False, description="Drop units already on the table")
+    replace: bool = Field(
+        title="Replace existing units", default=False, description="Drop units already on the table"
+    )
 
     @field_validator("units")
     @classmethod
@@ -116,6 +118,7 @@ class SetUnits(Block[SetUnitsParams]):
     inputs = (Port("table", PortType.TABLE, label="Table"),)
     outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = SetUnitsParams
+    advanced_params = ("replace",)
 
     def run(
         self, params: SetUnitsParams, inputs: dict[str, Any], ctx: RunContext

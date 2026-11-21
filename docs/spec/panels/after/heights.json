@@ -1,0 +1,106 @@
+{
+  "nastran.run": {
+    "block": "Modal analysis",
+    "height_px": 766
+  },
+  "nastran.hdf5_results": {
+    "block": "Modal results",
+    "height_px": 841
+  },
+  "table.pick": {
+    "block": "Lowest frequency",
+    "height_px": 315
+  },
+  "table.constants": {
+    "block": "Project constants",
+    "height_px": 439
+  },
+  "check.requirement": {
+    "block": "Frequency requirement",
+    "height_px": 353
+  },
+  "table.write_excel": {
+    "block": "Modal workbook",
+    "height_px": 307
+  },
+  "table.read_csv": {
+    "block": "Locations",
+    "height_px": 261
+  },
+  "python.script": {
+    "block": "Global margins",
+    "height_px": 961
+  },
+  "table.concat": {
+    "block": "Nastran messages",
+    "height_px": 204
+  },
+  "report.word": {
+    "block": "Test case report",
+    "height_px": 1977
+  },
+  "table.compute": {
+    "block": "Extra compute",
+    "height_px": 315
+  },
+  "table.filter": {
+    "block": "Extra filter",
+    "height_px": 223
+  },
+  "table.sort": {
+    "block": "Extra sort",
+    "height_px": 247
+  },
+  "units.convert": {
+    "block": "Extra convert",
+    "height_px": 223
+  },
+  "table.set_units": {
+    "block": "Extra setunits",
+    "height_px": 327
+  },
+  "nastran.hdf5_eigenvalues": {
+    "block": "Extra eig",
+    "height_px": 269
+  },
+  "nastran.hdf5_masses": {
+    "block": "Extra mass",
+    "height_px": 269
+  },
+  "table.read_excel": {
+    "block": "Extra rxl",
+    "height_px": 307
+  },
+  "table.join": {
+    "block": "Extra join",
+    "height_px": 269
+  },
+  "nastran.hdf5_rbe2_loads": {
+    "block": "RBE2 loads",
+    "height_px": 445
+  },
+  "loads.fastener_loads": {
+    "block": "Fastener loads CBUSH",
+    "height_px": 334
+  },
+  "table.select": {
+    "block": "Drop GRID",
+    "height_px": 289
+  },
+  "table.case_labels": {
+    "block": "Load case names",
+    "height_px": 419
+  },
+  "table.load_case_table": {
+    "block": "Fastener load table",
+    "height_px": 404
+  },
+  "table.envelope": {
+    "block": "Critical fastener",
+    "height_px": 353
+  },
+  "table.constant": {
+    "block": "Tension allowable",
+    "height_px": 269
+  }
+}

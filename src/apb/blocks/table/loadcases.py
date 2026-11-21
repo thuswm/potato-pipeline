@@ -200,9 +200,13 @@ class LoadCaseTableParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id_columns: list[str] = Field(default_factory=lambda: ["EID"], description="Entity columns")
+    id_columns: list[str] = Field(
+        title="ID columns", default_factory=lambda: ["EID"], description="Entity columns"
+    )
     case_column: str = Field(default="SUBCASE", description="Load case column")
-    value_columns: list[str] = Field(description="Columns to tabulate, e.g. TENSION, SHEAR")
+    value_columns: list[str] = Field(
+        title="Value columns", description="Columns to tabulate, e.g. TENSION, SHEAR"
+    )
     envelope: list[EnvelopeMode] = Field(
         default_factory=_default_envelope, description="Envelope columns: max, min, abs_max"
     )
@@ -230,6 +234,7 @@ class LoadCaseTable(Block[LoadCaseTableParams]):
     )
     outputs = (Port("table", PortType.TABLE, label="Table"),)
     Params = LoadCaseTableParams
+    advanced_params = ("layout", "labels")
 
     def run(
         self, params: LoadCaseTableParams, inputs: dict[str, Any], ctx: RunContext

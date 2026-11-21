@@ -107,7 +107,7 @@ class Filter(Block[FilterParams]):
 class SortParams(_Params):
     """Parameters of :class:`Sort`."""
 
-    by: list[str] = Field(description="Columns to sort by (first = primary)")
+    by: list[str] = Field(title="Sort by", description="Columns to sort by (first = primary)")
     ascending: bool = Field(default=True, description="Ascending order")
 
 
@@ -205,7 +205,9 @@ class EnvelopeParams(_Params):
         "(adds <value>_<column>)",
     )
     keep_row: bool = Field(
-        default=False, description="Return the full governing row (only with one value column)"
+        title="Keep governing row",
+        default=False,
+        description="Return the full governing row (only with one value column)",
     )
 
 
@@ -222,6 +224,7 @@ class Envelope(Block[EnvelopeParams]):
     inputs = _TABLE_IN
     outputs = _TABLE_OUT
     Params = EnvelopeParams
+    advanced_params = ("governing_columns", "keep_row")
 
     def run(
         self, params: EnvelopeParams, inputs: dict[str, Any], ctx: RunContext
@@ -266,9 +269,11 @@ class Envelope(Block[EnvelopeParams]):
 class JoinParams(_Params):
     """Parameters of :class:`Join`."""
 
-    on: list[str] = Field(description="Key columns present in both tables, e.g. EID")
+    on: list[str] = Field(
+        title="Key columns", description="Key columns present in both tables, e.g. EID"
+    )
     how: Literal["inner", "left", "right", "outer"] = Field(
-        default="left", description="Which rows to keep"
+        title="Rows to keep", default="left", description="Which rows to keep"
     )
 
 
@@ -308,7 +313,9 @@ class ConcatParams(_Params):
     """Parameters of :class:`Concat`."""
 
     add_source_column: bool = Field(
-        default=False, description="Add a SOURCE column naming the input each row came from"
+        title="Add SOURCE column",
+        default=False,
+        description="Add a SOURCE column naming the input each row came from",
     )
 
 
@@ -355,9 +362,11 @@ class PickParams(_Params):
 
     column: str = Field(description="Column to take the value from")
     row: Literal["max", "min", "abs_max", "first", "last"] = Field(
-        default="max", description="Which value"
+        title="Which value", default="max", description="Which value"
     )
-    where: str = Field(default="", description="Optional filter expression applied first")
+    where: str = Field(
+        title="Filter first", default="", description="Optional filter expression applied first"
+    )
 
 
 class Pick(Block[PickParams]):

@@ -184,6 +184,7 @@ class WriteExcel(Block[WriteExcelParams]):
     inputs = (Port("tables", PortType.TABLE, label="Tables", multiple=True),)
     outputs = (Port("file", PortType.TEXT, label="File"),)
     Params = WriteExcelParams
+    advanced_params = ("units_in_header",)
     always_run = True
 
     def output_files(

@@ -29,6 +29,7 @@ Change log:
 | 08 | [Stored outputs](08-stored-outputs.md) | Block outputs on disk (Parquet), reopening a pipeline as already run, clearing outputs |
 | 09 | [Nastran analysis block](09-nastran-analysis.md) | Running MSC Nastran from the pipeline, run modes, f06 check, the shared solver base |
 | 10 | [HDF5 viewer](10-hdf5-viewer.md) | Read-only view of a whole `.h5` file in its own tab: tree, raw and result views, copy path |
+| 11 | [Property panel layout](11-property-panel.md) | Inventory of all block panels, common layout rules, order of the rework |
 
 Each feature spec has the same structure: *Purpose · Requirements · Design · Out of scope (v1) · Open questions*.
 

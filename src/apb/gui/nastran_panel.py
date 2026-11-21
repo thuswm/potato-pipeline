@@ -21,7 +21,7 @@ from apb.blocks.nastran.blocks import Hdf5ResultsParams
 from apb.blocks.nastran.h5reader import NastranH5Error, ResultDetail, ResultInfo
 from apb.engine.variables import VariableError
 from apb.gui import h5viewer
-from apb.gui.forms import ParamForm
+from apb.gui.forms import ParamForm, short_path
 from apb.units import UnitSystem
 
 #: Dataset rows read for the preview from the file.
@@ -221,9 +221,11 @@ class Hdf5ResultsPanel:
         else:
             name, path = link
             ui.label(f"Result file from block '{name}'").classes("text-xs text-slate-700")
-            ui.label(path or "(that block has not run yet)").classes(
-                "text-[10px] break-all " + ("text-slate-500" if path else "text-amber-700")
-            )
+            shown = ui.label(
+                short_path(path, self.base_dir) if path else "(that block has not run yet)"
+            ).classes("text-[10px] " + ("text-slate-500" if path else "text-amber-700"))
+            if path:
+                shown.tooltip(path)
         self.body = ui.column().classes("w-full gap-2")
         self._build_body()
 

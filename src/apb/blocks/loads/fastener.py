@@ -92,6 +92,7 @@ class FastenerLoads(Block[FastenerLoadsParams]):
     inputs = (Port("forces", PortType.TABLE, label="Forces"),)
     outputs = (Port("loads", PortType.TABLE, label="Loads"),)
     Params = FastenerLoadsParams
+    advanced_params = ("keep_forces",)
 
     def run(
         self, params: FastenerLoadsParams, inputs: dict[str, Any], ctx: RunContext

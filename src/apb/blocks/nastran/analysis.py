@@ -69,16 +69,23 @@ class NastranRunParams(BaseModel):
         default_factory=list, description="Nastran keywords for {options}, e.g. mem=4gb"
     )
     timeout_minutes: float | None = Field(
-        default=None, gt=0, description="Stop Nastran after this time; empty = no limit"
+        title="Time limit [min]",
+        default=None,
+        gt=0,
+        description="Stop Nastran after this time; empty = no limit",
     )
     fail_on: Literal["fatal", "warning", "never"] = Field(
         default="fatal", description="Which messages in the .f06 fail the block"
     )
     ignore_messages: list[int] = Field(
-        default_factory=list, description="Warning numbers that are not counted, e.g. 9058"
+        title="Ignore message numbers",
+        default_factory=list,
+        description="Warning numbers that are not counted, e.g. 9058",
     )
     include_information: bool = Field(
-        default=False, description="Also list the INFORMATION messages"
+        title="List information messages",
+        default=False,
+        description="Also list the INFORMATION messages",
     )
 
     @field_validator("options")
@@ -152,6 +159,14 @@ class NastranRun(Block[NastranRunParams]):
         Port("status", PortType.TEXT, label="Status"),
     )
     Params = NastranRunParams
+    advanced_params = (
+        "command",
+        "path",
+        "options",
+        "timeout_minutes",
+        "ignore_messages",
+        "include_information",
+    )
 
     @classmethod
     def always_runs(cls, params: BaseModel | None) -> bool:

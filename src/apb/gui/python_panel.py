@@ -26,7 +26,7 @@ from apb.blocks.python.scripting import (
 from apb.blocks.python.templates import create_script, template_titles
 from apb.engine.variables import VariableError
 from apb.gui.filedialog import FileDialog
-from apb.gui.forms import ParamForm
+from apb.gui.forms import ParamForm, short_path
 
 #: Parameters whose change makes the script section outdated.
 _WATCHED = {"script", "inline_code", "inputs", "outputs"}
@@ -149,8 +149,8 @@ class PythonPanel:
         except ScriptError as exc:
             ui.label(str(exc)).classes("text-xs text-red-700 apb-script-error")
             return
-        info = f"{path.parent} · changed {modified_text(path)}"
-        ui.label(info).classes("text-[10px] text-slate-500 break-all apb-script-info")
+        info = f"{short_path(path.parent, self.base_dir) or '.'} · changed {modified_text(path)}"
+        ui.label(info).classes("text-[10px] text-slate-500 apb-script-info").tooltip(str(path))
         check = check_script_source(source, self._inputs(), path.name)
         with ui.row().classes("w-full items-start no-wrap gap-1 apb-script-check"):
             if check.ok:

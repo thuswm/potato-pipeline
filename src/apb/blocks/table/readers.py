@@ -62,6 +62,7 @@ class ReadExcelParams(_FileParams):
     sheet: str = Field(default="", description="Sheet name; empty = first sheet")
     header_row: int = Field(default=1, ge=1, description="Row with the column names (1 = first)")
     range: str = Field(
+        title="Cell range",
         default="",
         description="Optional cell range, e.g. A1:F200 (overrides header_row; first row = names)",
     )
@@ -74,6 +75,7 @@ class ReadExcel(_FileBlock[ReadExcelParams]):
     title = "Read Excel"
     description = "Read a sheet (or a cell range) of an .xlsx workbook into a table."
     Params = ReadExcelParams
+    advanced_params = ("header_row", "range")
 
     def run(
         self, params: ReadExcelParams, inputs: dict[str, Any], ctx: RunContext
@@ -95,9 +97,15 @@ class ReadExcel(_FileBlock[ReadExcelParams]):
 class ReadCsvParams(_FileParams):
     """Parameters of :class:`ReadCsv`."""
 
-    delimiter: str = Field(default=",", description="Column separator, e.g. , ; or \\t")
-    decimal: Literal[".", ","] = Field(default=".", description="Decimal separator")
-    skip_rows: int = Field(default=0, ge=0, description="Lines to skip before the header")
+    delimiter: str = Field(
+        title="Column separator", default=",", description="Column separator, e.g. , ; or \\t"
+    )
+    decimal: Literal[".", ","] = Field(
+        title="Decimal separator", default=".", description="Decimal separator"
+    )
+    skip_rows: int = Field(
+        title="Lines to skip", default=0, ge=0, description="Lines to skip before the header"
+    )
     encoding: str = Field(default="utf-8-sig", description="Text encoding, e.g. cp1252")
 
 
@@ -108,6 +116,7 @@ class ReadCsv(_FileBlock[ReadCsvParams]):
     title = "Read CSV"
     description = "Read a delimited text file (first line after skipped lines = names)."
     Params = ReadCsvParams
+    advanced_params = ("delimiter", "decimal", "skip_rows", "encoding")
 
     def run(self, params: ReadCsvParams, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
         """Read the file."""

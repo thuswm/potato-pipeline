@@ -134,6 +134,8 @@ class Block[P: BaseModel](ABC):
     """Pydantic model of the block's parameters."""
     always_run: ClassVar[bool] = False
     """Never take outputs from the cache; for blocks that write files (Excel, report)."""
+    advanced_params: ClassVar[tuple[str, ...]] = ()
+    """Parameters that are rarely changed; the property panel folds them (spec 11 PNL-03)."""
     provides_variables: ClassVar[bool] = False
     """The block defines variables for other blocks (see :meth:`provided_variables`)."""
 

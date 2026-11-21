@@ -20,11 +20,13 @@ Field type -> widget:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from enum import Enum
+from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin
 
 from nicegui import ui
@@ -36,6 +38,7 @@ from apb.engine.types import PortType
 from apb.gui.editor import UNSET
 
 _VARIABLE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+_EXAMPLE = re.compile(r"\be\.g\.\s*(.+?)\s*(?:; | — |$)")
 
 #: Writes a stored value (or ``UNSET`` to fall back to the default).
 type Setter = Callable[[Any], None]
@@ -44,6 +47,62 @@ type Setter = Callable[[Any], None]
 def humanize(name: str) -> str:
     """``default_unit_system`` -> ``Default unit system``."""
     return name.replace("_", " ").capitalize()
+
+
+def short_path(path: str | Path, base: Path | None = None, limit: int = 44) -> str:
+    """Return a path for display: relative to ``base`` if inside it, shortened in the middle.
+
+    Args:
+        path: The path.
+        base: Folder of the pipeline (paths inside it are shown relative to it).
+        limit: Longest text returned; longer paths keep their start and end (PNL-08).
+    """
+    p = Path(path)
+    text = str(p)
+    if base is not None:
+        with contextlib.suppress(ValueError, OSError):  # outside the pipeline folder
+            text = p.resolve().relative_to(base.resolve()).as_posix()
+    if len(text) <= limit:
+        return text
+    name = p.name
+    if len(name) + 2 >= limit:
+        return "…" + text[-(limit - 1) :]
+    return text[: limit - len(name) - 2] + "…/" + name
+
+
+def field_label(name: str, field: FieldInfo) -> str:
+    """Return the label of a parameter: its ``title``, else the humanized name (PNL-09)."""
+    return field.title or humanize(name)
+
+
+def example_of(hint: str) -> str:
+    """Return the example part of a help text (``"e.g. EID"``), or ``""`` (PNL-04)."""
+    m = _EXAMPLE.search(hint)
+    if not m:
+        return ""
+    text = m.group(1)
+    while text.endswith(")") and text.count(")") > text.count("("):
+        text = text[:-1]  # the example sat inside brackets: "(e.g. 9058)"
+    return f"e.g. {text.strip(chr(39))}"
+
+
+def describe(widget: Any, hint: str, placeholder: bool = True) -> None:
+    """Attach a help text to a field: an ⓘ icon with tooltip, the example as placeholder.
+
+    Args:
+        widget: A ``ui.input`` or ``ui.select`` (anything with an ``append`` slot).
+        hint: Help text (nothing happens if empty).
+        placeholder: Also show the example of the text in the empty field.
+    """
+    if not hint:
+        return
+    with widget.add_slot("append"):
+        ui.icon("info_outline", size="xs").classes("text-slate-400 cursor-help apb-info").tooltip(
+            hint
+        )
+    example = example_of(hint) if placeholder else ""
+    if example:
+        widget.props(f"placeholder={json.dumps(example)}")
 
 
 def default_of(field: FieldInfo) -> Any:
@@ -117,11 +176,38 @@ class ParamForm:
         self.on_change = on_change
         self.pick_file = pick_file
 
-    def build(self) -> None:
-        """Create the widgets in the current NiceGUI context."""
-        for name, field in self.model.model_fields.items():
-            current = self.values.get(name, default_of(field))
-            self._field(name, field, current, self._setter(name))
+    def build(self, advanced: Sequence[str] = ()) -> None:
+        """Create the widgets in the current NiceGUI context.
+
+        Args:
+            advanced: Parameters shown in a folded *Advanced* section (PNL-03).
+        """
+        fields = self.model.model_fields
+        for name, field in fields.items():
+            if name not in advanced:
+                self._field(
+                    name, field, self.values.get(name, default_of(field)), self._setter(name)
+                )
+        rare = [n for n in advanced if n in fields]
+        if rare:
+            self.advanced(rare)
+
+    def changed(self, names: Sequence[str]) -> int:
+        """Return how many of the parameters differ from their defaults."""
+        fields = self.model.model_fields
+        return sum(1 for n in names if n in self.values and self.values[n] != default_of(fields[n]))
+
+    def advanced(self, names: Sequence[str]) -> None:
+        """Create a folded *Advanced* section with the given parameters (PNL-03)."""
+        count = self.changed(names)
+        title = "Advanced" + (f" · {count} changed" if count else "")
+        with (
+            ui.expansion(title, value=False)
+            .classes("w-full apb-advanced")
+            .props("dense header-class='apb-section-title px-0'")
+        ):
+            for name in names:
+                self.field(name)
 
     def field(self, name: str) -> None:
         """Create the widget of one parameter (for panels that mix custom and standard fields).
@@ -144,7 +230,7 @@ class ParamForm:
         kind, detail, optional = classify(field.annotation)
         extra = field.json_schema_extra if isinstance(field.json_schema_extra, dict) else {}
         widget = extra.get("apb_widget")
-        label = humanize(name) + ("" if not field.is_required() else " *")
+        label = field_label(name, field) + ("" if not field.is_required() else " *")
         hint = field.description or ""
         if kind == "text" and widget == "file":
             self._file(label, hint, value, setter)
@@ -182,8 +268,7 @@ class ParamForm:
 
     @staticmethod
     def _hint(widget: Any, hint: str) -> None:
-        if hint:
-            widget.props(f"hint={json.dumps(hint)}")
+        describe(widget, hint)
 
     def _text(self, label: str, hint: str, value: Any, setter: Setter) -> None:
         box = (
@@ -230,7 +315,7 @@ class ParamForm:
             )
             editor.on("blur", lambda: setter(editor.value))
             if hint:
-                ui.label(hint).classes("text-xs text-slate-500")
+                editor.tooltip(hint)
 
     def _number(
         self, label: str, hint: str, value: Any, setter: Setter, kind: type, optional: bool
@@ -240,7 +325,7 @@ class ParamForm:
             .props("dense outlined")
             .classes("w-full")
         )
-        self._hint(box, hint or "Number or ${variable}")
+        self._hint(box, (hint + " — " if hint else "") + "a number or ${variable}")
 
         def commit() -> None:
             text = (box.value or "").strip()
@@ -302,9 +387,12 @@ class ParamForm:
 
     def _mapping(self, label: str, hint: str, value: Any, setter: Setter, key_type: type) -> None:
         rows: list[list[str]] = [[str(k), str(v)] for k, v in (value or {}).items()]
-        ui.label(label).classes("text-xs text-slate-600 mt-1")
-        if hint:
-            ui.label(hint).classes("text-xs text-slate-500")
+        with ui.row().classes("items-center gap-1 mt-1"):
+            ui.label(label).classes("text-xs text-slate-600")
+            if hint:
+                ui.icon("info_outline", size="xs").classes(
+                    "text-slate-400 cursor-help apb-info"
+                ).tooltip(hint)
         container = ui.column().classes("w-full gap-1")
 
         def commit() -> None:
@@ -439,7 +527,7 @@ class ParamForm:
 
         editor.on("blur", commit)
         if hint:
-            ui.label(hint).classes("text-xs text-slate-500")
+            editor.tooltip(hint)
 
 
 def suffix_hint(label: str) -> str:
