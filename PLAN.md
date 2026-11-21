@@ -94,7 +94,7 @@ Name, Value, Description. Proposal and points for the user to decide in the revi
 Today File > Quit stops the server but the browser tab stays. A web page can only close
 windows it opened itself, so a real exit needs the program to own the window.
 
-- [ ] 3.1 Spec with a choice for the user:
+- [x] 3.1 Spec with a choice for the user (spec 06 §3.6):
   - *Proposal A (no new dependency):* `apb gui` starts Chrome or Edge in app mode
     (`--app=<url>` with its own profile folder): a window without tabs or address bar.
     Quit ends that browser process, so the window closes; closing the window ends the
@@ -103,10 +103,10 @@ windows it opened itself, so a real exit needs the program to own the window.
     dependency that needs WebView2 (Windows) or GTK/Qt WebKit (Linux)
   - Both: the server also stops when the last window has been closed for a few seconds;
     unsaved-change warning kept
-- [ ] 3.2 User review / choice
-- [ ] 3.3 Launcher (`src/apb/gui/launcher.py`): find browser, start, watch, shut down
-- [ ] 3.4 Quit and window close wired to it; tests (launcher logic unit-tested, browser tests)
-- [ ] 3.5 Commit
+- [x] 3.2 User review / choice — option A (Chrome/Edge app window)
+- [x] 3.3 Launcher (`src/apb/gui/launcher.py`): find browser, start, watch, shut down
+- [x] 3.4 Quit and window close wired to it; tests (launcher logic unit-tested, browser tests)
+- [x] 3.5 Commit
 
 ## Step 4 — Property panel review (one panel at a time)
 

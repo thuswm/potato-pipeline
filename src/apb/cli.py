@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 from pydantic import ValidationError
@@ -266,19 +266,26 @@ def new_script(
     typer.secho(f"Created {path}", fg=typer.colors.GREEN)
 
 
-@app.command()
-def gui(
-    pipeline: Annotated[Path | None, typer.Argument(help="Pipeline to open")] = None,
-    port: Annotated[int, typer.Option(help="Local port of the GUI server")] = 8765,
-    no_browser: Annotated[bool, typer.Option(help="Do not open the browser")] = False,
-) -> None:
-    """Start the graphical editor in the web browser (stop with Ctrl+C)."""
-    from apb.gui.app import run_gui
+if TYPE_CHECKING:
+    from apb.gui.launcher import WindowSettings
 
-    if pipeline is not None and not pipeline.is_file():
-        typer.secho(f"File not found: {pipeline}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(2)
-    run_gui(pipeline, port=port, show=not no_browser)
+_WINDOW_HELP = (
+    "How to show the GUI: app (Chrome/Edge app window, default), browser (a tab in the "
+    "default browser) or none (start only the server). Default from [gui] window in the "
+    "config file"
+)
+
+
+def _window_settings(window: str | None, no_browser: bool) -> WindowSettings:
+    """Return the window settings of ``--window`` / ``--no-browser`` and the config file."""
+    from apb.config import ConfigError
+    from apb.gui.launcher import WindowMode, window_settings
+
+    try:
+        return window_settings(WindowMode.NONE if no_browser else window)
+    except ConfigError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
 
 
 def _server_answers(port: int) -> bool:
@@ -292,6 +299,40 @@ def _server_answers(port: int) -> bool:
         return False
 
 
+def _show(paths: list[str], pipeline: Path | None, port: int, settings: WindowSettings) -> None:
+    """Open the pages in a running server, or start the server and open them."""
+    from apb.gui.launcher import open_windows_only
+
+    if _server_answers(port):
+        typer.echo(f"Using the GUI server already running on port {port}")
+        open_windows_only(settings, [f"http://127.0.0.1:{port}{p}" for p in paths])
+        return
+    from apb.gui.app import run_gui
+
+    run_gui(pipeline, port=port, window=settings, open_paths=paths)
+
+
+@app.command()
+def gui(
+    pipeline: Annotated[Path | None, typer.Argument(help="Pipeline to open")] = None,
+    port: Annotated[int, typer.Option(help="Local port of the GUI server")] = 8765,
+    window: Annotated[str | None, typer.Option(help=_WINDOW_HELP)] = None,
+    no_browser: Annotated[bool, typer.Option(help="Same as --window none")] = False,
+) -> None:
+    """Start the graphical editor in its own window (stop with File > Quit or Ctrl+C)."""
+    if pipeline is not None and not pipeline.is_file():
+        typer.secho(f"File not found: {pipeline}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    settings = _window_settings(window, no_browser)
+    if pipeline is not None and _server_answers(port):
+        typer.secho(
+            f"A GUI server is already running on port {port}; open the pipeline there with "
+            "File > Open, or use --port for a second one.",
+            fg=typer.colors.YELLOW,
+        )
+    _show(["/"], pipeline, port, settings)
+
+
 @app.command()
 def h5view(
     files: Annotated[list[Path], typer.Argument(help="HDF5 file(s) to look into")],
@@ -299,11 +340,10 @@ def h5view(
     units: Annotated[
         str, typer.Option(help="Unit system for the unit labels: SI, SI_mm or empty")
     ] = "",
-    no_browser: Annotated[bool, typer.Option(help="Do not open the browser")] = False,
+    window: Annotated[str | None, typer.Option(help=_WINDOW_HELP)] = None,
+    no_browser: Annotated[bool, typer.Option(help="Same as --window none")] = False,
 ) -> None:
-    """Open the HDF5 viewer for one or more .h5 files, one browser tab each (spec 10)."""
-    import webbrowser
-
+    """Open the HDF5 viewer for one or more .h5 files, one window each (spec 10)."""
     from apb.gui.h5viewer import UNIT_CHOICES, viewer_url
 
     missing = [f for f in files if not f.is_file()]
@@ -316,18 +356,11 @@ def h5view(
             f"Unknown unit system {units!r} (use SI or SI_mm)", fg=typer.colors.RED, err=True
         )
         raise typer.Exit(2)
+    settings = _window_settings(window, no_browser)
     urls = [viewer_url(f, units=units) for f in files]
-    if _server_answers(port):
-        typer.echo(f"Using the GUI server already running on port {port}")
-        if not no_browser:
-            for url in urls:
-                webbrowser.open(f"http://127.0.0.1:{port}{url}")
-        return
-    from apb.gui.app import run_gui
-
     for url in urls:
         typer.echo(f"http://127.0.0.1:{port}{url}")
-    run_gui(None, port=port, show=not no_browser, open_paths=urls)
+    _show(urls, None, port, settings)
 
 
 @app.command()

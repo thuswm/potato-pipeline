@@ -29,6 +29,7 @@ from apb.blocks.solvers.record import (
     write_record,
 )
 from apb.blocks.solvers.runmode import Action, Results, RunMode, decide
+from apb.config import config_path
 from apb.engine.block import Block, BlockCancelledError, FilePath, RunContext
 from apb.engine.types import Port, PortType
 
@@ -258,7 +259,7 @@ class NastranRun(Block[NastranRunParams]):
         if status.checked and status.found is None:
             raise NastranError(
                 f"Nastran program '{status.program}' not found. Set the path in the block "
-                f"or in the config file {cmd.config_path()}, or the command"
+                f"or in the config file {config_path()}, or the command"
             )
         ctx.log(f"Command: {command}   (in {deck.parent})")
         started = _time(datetime.now().timestamp())

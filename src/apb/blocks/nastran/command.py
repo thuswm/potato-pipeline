@@ -12,10 +12,11 @@ import shlex
 import shutil
 import string
 import subprocess
-import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from apb.config import ConfigError, config_path, read_section
 
 #: The command typed at work (``nastran job.bdf``) plus the keywords that make it wait.
 DEFAULT_COMMAND = "nastran {input} batch=no old=no scr=yes {options}"
@@ -65,18 +66,6 @@ class Settings:
     path_from: str
 
 
-def config_path() -> Path:
-    """Return the config file: ``$APB_CONFIG``, else the user's config folder."""
-    override = os.environ.get("APB_CONFIG")
-    if override:
-        return Path(override)
-    if os.name == "nt":
-        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
-    else:
-        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    return base / "apb" / "config.toml"
-
-
 def validate_option(option: str) -> str:
     """Check a Nastran keyword ``key=value`` (no spaces, no shell characters).
 
@@ -118,12 +107,9 @@ def load_defaults(path: Path | None = None) -> Defaults:
     """
     target = path or config_path()
     try:
-        data = tomllib.loads(target.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return Defaults()
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise CommandError(f"Config file {target} cannot be read: {exc}") from exc
-    section = data.get("nastran", {})
+        section = read_section("nastran", target)
+    except ConfigError as exc:
+        raise CommandError(str(exc)) from exc
     try:
         command, folder = str(section.get("command", "")), str(section.get("path", ""))
         options = tuple(validate_option(str(o)) for o in section.get("options", []))

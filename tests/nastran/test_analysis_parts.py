@@ -25,6 +25,7 @@ from apb.blocks.solvers.record import (
     write_record,
 )
 from apb.blocks.solvers.runmode import Action, Results, RunMode, decide
+from apb.config import config_path
 from tests.conftest import FEM_DIR
 
 # ---- f06 --------------------------------------------------------------------------------
@@ -267,9 +268,9 @@ def test_config_file(tmp_path, monkeypatch):
     with pytest.raises(cmd.CommandError, match="Unknown placeholder"):
         cmd.load_defaults(path)
     monkeypatch.setenv("APB_CONFIG", str(tmp_path / "elsewhere.toml"))
-    assert cmd.config_path() == tmp_path / "elsewhere.toml"
+    assert config_path() == tmp_path / "elsewhere.toml"
     monkeypatch.delenv("APB_CONFIG")
-    assert cmd.config_path().name == "config.toml" and cmd.config_path().parent.name == "apb"
+    assert config_path().name == "config.toml" and config_path().parent.name == "apb"
 
 
 def test_path_goes_in_front_of_path(tmp_path):

@@ -128,8 +128,11 @@ def test_h5view_refuses_unknown_units():
     assert "Unknown unit system" in result.output
 
 
-def test_h5view_starts_server_with_one_tab_per_file(monkeypatch: pytest.MonkeyPatch):
+def test_h5view_starts_server_with_one_tab_per_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     calls: list[dict[str, object]] = []
+    monkeypatch.setenv("APB_CONFIG", str(tmp_path / "none.toml"))
     monkeypatch.setattr(cli, "_server_answers", lambda port: False)
     monkeypatch.setattr(
         "apb.gui.app.run_gui",
@@ -138,17 +141,21 @@ def test_h5view_starts_server_with_one_tab_per_file(monkeypatch: pytest.MonkeyPa
     result = runner.invoke(cli.app, ["h5view", str(MODAL_H5), str(GLOBAL_H5), "--port", "9001"])
     assert result.exit_code == 0, result.output
     (call,) = calls
-    assert call["pipeline"] is None and call["port"] == 9001 and call["show"] is True
+    assert call["pipeline"] is None and call["port"] == 9001
+    assert call["window"].mode == "app"  # the default window mode
     paths = call["open_paths"]
     assert isinstance(paths, list) and len(paths) == 2
     assert [_query(p)["file"] for p in paths] == [str(MODAL_H5.resolve()), str(GLOBAL_H5.resolve())]
 
 
-def test_h5view_reuses_a_running_server(monkeypatch: pytest.MonkeyPatch):
+def test_h5view_reuses_a_running_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     opened: list[str] = []
+    monkeypatch.setenv("APB_CONFIG", str(tmp_path / "none.toml"))
     monkeypatch.setattr(cli, "_server_answers", lambda port: True)
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
-    result = runner.invoke(cli.app, ["h5view", str(MODAL_H5), "--units", "SI"])
+    result = runner.invoke(
+        cli.app, ["h5view", str(MODAL_H5), "--units", "SI", "--window", "browser"]
+    )
     assert result.exit_code == 0, result.output
     assert "already running" in result.output
     (url,) = opened

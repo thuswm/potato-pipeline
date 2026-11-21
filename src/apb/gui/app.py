@@ -8,14 +8,14 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
-import webbrowser
+import threading
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from nicegui import app, ui
+from nicegui import app, core, run, ui
 
 from apb import __version__
 from apb.blocks.nastran.analysis import NastranRun
@@ -29,7 +29,7 @@ from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
 from apb.engine.store import StoreError, format_size
 from apb.engine.variables import VariableError, resolve
-from apb.gui import h5viewer
+from apb.gui import h5viewer, launcher
 from apb.gui.analysis_panel import AnalysisPanel
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.constants_panel import ConstantsPanel
@@ -47,6 +47,22 @@ HEADER_HEIGHT = 52
 
 #: The editors of all open browser tabs (needed by File > Quit).
 _PAGES: list[EditorPage] = []
+
+
+@dataclasses.dataclass
+class _Session:
+    """How this server shows its pages (spec 06 §3.6).
+
+    Attributes:
+        window: The app window process, if the server started one.
+        watched: The app window can be watched (its close stops the server).
+    """
+
+    window: launcher.AppWindow | None = None
+    watched: bool = False
+
+
+_SESSION = _Session()
 
 _CLOSED_HTML = (
     '<div style="font-family:sans-serif;text-align:center;margin-top:20vh">'
@@ -920,6 +936,9 @@ class EditorPage:
                 "document.title = 'Closed';"
             )
         await asyncio.sleep(0.5)  # let the browsers show the message before the server ends
+        window = _SESSION.window
+        if window is not None:
+            await run.io_bound(window.close)  # the app window closes (GUI-26)
         app.shutdown()
 
     async def _discard_ok(self) -> bool:
@@ -1049,21 +1068,82 @@ class EditorPage:
         self._render_stored()
 
 
+def _stop_server(reason: str) -> None:
+    """Stop running work and the server; safe to call from any thread (GUI-27, GUI-28)."""
+
+    def stop() -> None:
+        print(f"Analysis Pipeline Builder: {reason}; stopping the server.", flush=True)
+        for page in list(_PAGES):
+            page.runner.stop()
+        app.shutdown()
+
+    loop = core.loop
+    if loop is not None:
+        loop.call_soon_threadsafe(stop)
+
+
+def _handover() -> None:
+    """The app window went to a browser that was already running: it cannot be watched."""
+    _SESSION.watched = False
+
+
+def _start_windows(window: launcher.WindowSettings, port: int, paths: Sequence[str]) -> None:
+    """Open the pages once the server answers: app window, browser tab or nothing (GUI-29)."""
+    if window.mode is launcher.WindowMode.NONE:
+        return
+    urls = [f"http://127.0.0.1:{port}{path}" for path in paths]
+    browser = (
+        launcher.find_browser(window.browser) if window.mode is launcher.WindowMode.APP else None
+    )
+    if window.mode is launcher.WindowMode.APP and browser is None:
+        print(
+            "Chrome or Edge not found: opening the default browser instead "
+            "(set [gui] browser in the config file to choose one).",
+            flush=True,
+        )
+
+    def open_pages() -> None:
+        if not launcher.wait_for_port(port):
+            return
+        if browser is not None:
+            _SESSION.window = launcher.AppWindow(
+                browser,
+                launcher.profile_dir(),
+                on_closed=lambda: _stop_server("the window was closed"),
+                on_handover=_handover,
+            )
+            _SESSION.watched = True
+            for url in urls:
+                _SESSION.window.open(url)
+        else:
+            for url in urls:
+                launcher.open_in_browser(url)
+
+    monitor = launcher.IdleMonitor(
+        window.idle_seconds,
+        lambda: None if _SESSION.watched else _stop_server("no page open any more"),
+        lambda delay, callback: asyncio.get_running_loop().call_later(delay, callback),
+    )
+    app.on_connect(monitor.connect)
+    app.on_disconnect(monitor.disconnect)
+    app.on_startup(lambda: threading.Thread(target=open_pages, daemon=True).start())
+
+
 def run_gui(
     pipeline: Path | None = None,
     *,
     port: int = 8765,
-    show: bool = True,
+    window: launcher.WindowSettings | None = None,
     open_paths: Sequence[str] = (),
 ) -> None:
-    """Start the GUI server on localhost and open the browser (GUI-01).
+    """Start the GUI server on localhost and show it (GUI-01, spec 06 §3.6).
 
     Args:
         pipeline: Pipeline file to open in the editor.
         port: Local port.
-        show: Open the default browser.
+        window: How to show the pages (default: start only the server).
         open_paths: Pages to open instead of the editor, e.g. HDF5 viewer URLs from
-            :func:`apb.gui.h5viewer.viewer_url` (one browser tab each, spec 10 §3.2).
+            :func:`apb.gui.h5viewer.viewer_url` (one window or tab each, spec 10 §3.2).
     """
     registry = default_registry()
     initial = pipeline.resolve() if pipeline else None
@@ -1072,16 +1152,15 @@ def run_gui(
     def root() -> None:
         EditorPage(registry, initial)
 
-    if show and open_paths:
-        base = f"http://127.0.0.1:{port}"
-        app.on_startup(lambda: [webbrowser.open(base + path) for path in open_paths])
-
+    _start_windows(
+        window or launcher.WindowSettings(launcher.WindowMode.NONE), port, list(open_paths) or ["/"]
+    )
     ui.run(
         root,
         host="127.0.0.1",
         port=port,
         title="Analysis Pipeline Builder",
-        show=show and not open_paths,
+        show=False,
         reload=False,
         favicon="🔧",
         show_welcome_message=True,

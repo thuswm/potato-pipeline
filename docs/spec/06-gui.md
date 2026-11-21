@@ -8,7 +8,7 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 
 | ID | Requirement | Prio |
 |----|-------------|------|
-| GUI-01 | Started with `apb gui [file]`; opens the default browser at `http://127.0.0.1:<port>`; binds to localhost only | M |
+| GUI-01 | Started with `apb gui [file]`; serves `http://127.0.0.1:<port>` and opens it in an app window (§3.6, GUI-25), else the default browser; binds to localhost only | M |
 | GUI-02 | Works in current Firefox, Edge and Chrome | M |
 | GUI-03 | **Canvas:** blocks with labelled input/output ports; drag to move; connect ports by dragging; delete blocks/connectors; zoom and pan | M |
 | GUI-04 | Connectors between incompatible port types are refused with a visible hint | M |
@@ -30,7 +30,7 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 | GUI-22 | Panel of the Nastran analysis block: status lines (program found, input, results current?), open the `.f06` and the folder, messages table, warning mark on the canvas (spec 09 §3.9) | M |
 | GUI-17 | The file dialog can create a **new folder** in the folder it shows (§3.5) | M |
 | GUI-18 | Every block on the canvas shows its **block type** under its label, also when the label equals the type name; the property panel states the block type and category explicitly (§3.5) | M |
-| GUI-19 | **File > Quit** closes the application: asks about unsaved changes and a running pipeline, stops the server and tells the user the tab can be closed (§3.5) | M |
+| GUI-19 | **File > Quit** closes the application: asks about unsaved changes and a running pipeline, stops the server and closes the app window (§3.6, GUI-26); in a plain browser tab it tells the user the tab can be closed (§3.5) | M |
 | GUI-20 | One vocabulary in all GUI texts, messages and documentation: *block*, *connector*, *port*, *pipeline* (spec 00 §1.1) | M |
 
 ## 3. Design
@@ -156,13 +156,72 @@ Implementation notes (step 2): `make_folder` in `gui/filedialog.py`; open editor
 message in every tab and then calls `nicegui.app.shutdown()`. The pipeline file schema is
 unchanged.
 
+### 3.6 Application window and clean exit (GUI-25 … GUI-29) — round 4 step 3
+
+Status: decided 2026-11-21: **option A** (Chrome/Edge app window, no new dependency).
+
+Today `apb gui` opens a tab in the default browser. *File > Quit* stops the server, but the
+tab stays open showing "Closed", because a web page may only close windows it opened
+itself. A real exit needs the program to own the window. MSC Nastran users are mostly on
+Windows, where Edge is always installed.
+
+| ID | Requirement | Prio |
+|----|-------------|------|
+| GUI-25 | `apb gui` opens the editor in an **app window** of Chrome or Edge (`--app=<url>`): its own window without tabs, address bar or bookmarks, with the tool's title and icon. It uses its own browser profile folder, so it is a separate browser process that never touches the user's normal browser windows | M |
+| GUI-26 | **File > Quit** (after the existing checks, GUI-19) ends the server **and closes the app window** | M |
+| GUI-27 | **Closing the app window** (window ×) ends the server. The existing unsaved-changes warning of the browser (GUI-12) appears first; nothing is saved automatically. A running pipeline is stopped | M |
+| GUI-28 | **Fallback**: when neither Chrome nor Edge (nor Chromium) is found, or when chosen, the default browser opens a tab as today (Firefox has no app mode). Quit then shows "Closed" in the tab as today. In this mode the server also stops when no tab has been connected for 30 s (after at least one was), so a forgotten server does not keep running | M |
+| GUI-29 | The window mode is chosen with `apb gui --window app\|browser\|none` (`none` = start only the server, the same as `--no-browser`) and as a computer default in the config file: `[gui] window = "browser"`, `[gui] browser = "<path to chrome.exe or msedge.exe>"`. Command line > config file > `app` | M |
+| GUI-30 | The HDF5 viewer (`apb h5view`, spec 10) opens its file(s) in app windows the same way; extra windows of the same run join the same browser process | S |
+| GUI-31 | Desktop shortcut / start menu entry, and hiding the console window on Windows (`pythonw`) | L |
+
+#### 3.6.1 Design
+
+- **Finding the browser** (`gui/launcher.py`, `find_browser()`): the configured path if
+  set; else, in this order, Chrome, Edge, Chromium:
+  - Windows: `chrome.exe` / `msedge.exe` under `%ProgramFiles%`, `%ProgramFiles(x86)%`
+    and `%LOCALAPPDATA%` (standard install folders);
+  - Linux: `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`,
+    `microsoft-edge`, `microsoft-edge-stable` on `PATH`;
+  - macOS: the `.app` bundles in `/Applications`.
+- **Command:** `<browser> --app=<url> --user-data-dir=<profile> --no-first-run
+  --no-default-browser-check --window-size=1500,950`. The profile folder is
+  `<config folder>/apb/browser-profile` (next to `config.toml`). With its own profile the
+  browser starts a new process that ends when its last window closes; that is what makes
+  "window closed" observable.
+- **Watching:** a background thread waits for the browser process. When it ends and Quit
+  was not the reason, the server shuts down (stop running work, then `app.shutdown()`).
+  When Quit ends the server, the browser process is terminated (its windows close). Windows
+  opened later in the same profile (e.g. the HDF5 viewer from the File menu,
+  `ui.navigate.to(..., new_tab=True)`) belong to the same process, so they close too.
+- **Second start:** if `apb gui` is started while the port is in use by another APB server,
+  the existing server is reused: only a new window is opened (as `apb h5view` does). A
+  pipeline given on the command line is then not opened; a message says to use File > Open
+  there or `--port` for a second server.
+- **Not verified on Windows yet:** Chrome and Edge keep the started process alive while the
+  window is open when they use their own profile folder; this is tested on Linux with a fake
+  browser and should be checked once on a Windows PC with Edge (open point).
+- **Fallback timer (GUI-28):** connected pages are counted (NiceGUI connect/disconnect);
+  30 s after the last page disconnected, and only if one had connected, the server stops.
+  Reloading a page reconnects within a second and does not trigger it.
+- **No change to the pipeline file format**; tests keep using `--no-browser` (mode
+  `none`), which never stops on its own.
+- The config file reading moves from `blocks/nastran/command.py` to a small shared module
+  `apb/config.py` (`config_path()`, `read_section(name)`); the Nastran block uses it too.
+
+#### 3.6.2 Not in this step
+
+A native window without any browser (option B, pywebview), packaging as an installer,
+hiding the console window (GUI-31), single-instance locking across users.
+
 ## 4. Out of scope (v1)
 
 Multi-user editing, remote server deployment with authentication, minimap, block grouping,
-desktop packaging (a native window via NiceGUI's `native` mode / pywebview is possible later).
+desktop packaging (a native window via NiceGUI's `native` mode / pywebview is possible later;
+round 4 chose the Chrome/Edge app window instead, §3.6).
 
 ## 5. Open questions
 
-1. ~~Native window?~~ A browser tab is fine.
+1. ~~Native window?~~ A browser tab is fine. Round 4: an app window of Chrome/Edge (§3.6).
 2. ~~GUI technology — browser or desktop Qt (PySide6)?~~ Decided: **browser** (NiceGUI +
    Drawflow), as described in this spec.
