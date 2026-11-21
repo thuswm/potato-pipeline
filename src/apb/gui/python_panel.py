@@ -108,11 +108,24 @@ class PythonPanel:
     # ---- widgets --------------------------------------------------------------------------
 
     def build(self) -> None:
-        """Create the widgets in the current NiceGUI context."""
+        """Create the side panel in the current NiceGUI context (spec 11 §4.7).
+
+        The ports are edited in the panel's *Ports* section (:meth:`build_ports`). Inline
+        code is under *Advanced* unless the block uses it instead of a script file.
+        """
         self.form.field("script")
         self.script_box = ui.column().classes("w-full gap-1 apb-script")
         self._render_script()
-        self.form.field("inline_code")
+        uses_inline = bool(str(self.params.get("inline_code") or "").strip()) and not (
+            self.params.get("script")
+        )
+        if uses_inline:
+            self.form.field("inline_code")
+        else:
+            self.form.advanced(["inline_code"])
+
+    def build_ports(self) -> None:
+        """The input and output port editors (in the *Ports* section of the panel)."""
         self.form.field("inputs")
         self.form.field("outputs")
 
@@ -161,21 +174,21 @@ class PythonPanel:
                 ui.label("\n".join(check.problems)).classes(
                     "text-xs text-red-700 grow whitespace-pre-wrap"
                 )
-            ui.button("Check", on_click=self._render_script).props("flat dense size=sm").tooltip(
-                "Read the file again and check it (the script is not run)"
-            )
-        ui.code(source, language="python").classes(
-            "w-full h-64 text-xs border rounded apb-script-code"
+            ui.button(icon="refresh", on_click=self._render_script).props(
+                'flat dense round size=sm aria-label="Check"'
+            ).tooltip("Check: read the file again and check it (the script is not run)")
+        code = ui.code(source, language="python").classes(
+            "w-full max-h-40 overflow-hidden text-xs border rounded cursor-pointer apb-script-code"
         )
-        with ui.row().classes("gap-1"):
-            ui.button(
-                "Open in editor", icon="open_in_new", on_click=lambda: self._open(path)
-            ).props("dense outline").tooltip(
-                "Open the file in the program your system uses for .py files"
-            )
-            ui.button("Edit here", icon="code", on_click=lambda: self._edit(path)).props(
-                "dense outline"
-            )
+        code.tooltip("Click to open the code in the editor")
+        code.on("click", lambda: self._edit(path))
+        with ui.row().classes("w-full items-center gap-1"):
+            ui.button("Edit", icon="code", on_click=lambda: self._edit(path)).props(
+                "dense unelevated no-caps"
+            ).classes("apb-script-edit").tooltip("Edit the script in a large editor here")
+            ui.button(icon="open_in_new", on_click=lambda: self._open(path)).props(
+                'dense flat round aria-label="Open in editor"'
+            ).tooltip("Open in editor: the program your system uses for .py files")
 
     def _open(self, path: Path) -> None:
         try:

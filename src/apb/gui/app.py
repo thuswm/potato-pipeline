@@ -360,7 +360,7 @@ class EditorPage:
                     rebuild=self._show_panel,
                 ).build()
             elif cls is PythonBlock:  # script view and templates (spec 04 §3.5)
-                PythonPanel(
+                ports_editor = PythonPanel(
                     block.params,
                     on_change=lambda name, value: self._set_param(block.id, name, value),
                     pick_file=self._pick_file,
@@ -370,7 +370,10 @@ class EditorPage:
                     edit_script=self._edit_script,
                     open_in_editor=open_with_system,
                     rebuild=self._show_panel,
-                ).build()
+                )
+                ports_editor.build()
+                self._ports_section(block, editor=ports_editor.build_ports)
+                return
             elif cls is Constants:  # constants table (spec 03 §3.5.3)
                 ConstantsPanel(
                     block.params,
@@ -437,10 +440,16 @@ class EditorPage:
                 )
                 description.set_visibility(False)
 
-    def _ports_section(self, block: Any) -> None:
-        """The block's ports in a folded section (PNL-10)."""
+    def _ports_section(self, block: Any, editor: Callable[[], None] | None = None) -> None:
+        """The block's ports in a folded section (PNL-10).
+
+        Args:
+            block: The block.
+            editor: Builds an editor for blocks whose ports are parameters (Python block);
+                shown instead of the read-only list.
+        """
         inputs, outputs = self.state.ports(block)
-        if not inputs and not outputs:
+        if not inputs and not outputs and editor is None:
             return
         summary = f"Ports · {len(inputs)} in, {len(outputs)} out"
         with (
@@ -448,6 +457,9 @@ class EditorPage:
             .classes("w-full apb-ports")
             .props("dense header-class='apb-section-title px-0'")
         ):
+            if editor is not None:
+                editor()
+                return
             for title, ports in (("Inputs", inputs), ("Outputs", outputs)):
                 if ports:
                     ui.label(title).classes("text-xs font-medium text-slate-600 mt-1")

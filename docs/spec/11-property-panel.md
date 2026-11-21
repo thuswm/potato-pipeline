@@ -171,3 +171,12 @@ program is shown with a short path (full path as tooltip). 1275 px → 525 px.
   "from block" line instead of its field (PNL-07), and a list parameter can offer the values
   present (PNL-11): `subcases` is a drop-down of the subcases in the result file (free
   text when the file cannot be read, or for a `${variable}`).
+
+### 4.7 Python — done (2026-11-21)
+
+*Settings*: script file, a short folder line ("scripts · changed …", full path as
+tooltip), the check result with a ↻ *Check* icon, the first ~10 lines of the code (click
+to open the large editor), *Edit* and an *Open in editor* icon (system program).
+*Advanced*: inline code (in *Settings* instead when the block uses inline code and no
+file). The port editors moved into the *Ports* section, which replaces the read-only port
+list for this block, so the ports are no longer shown twice. 1310 px → 512 px.

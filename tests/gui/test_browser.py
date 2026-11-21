@@ -279,6 +279,8 @@ def test_invalid_parameters_block_the_run(page):
 
 def test_python_block_port_change_updates_canvas(page):
     select(page, "Fastener margins")
+    page.locator(".apb-ports").get_by_text("Ports").click()  # the port editor (spec 11 §4.7)
+    page.wait_for_timeout(300)
     page.get_by_role("button", name="Add port").first.click()
     page.wait_for_timeout(500)
     margins = node(page, "Fastener margins")
@@ -426,7 +428,7 @@ def test_python_block_shows_code_and_checks_the_script(page, workdir: Path):
     assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
     assert "changed 20" in page.locator(".apb-script-info").inner_text()
     assert page.get_by_role("button", name="Open in editor").is_visible()
-    assert page.get_by_role("button", name="Edit here").is_visible()
+    assert page.get_by_role("button", name="Edit", exact=True).is_visible()
 
     # An edit in an external editor shows up after "Check"; nothing is executed.
     script = workdir / "scripts" / "fastener_margins.py"
