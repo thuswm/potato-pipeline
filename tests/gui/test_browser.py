@@ -509,7 +509,30 @@ def test_python_block_use_existing_file(page, workdir: Path):
 # ---- report section editor (spec 05 §3.4) ------------------------------------------------
 
 
+def open_report(page, label: str) -> None:
+    """Select a Word report block and open its editor dialog (spec 11 §4.4)."""
+    select(page, label)
+    page.locator(".apb-open-editor").click()
+    page.wait_for_selector(".apb-report-editor")
+    page.wait_for_timeout(400)
+
+
+def tab(page, name: str) -> None:
+    """Switch the tab of the report editor."""
+    page.locator(".apb-report-editor").get_by_role("tab", name=name).click()
+    page.wait_for_timeout(400)
+
+
+def close_editor(page) -> None:
+    """Close the report editor if it is open."""
+    editor = page.locator(".apb-report-editor")
+    if editor.count() and editor.is_visible():
+        editor.get_by_role("button", name="Close").click()
+        page.wait_for_timeout(400)
+
+
 def save_file(page) -> None:
+    close_editor(page)
     page.get_by_role("button", name="File", exact=True).click()
     page.get_by_text("Save", exact=True).click()
     page.wait_for_timeout(600)
@@ -534,7 +557,8 @@ def summaries(page) -> list[str]:
 
 
 def test_report_editor_lists_items_and_sections(page):
-    select(page, "Fastener report")
+    open_report(page, "Fastener report")
+    tab(page, "Items")
     names = [i.input_value() for i in page.locator(".apb-item-name input").all()]
     assert names == [
         "load_table",
@@ -547,6 +571,7 @@ def test_report_editor_lists_items_and_sections(page):
     ]
     assert "Table · Fastener load table" in page.locator(".apb-item").first.inner_text()
     assert "Figure · Fastener margins (plot)" in page.locator(".apb-item").nth(2).inner_text()
+    tab(page, "Sections")
     found = summaries(page)
     assert found[0] == "Title"
     assert found[1] == "H1 · 1 Introduction"
@@ -558,7 +583,7 @@ def test_report_editor_lists_items_and_sections(page):
 
 
 def test_report_editor_add_move_duplicate_delete_and_save(page, workdir: Path):
-    select(page, "Fastener report")
+    open_report(page, "Fastener report")
     before = len(summaries(page))
     open_section(page, 1)  # the first heading
     page.get_by_role("button", name="Add section").click()
@@ -591,7 +616,7 @@ def test_report_editor_add_move_duplicate_delete_and_save(page, workdir: Path):
 
 def test_report_editor_table_columns_formats_and_warnings(page, workdir: Path):
     run_all(page)
-    select(page, "Fastener report")
+    open_report(page, "Fastener report")
     open_section(page, 8)  # table critical_margins
     columns = page.locator(".apb-columns")
     assert "EID" in columns.inner_text() and "TENSION" in columns.inner_text()
@@ -612,6 +637,8 @@ def test_report_editor_table_columns_formats_and_warnings(page, workdir: Path):
     assert report_params(workdir)["sections"][8]["formats"]["SHEAR"] == "0.000"
 
     # A column that is not in the table gives a warning on the section before any run.
+    open_report(page, "Fastener report")
+    open_section(page, 8)
     caption_box = page.locator(".apb-text-caption input").first
     caption_box.fill("Critical {nope}")
     caption_box.press("Tab")
@@ -623,7 +650,7 @@ def test_report_editor_table_columns_formats_and_warnings(page, workdir: Path):
 
 def test_report_editor_insert_value_and_live_preview(page):
     run_all(page)
-    select(page, "Fastener report")
+    open_report(page, "Fastener report")
     open_section(page, 10)  # paragraph: The minimum margin of safety is {min_ms:.2f}.
     status = page.locator(".apb-text-status").first
     assert "→ The minimum margin of safety is 0.23." in status.inner_text()
@@ -639,7 +666,8 @@ def test_report_editor_insert_value_and_live_preview(page):
 
 
 def test_report_editor_rename_item_updates_references(page, workdir: Path):
-    select(page, "Fastener report")
+    open_report(page, "Fastener report")
+    tab(page, "Items")
     plot = page.locator(".apb-item-name input").nth(2)
     assert plot.input_value() == "plot"
     plot.fill("margin_plot")
@@ -648,6 +676,7 @@ def test_report_editor_rename_item_updates_references(page, workdir: Path):
     page.get_by_role("button", name="Rename").click()
     page.wait_for_timeout(800)
     assert [i.input_value() for i in page.locator(".apb-item-name input").all()][2] == "margin_plot"
+    tab(page, "Sections")
     assert "Figure · margin_plot" in summaries(page)[9]
     assert page.locator(".apb-section-warning:visible").count() == 0
     save_file(page)
@@ -663,13 +692,15 @@ def test_report_editor_rename_item_updates_references(page, workdir: Path):
 
 
 def test_report_editor_refuses_a_name_in_use_and_flags_missing_items(page):
-    select(page, "Fastener report")
+    open_report(page, "Fastener report")
+    tab(page, "Items")
     box = page.locator(".apb-item-name input").nth(3)
     box.fill("plot")
     box.press("Enter")
     page.wait_for_selector("text=already used by another item")
     assert page.locator(".apb-item-name input").nth(3).input_value() == "min_ms"
     # A new table section has no item yet: the warning says so.
+    tab(page, "Sections")
     page.get_by_role("button", name="Add section").click()
     page.locator(".q-menu").get_by_text("Table", exact=True).click()
     page.wait_for_timeout(500)
@@ -703,7 +734,8 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
     assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
 
     # The report editor knows the items by the names given on the connectors.
-    select(page, "Test case report")
+    open_report(page, "Test case report")
+    tab(page, "Items")
     names = [i.input_value() for i in page.locator(".apb-item-name input").all()]
     assert names == [
         "effective_mass",
@@ -720,6 +752,7 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
     ]
     assert page.locator(".apb-unused").count() == 0
     assert page.locator(".apb-section-warning:visible").count() == 0
+    tab(page, "Sections")
     open_section(page, 8)  # the modal effective mass table: columns known from the run
     assert "FREQUENCY" in page.locator(".apb-columns").inner_text()
     assert page.locator(".apb-format-column input").count() == 8
@@ -1150,3 +1183,24 @@ def test_deleting_a_used_constant_asks_first(page):
     page.wait_for_timeout(500)
     assert page.locator(".apb-constant-row").count() == 1
     assert counts(page) == (15, 25)  # its two connectors are gone
+
+
+def test_report_side_panel_summary_and_editor_tabs(page):
+    select(page, "Fastener report")
+    summary = page.locator(".apb-report-summary").inner_text()
+    assert "sections · 7 items" in summary and "No problems found" in summary
+    assert page.locator(".apb-section").count() == 0  # the sections are in the dialog only
+    open_report(page, "Fastener report")
+    assert page.locator(".apb-detail").inner_text().startswith("Select a section")
+    open_section(page, 1)
+    assert page.locator(".apb-section-open").count() == 1
+    assert "Section 2 · H1 · 1 Introduction" in page.locator(".apb-detail").inner_text()
+    tab(page, "Document")
+    assert page.locator(".apb-report-editor").get_by_label("Title").count() == 1
+    tab(page, "Sections")
+    page.get_by_role("button", name="Add section").click()
+    page.locator(".q-menu").get_by_text("Table", exact=True).click()
+    page.wait_for_timeout(500)
+    close_editor(page)
+    problems = page.locator(".apb-report-problems").inner_text()
+    assert "1 problem" in problems and "Choose an item" in problems

@@ -1,8 +1,9 @@
-"""Property panel of the Word report block: the section editor (spec 05 §3.4).
+"""Property panel of the Word report block and its editor dialog (spec 05 §3.4, spec 11 §4.4).
 
-Replaces the JSON field for ``sections`` with a list of sections that can be added, moved,
-duplicated, deleted and edited, next to a list of the connected items whose names can be
-set. The stored format is unchanged. All decisions (what fits, what is wrong) are made by
+The side panel shows the output file, a summary and *Open editor*. The editor dialog has
+three tabs: the sections (list on the left, settings of the selected one on the right),
+the connected items whose names can be set, and the document metadata. The stored format
+is unchanged. All decisions (what fits, what is wrong) are made by
 the pure functions in :mod:`apb.blocks.report.editing`.
 
 Note for changes: a handler that rebuilds a container deletes the widget it runs in, after
@@ -49,7 +50,23 @@ class _Row:
 
     summary: ui.label
     warning: ui.icon
-    body: ui.column
+
+
+def summary_text(sections: list[dict[str, Any]], infos: Mapping[str, ed.ItemInfo]) -> str:
+    """Return e.g. ``"20 sections · 11 items"`` for the side panel."""
+    n, m = len(sections), len(infos)
+    return f"{n} section{'s' if n != 1 else ''} · {m} item{'s' if m != 1 else ''}"
+
+
+def problem_lines(sections: list[dict[str, Any]], infos: Mapping[str, ed.ItemInfo]) -> list[str]:
+    """Return the problems shown in the side panel summary (sections, unused items)."""
+    lines: list[str] = []
+    problems = ed.check_sections(sections, infos)
+    lines += [p.message for p in problems if p.index < 0]
+    lines += sorted({f"Section {p.index + 1}: {p.message}" for p in problems if p.index >= 0})
+    used = ed.referenced_names(sections)
+    lines += [f"Item {name!r} is used nowhere" for name in infos if name not in used]
+    return lines
 
 
 class ReportPanel:
@@ -133,32 +150,93 @@ class ReportPanel:
     # ---- build ----------------------------------------------------------------------------
 
     def build(self) -> None:
-        """Create the widgets in the current NiceGUI context."""
+        """Create the side panel in the current NiceGUI context (spec 11 §4.4)."""
         self.form.field("output_file")
-        self.form.field("base_document")
-        self.form.field("metadata")
-        ui.label("Items (connected to this block)").classes(
-            "text-xs font-medium text-slate-600 mt-2"
-        )
-        self.items_box = ui.column().classes("w-full gap-1 apb-items")
-        with ui.row().classes("w-full items-center mt-2"):
-            ui.label("Sections").classes("text-xs font-medium text-slate-600")
-            ui.space()
-            with ui.button("Add section", icon="add").props("dense outline"), ui.menu():
-                for kind, label in ed.SECTION_KINDS:
-                    ui.menu_item(label, on_click=lambda k=kind: self._add(k))
-        if not isinstance(self.params.get("sections", []), list):
-            self.form.field("sections")  # a ${variable}: keep the plain field
-            self.list_box = ui.column()
+        self.summary_box = ui.column().classes("w-full gap-1 apb-report-summary")
+        self.infos = {i.name: i for i in self.get_items()}
+        self._render_summary()
+        ui.button("Open editor", icon="edit_note", on_click=self.open_editor).props(
+            "unelevated no-caps"
+        ).classes("w-full apb-open-editor")
+        self.form.advanced(["base_document"])
+        self.items_box = ui.column()
+        self.list_box = ui.column()
+        self.detail_box = ui.column()
+
+    def _render_summary(self) -> None:
+        """The summary card of the side panel."""
+        box = getattr(self, "summary_box", None)
+        if box is None:
             return
-        self.list_box = ui.column().classes("w-full gap-1 apb-sections")
-        self._refresh_items()
+        box.clear()
+        lines = problem_lines(self.sections, self.infos)
+        with box, ui.card().props("flat bordered").classes("w-full p-2 gap-0"):
+            ui.label(summary_text(self.sections, self.infos)).classes("text-sm font-medium")
+            if lines:
+                ui.label(
+                    f"{len(lines)} problem{'s' if len(lines) != 1 else ''}: {lines[0]}"
+                ).classes("text-xs text-amber-800 apb-report-problems").tooltip("\n".join(lines))
+            else:
+                ui.label("No problems found").classes("text-xs text-slate-500")
+
+    async def open_editor(self) -> None:
+        """Open the editor dialog: sections, items and document (PNL-06)."""
+        self.infos = {i.name: i for i in self.get_items()}
+        with (
+            ui.dialog().props("persistent") as dialog,
+            ui.card().classes("w-[80vw] max-w-none h-[85vh] p-0 gap-0 apb-report-editor"),
+        ):
+            with ui.row().classes("w-full items-center px-4 py-2 border-b"):
+                ui.icon("description").classes("text-slate-600")
+                ui.label("Report editor").classes("text-lg font-medium")
+                ui.space()
+                ui.button("Close", on_click=dialog.close).props("flat no-caps")
+            with ui.tabs().props("dense align=left no-caps").classes("px-4") as tabs:
+                t_sections = ui.tab("Sections")
+                t_items = ui.tab("Items")
+                t_document = ui.tab("Document")
+            with ui.tab_panels(tabs, value=t_sections).classes("w-full grow"):
+                with ui.tab_panel(t_sections).classes("h-full p-0"):
+                    self._sections_tab()
+                with ui.tab_panel(t_items).classes("p-4"):
+                    ui.label(
+                        "Values connected to the report's Items input. Their names are used "
+                        "by the sections and in {placeholders}; edit a name to rename it."
+                    ).classes("text-xs text-slate-500")
+                    self.items_box = ui.column().classes("w-full max-w-2xl gap-1 apb-items")
+                with ui.tab_panel(t_document).classes("p-4"), ui.column().classes("max-w-2xl"):
+                    self.form.field("metadata")
+        self._render_items()
         self._render_list()
+        self._render_detail()
+        await dialog
+        dialog.delete()
+        self._render_summary()
+
+    def _sections_tab(self) -> None:
+        with ui.row().classes("w-full h-full no-wrap gap-0"):
+            with ui.column().classes("w-2/5 h-full gap-1 p-3 border-r overflow-auto"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Sections").classes("apb-section-title")
+                    ui.space()
+                    with (
+                        ui.button("Add section", icon="add").props("dense outline no-caps"),
+                        ui.menu(),
+                    ):
+                        for kind, label in ed.SECTION_KINDS:
+                            ui.menu_item(label, on_click=lambda k=kind: self._add(k))
+                if not isinstance(self.params.get("sections", []), list):
+                    self.form.field("sections")  # a ${variable}: keep the plain field
+                    self.list_box = ui.column()
+                else:
+                    self.list_box = ui.column().classes("w-full gap-1 apb-sections")
+            self.detail_box = ui.column().classes("grow h-full gap-2 p-4 overflow-auto apb-detail")
 
     def _refresh_items(self) -> None:
-        """Read the items again and rebuild the items list."""
+        """Read the items again and rebuild the items list and the summary."""
         self.infos = {i.name: i for i in self.get_items()}
         self._render_items()
+        self._render_summary()
 
     # ---- items ----------------------------------------------------------------------------
 
@@ -219,7 +297,9 @@ class ReportPanel:
                     else:
                         if changes:
                             self._commit(ed.rename_items(self.sections, changes))
-                        self.rebuild()
+                        self._refresh_items()
+                        self._render_list()
+                        self._render_detail()
                         return
             self._render_items()
         finally:
@@ -242,35 +322,35 @@ class ReportPanel:
     def _row(self, index: int, messages: list[str]) -> None:
         section = self.sections[index]
         is_open = index == self.open_index
-        with ui.card().props("flat bordered").classes("w-full p-1 gap-0 apb-section"):
-            with ui.row().classes("w-full items-center no-wrap gap-1"):
-                ui.label(str(index + 1)).classes("text-[10px] text-slate-400 w-4 text-right")
-                ui.icon(KIND_ICONS.get(str(section.get("kind")), "notes"), size="xs").classes(
-                    "text-slate-600"
-                )
-                summary = ui.label(ed.describe(section)).classes(
-                    "text-xs grow cursor-pointer truncate apb-section-summary"
-                    + (" font-medium" if is_open else "")
-                )
-                summary.on("click", lambda _e, i=index: self._toggle(i))
-                warning = ui.icon("warning", color="amber-8", size="xs").classes(
-                    "apb-section-warning"
-                )
-                self._set_warning(warning, messages)
-                for icon, tip, action in (
-                    ("arrow_upward", "Move up", lambda i=index: self._move(i, -1)),
-                    ("arrow_downward", "Move down", lambda i=index: self._move(i, 1)),
-                    ("content_copy", "Duplicate", lambda i=index: self._duplicate(i)),
-                    ("delete", "Delete", lambda i=index: self._delete(i)),
-                ):
-                    ui.button(icon=icon, on_click=action).props(
-                        f'flat dense size=xs aria-label="{tip}"'
-                    ).tooltip(tip)
-            body = ui.column().classes("w-full gap-1 p-1 apb-section-body")
-            body.set_visibility(is_open)
-        self._rows.append(_Row(summary, warning, body))
-        if is_open:
-            self._render_body(index)
+        with (
+            ui.card()
+            .props("flat bordered")
+            .classes(
+                "w-full p-1 gap-0 apb-section" + (" bg-blue-50 apb-section-open" if is_open else "")
+            ),
+            ui.row().classes("w-full items-center no-wrap gap-1"),
+        ):
+            ui.label(str(index + 1)).classes("text-[10px] text-slate-400 w-4 text-right")
+            ui.icon(KIND_ICONS.get(str(section.get("kind")), "notes"), size="xs").classes(
+                "text-slate-600"
+            )
+            summary = ui.label(ed.describe(section)).classes(
+                "text-xs grow cursor-pointer truncate apb-section-summary"
+                + (" font-medium" if is_open else "")
+            )
+            summary.on("click", lambda _e, i=index: self._toggle(i))
+            warning = ui.icon("warning", color="amber-8", size="xs").classes("apb-section-warning")
+            self._set_warning(warning, messages)
+            for icon, tip, action in (
+                ("arrow_upward", "Move up", lambda i=index: self._move(i, -1)),
+                ("arrow_downward", "Move down", lambda i=index: self._move(i, 1)),
+                ("content_copy", "Duplicate", lambda i=index: self._duplicate(i)),
+                ("delete", "Delete", lambda i=index: self._delete(i)),
+            ):
+                ui.button(icon=icon, on_click=action).props(
+                    f'flat dense size=xs aria-label="{tip}"'
+                ).tooltip(tip)
+        self._rows.append(_Row(summary, warning))
 
     @staticmethod
     def _set_warning(icon: ui.icon, messages: list[str]) -> None:
@@ -281,6 +361,7 @@ class ReportPanel:
     def _refresh_header(self) -> None:
         """Update summaries and warnings of all rows (no widget is rebuilt)."""
         self.infos = {i.name: i for i in self.get_items()}
+        self._render_summary()
         problems = self._problems()
         for index, row in enumerate(self._rows):
             if index < len(self.sections):
@@ -288,25 +369,39 @@ class ReportPanel:
             self._set_warning(row.warning, [p.message for p in problems if p.index == index])
 
     def _toggle(self, index: int) -> None:
-        self.open_index = None if self.open_index == index else index
+        """Select a section: its settings are shown on the right."""
+        self.open_index = index
         self._render_list()
+        self._render_detail()
+
+    def _render_detail(self) -> None:
+        """The settings of the selected section, or a hint."""
+        box = self.detail_box
+        box.clear()
+        if self.open_index is None or self.open_index >= len(self.sections):
+            with box:
+                ui.label("Select a section on the left to edit it.").classes(
+                    "text-sm text-slate-500"
+                )
+            return
+        self._render_body(self.open_index)
 
     def _add(self, kind: str) -> None:
         index = len(self.sections) if self.open_index is None else self.open_index + 1
         self.open_index = index
         self._commit(ed.insert(self.sections, index, ed.new_section(kind)))
-        self._render_list()
+        self._after_structure_change()
 
     def _move(self, index: int, delta: int) -> None:
         if self.open_index == index:
             self.open_index = max(0, min(index + delta, len(self.sections) - 1))
         self._commit(ed.move(self.sections, index, delta))
-        self._render_list()
+        self._after_structure_change()
 
     def _duplicate(self, index: int) -> None:
         self.open_index = index + 1
         self._commit(ed.duplicate(self.sections, index))
-        self._render_list()
+        self._after_structure_change()
 
     def _delete(self, index: int) -> None:
         self.open_index = None
@@ -315,16 +410,25 @@ class ReportPanel:
 
     def _refresh_items_after_delete(self) -> None:
         self._render_items()
+        self._after_structure_change()
+
+    def _after_structure_change(self) -> None:
+        """Rebuild the list, the selected section and the summary."""
         self._render_list()
+        self._render_detail()
+        self._render_summary()
 
     # ---- the fields of one section --------------------------------------------------------
 
     def _render_body(self, index: int) -> None:
-        body = self._rows[index].body
+        body = self.detail_box
         body.clear()
         section = self.sections[index]
         kind = str(section.get("kind"))
         with body:
+            ui.label(f"Section {index + 1} · {ed.describe(section)}").classes(
+                "text-sm font-medium text-slate-700 truncate w-full"
+            )
             match kind:
                 case "heading":
                     self._text(index, "text", "Heading text")

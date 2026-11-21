@@ -129,3 +129,25 @@ sub-steps. Screenshots: [`panels/after/`](panels/after/), made with
 | table.constants | 650 | 439 |
 | table.read_csv | 645 | 261 |
 | table.filter | 412 | 223 |
+
+### 4.4 Word report — design
+
+- **Side panel:** *Output file*; a summary card "20 sections · 11 items", with the number of
+  problems (sections with warnings, items used nowhere, report-level messages) and the first
+  problem; **Open editor**; *Advanced*: base document.
+- **Editor dialog** (80 % × 85 % of the window, over the canvas), title "Report editor —
+  *label*", three tabs:
+  - *Sections*: the section list on the left (40 %, full summaries, add / move / duplicate
+    / delete as today) and the settings of the selected section on the right — no more
+    accordion inside a narrow column;
+  - *Items*: the connected items with their names (rename as today);
+  - *Document*: title, document number, revision, author, date (the metadata).
+- Every change is stored at once, as before; *Close* just closes the dialog and the summary
+  in the side panel is updated. The pipeline file format does not change.
+
+### 4.4 Word report — done (2026-11-21)
+
+As designed above. Side panel 2270 px → 381 px. The dialog keeps the selected section
+while it is open; the summary of the side panel is updated on every change and when the
+dialog closes. The `sections` parameter given as a `${variable}` still gets its plain field
+(in the *Sections* tab).
