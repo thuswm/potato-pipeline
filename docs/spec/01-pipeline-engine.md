@@ -22,7 +22,7 @@ how a pipeline is executed, cached and saved.
 | ENG-11 | Progress/log events are emitted (used by GUI and CLI) | M |
 | ENG-12 | Block registry discovers built-in blocks and blocks from installed packages via Python entry points (`apb.blocks`) | S |
 | ENG-13 | Relative file paths in a pipeline are resolved relative to the pipeline file | M |
-| ENG-14 | Pipeline-level **variables** (e.g. `h5_file`, `allowable`) that block parameters can reference as `${name}`; overridable from the CLI | S |
+| ENG-14 | Pipeline-level **variables** (e.g. `h5_file`, `doc_number`) that block parameters can reference as `${name}`; overridable from the CLI. The constants of Constants blocks are available the same way (spec 03 §3.5) | S |
 | ENG-15 | Pipeline setting `default_unit_system` (`SI` / `SI_mm`), used as default by input blocks (spec 00 §5.1) | M |
 | ENG-16 | Macro blocks (sub-pipeline as reusable block) | L |
 | ENG-18 | Block outputs are stored on disk and restored when a pipeline is opened; stored outputs can be cleared (spec 08) | M |

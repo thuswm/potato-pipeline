@@ -40,7 +40,10 @@ class Constant(Block[ConstantParams]):
     type_id = "table.constant"
     category = "Input/Values"
     title = "Constant"
-    description = "A number with optional unit, e.g. an allowable stress or a safety factor."
+    description = (
+        "A number with optional unit, e.g. an allowable stress or a safety factor. "
+        "For several values use Constants."
+    )
     outputs = (Port("value", PortType.SCALAR, label="Value"),)
     Params = ConstantParams
 

@@ -5,7 +5,8 @@ Modal results, global loads and local loads from the real MSC Nastran files in
 are in the pipeline as *MSC Nastran analysis* blocks in run mode ``never`` (the supplied
 results are used, Nastran is not started) and their messages are stacked into one table for
 the report. All numbers that are not results (requirement, safety factor, allowables) are
-made up.
+made up; the requirement limit and the safety factor are in the Constants block
+*Project constants*.
 
 Usage::
 
@@ -37,9 +38,7 @@ def build() -> PipelineModel:
     p.metadata.title = "Test case: modal analysis and CBUSH margins (real Nastran files)"
     p.metadata.created = "2026-11-15"
     p.settings.default_unit_system = UnitSystem.SI  # the Nastran models are in m, kg, N
-    p.variables.update(
-        {"min_frequency": 20.0, "safety_factor": 1.5, "doc_number": "APB-TC-001", "revision": "A"}
-    )
+    p.variables.update({"doc_number": "APB-TC-001", "revision": "A"})
 
     def block(
         type_id: str, block_id: str, label: str, x: float, y: float, **params: object
@@ -71,14 +70,26 @@ def build() -> PipelineModel:
         unit_system="SI",
     )
     block("table.pick", "f1", "Lowest frequency", 330, 40, column="FREQUENCY", row="min")
+    # The project constants (spec 03 §3.5): requirement limit and safety factor
     block(
-        "table.constant",
-        "fmin",
-        "Required frequency",
-        330,
-        140,
-        value="${min_frequency}",
-        unit="Hz",
+        "table.constants",
+        "const",
+        "Project constants",
+        40,
+        180,
+        constants=[
+            {
+                "name": "f_min",
+                "value": 20.0,
+                "unit": "Hz",
+                "description": "REQ-DYN-001: lowest allowed first eigenfrequency (made up)",
+            },
+            {
+                "name": "SF",
+                "value": 1.5,
+                "description": "Safety factor on the CBUSH loads (made up)",
+            },
+        ],
     )
     block(
         "check.requirement",
@@ -101,12 +112,11 @@ def build() -> PipelineModel:
     p.connect("modal_run.h5", "modal.file")
     p.connect("modal.table", "f1.table")
     p.connect("f1.value", "req.value")
-    p.connect("fmin.value", "req.limit")
+    p.connect("const.f_min", "req.limit")
     p.connect("modal.table", "xlsx.tables")
 
     # Global and local loads: the same joints (locations) and the same margin script
     block("table.read_csv", "locs", "Locations", 40, 420, file="test_case/locations.csv")
-    block("table.constant", "sf", "Safety factor", 40, 520, value="${safety_factor}")
     ports = {
         "inputs": [
             {"name": "forces", "type": "Table"},
@@ -138,7 +148,7 @@ def build() -> PipelineModel:
         p.connect(f"{case}_run.h5", f"{case}_forces.file")
         p.connect(f"{case}_forces.table", f"{case}_margins.forces")
         p.connect("locs.table", f"{case}_margins.locations")
-        p.connect("sf.value", f"{case}_margins.safety_factor")
+        p.connect("const.SF", f"{case}_margins.safety_factor")
 
     # The messages of the three analyses in one table
     block("table.concat", "msgs", "Nastran messages", 620, 800, add_source_column=True)
@@ -153,8 +163,14 @@ def build() -> PipelineModel:
             "kind": "paragraph",
             "text": "This report presents a modal analysis and the margins of safety of the "
             "CBUSH elements of an example structure (fake data, real MSC Nastran result files). "
-            "The first eigenfrequency must be higher than {min_frequency:.1f}; the safety "
-            "factor on the CBUSH loads is {safety_factor:.2f}.",
+            "The first eigenfrequency must be higher than {f_min:.1f}; the safety "
+            "factor on the CBUSH loads is {SF:.2f}.",
+        },
+        {
+            "kind": "table",
+            "item": "constants",
+            "caption": "Constants used in this analysis",
+            "columns": ["NAME", "VALUE", "UNIT", "DESCRIPTION"],
         },
         {"kind": "units"},
         {"kind": "heading", "text": "2 Modal analysis"},
@@ -181,7 +197,7 @@ def build() -> PipelineModel:
         {
             "kind": "paragraph",
             "text": "Margins of safety of the CBUSH elements at each location for the global "
-            "load case (safety factor {safety_factor:.2f}).",
+            "load case (safety factor {SF:.2f}).",
         },
         {
             "kind": "table",
@@ -239,10 +255,11 @@ def build() -> PipelineModel:
     for source, name in (
         ("modal.table", "effective_mass"),
         ("f1.value", "f1"),
-        ("fmin.value", "min_frequency"),
+        ("const.f_min", ""),  # the item takes the constant's name
+        ("const.table", "constants"),
         ("req.result", "requirement"),
         ("req.status", "req_status"),
-        ("sf.value", "safety_factor"),
+        ("const.SF", ""),
         ("global_margins.margins", "global_margins"),
         ("global_margins.min_ms", "min_ms_global"),
         ("local_margins.margins", "local_margins"),

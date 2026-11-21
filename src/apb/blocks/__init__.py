@@ -15,6 +15,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
     from apb.blocks.nastran.blocks import BLOCKS as NASTRAN
     from apb.blocks.python.block import BLOCKS as PYTHON
     from apb.blocks.report.block import BLOCKS as REPORT
+    from apb.blocks.table.constants import BLOCKS as CONSTANTS
     from apb.blocks.table.excel import BLOCKS as EXCEL
     from apb.blocks.table.loadcases import BLOCKS as LOADCASES
     from apb.blocks.table.readers import BLOCKS as READERS
@@ -25,6 +26,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
         *ANALYSIS,
         *NASTRAN,
         *READERS,
+        *CONSTANTS,
         *VALUES,
         *TRANSFORM,
         *LOADCASES,

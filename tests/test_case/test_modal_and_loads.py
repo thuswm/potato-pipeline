@@ -22,11 +22,13 @@ PIPELINE = EXAMPLES / "test_case.apb.json"
 HIGHLIGHT = "FFC7CE"
 
 
-def run(tmp_path: Path, **variables: float):
+def run(tmp_path: Path, **overrides: float):
+    """Run the test case; ``overrides`` change constants like ``apb run --set`` (CON-09)."""
     pipeline = load_pipeline(PIPELINE)
-    pipeline.variables.update(variables)
     executor = Executor(default_registry())
-    result = executor.run(pipeline, EXAMPLES, output_dir=tmp_path, pipeline_file=PIPELINE)
+    result = executor.run(
+        pipeline, EXAMPLES, output_dir=tmp_path, pipeline_file=PIPELINE, overrides=overrides
+    )
     return pipeline, executor, result
 
 
@@ -49,7 +51,7 @@ def test_pipeline_file_is_what_the_generator_writes():
 def test_whole_pipeline_runs(outcome):
     _, result = outcome
     assert result.ok
-    assert len(result.results) == 16
+    assert len(result.results) == 15
 
 
 def test_the_analyses_check_their_f06_files(outcome):
@@ -175,7 +177,10 @@ def test_word_report(outcome):
         "Traceability",
     ]
 
-    requirement, modal, global_margins, local_margins = (table_text(t) for t in doc.tables[1:5])
+    constants = table_text(doc.tables[1])
+    assert constants[0] == ["NAME", "VALUE", "UNIT", "DESCRIPTION"]
+    assert [row[:3] for row in constants[1:]] == [["f_min", "20", "Hz"], ["SF", "1.5", ""]]
+    requirement, modal, global_margins, local_margins = (table_text(t) for t in doc.tables[2:6])
     assert requirement[0] == [
         "REQUIREMENT",
         "VALUE [Hz]",
@@ -192,11 +197,11 @@ def test_word_report(outcome):
     assert global_margins[6][3:] == ["500", "0", "6.33"]
     assert len(local_margins) == 9
     assert local_margins[1][3:] == ["0", "0", ""]  # no margin: empty cell, not "nan"
-    assert all(shaded(t) == 0 for t in doc.tables[1:5])  # nothing fails
-    messages = table_text(doc.tables[5])
+    assert all(shaded(t) == 0 for t in doc.tables[2:6])  # nothing fails
+    messages = table_text(doc.tables[6])
     assert messages[0] == ["SOURCE", "SEVERITY", "NUMBER", "MODULE", "TEXT"]
     assert messages[1][:4] == ["local_loads.f06", "WARNING", "9058", "SUBDMAP SESTATIC"]
-    assert len(messages) == 2 and len(doc.tables) == 6
+    assert len(messages) == 2 and len(doc.tables) == 7
 
     trace = " ".join(text)
     for needle in (
@@ -212,7 +217,7 @@ def test_word_report(outcome):
 
 
 def test_a_failing_requirement_is_reported_not_hidden(tmp_path):
-    _, _, result = run(tmp_path, min_frequency=30.0)
+    _, _, result = run(tmp_path, f_min=30.0)
     assert result.ok  # a failed requirement does not stop the pipeline
     assert result.output("req", "status") == "FAIL"
     assert result.output("req", "margin") == pytest.approx(25.7119 / 30 - 1, abs=1e-4)
@@ -220,7 +225,7 @@ def test_a_failing_requirement_is_reported_not_hidden(tmp_path):
     assert any(line.startswith("WARNING: requirement not met") for line in log)
     doc = Document(str(tmp_path / "output" / "test_case_report.docx"))
     assert "The first eigenfrequency is 25.71 Hz: the requirement is FAIL." in paragraphs(doc)
-    requirement = doc.tables[1]
+    requirement = doc.tables[2]
     assert table_text(requirement)[1][-1] == "FAIL"
     assert shaded(requirement) > 0  # the row of the failed requirement is highlighted
 
@@ -238,10 +243,9 @@ def test_second_run_takes_unchanged_blocks_from_the_cache(tmp_path):
         "msgs",
         "modal",
         "f1",
-        "fmin",
+        "const",
         "req",
         "locs",
-        "sf",
         "global_forces",
         "local_forces",
         "global_margins",

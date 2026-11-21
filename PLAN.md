@@ -62,7 +62,8 @@ data blocks need.
 A block holding the project constants (e.g. safety factors). Output: one table. Columns:
 Name, Value, Description. Proposal and points for the user to decide in the review:
 
-- [ ] 2.1 Spec: block, parameters, validation, how receiving blocks use a constant
+- [x] 2.1 Spec: block, parameters, validation, how receiving blocks use a constant
+      (draft: spec 03 §3.5)
   - Name rule: letter or `_` first, then letters, digits, `_` (no spaces), unique.
     Proposal: this Python identifier rule, so names also work in Python scripts
   - Value: number. *Decide:* allow text values too?
@@ -76,14 +77,17 @@ Name, Value, Description. Proposal and points for the user to decide in the revi
     changes. The Python block gets the constants as a table or dict argument
   - *Decide:* keep the pipeline variables dialog, or replace it with the Constants block
   - Report: the table goes into the Word report like any table (e.g. "Safety factors used")
-- [ ] 2.2 User review
-- [ ] 2.3 Block class + params model in `src/apb/blocks/table/` with validation; register it
-- [ ] 2.4 Table editor in the property panel (add/delete/move rows, inline validation)
-- [ ] 2.5 Engine: resolve `${name}` from connected constants (`engine/variables.py`, executor)
-- [ ] 2.6 `constants` input on requirement check / Python / report blocks
-- [ ] 2.7 Test case: Constants block with SF 1.5 and the 20 Hz requirement feeding the check,
+- [x] 2.2 User review (all proposals of spec 03 §3.5.1 accepted)
+- [x] 2.3 Block class + params model in `src/apb/blocks/table/` with validation; register it
+- [x] 2.4 Table editor in the property panel (add/delete/move rows, inline validation)
+- [x] 2.5 Engine: collect the constants of all Constants blocks while preparing the pipeline,
+      resolve `${name}` like variables, clash check, `--set` overrides (`engine/graph.py`)
+- [x] 2.6 One output port per constant (dynamic ports); rename keeps connectors and updates
+      `${name}` references; "used by" list. *(Replaces the earlier idea of a `constants`
+      input on the requirement check / Python / report blocks — see spec 03 §3.5.1)*
+- [x] 2.7 Test case: Constants block with SF 1.5 and the 20 Hz requirement feeding the check,
       margin scripts and report (`tools/make_test_case.py`, regenerate, spec 07)
-- [ ] 2.8 Tests (unit + browser) and commit
+- [x] 2.8 Tests (unit + browser) and commit
 
 ## Step 3 — Clean exit (spec 06 new section; first part of "hide the server")
 

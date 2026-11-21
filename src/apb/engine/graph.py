@@ -21,7 +21,7 @@ from apb.engine.block import AnyBlockType
 from apb.engine.model import BlockInstance, Connection, PipelineModel
 from apb.engine.registry import BlockRegistry
 from apb.engine.types import Port, types_compatible
-from apb.engine.variables import VariableError, resolve
+from apb.engine.variables import VariableError, referenced_names, resolve
 
 
 @dataclass(frozen=True)
@@ -187,6 +187,7 @@ def _prepare_block(
     registry: BlockRegistry,
     variables: Mapping[str, Any],
     issues: list[ValidationIssue],
+    overrides: Mapping[str, Any] | None = None,
 ) -> PreparedBlock:
     """Look up, migrate, resolve and validate one block instance."""
     if inst.type_id not in registry:
@@ -210,6 +211,8 @@ def _prepare_block(
         except Exception as exc:
             issues.append(ValidationIssue(f"Could not upgrade parameters: {exc}", inst.id))
             return prepared
+    if cls.provides_variables and overrides:
+        raw = cls.apply_overrides(raw, overrides)
     try:
         prepared.resolved_params = resolve(raw, variables)
     except VariableError as exc:
@@ -274,6 +277,75 @@ def _check_connection(
     return True
 
 
+def collect_variables(
+    pipeline: PipelineModel,
+    registry: BlockRegistry,
+    overrides: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[ValidationIssue]]:
+    """Collect the variables for ``${name}``: pipeline variables, blocks, overrides.
+
+    Blocks that provide variables (the Constants block, spec 03 §3.5.2) are read from
+    their stored parameters; nothing runs. Precedence: overrides (CLI ``--set``) > block
+    variables > pipeline variables.
+
+    Args:
+        pipeline: The pipeline.
+        registry: Available block types.
+        overrides: Values that win over everything else.
+
+    Returns:
+        ``(variables, issues)``: issues for name clashes (CON-08) and for ``${...}`` inside
+        a providing block's parameters. Invalid providing blocks contribute nothing; their
+        parameter errors are reported by :func:`prepare`.
+    """
+    issues: list[ValidationIssue] = []
+    provided: dict[str, Any] = {}
+    owner: dict[str, str] = {}
+    for inst in pipeline.blocks:
+        if inst.type_id not in registry:
+            continue
+        cls = registry.get(inst.type_id)
+        if not cls.provides_variables:
+            continue
+        name = inst.label or inst.id
+        refs = sorted(referenced_names(inst.params))
+        if refs:
+            issues.append(
+                ValidationIssue(
+                    f"Block '{name}' defines values for ${{name}} and cannot use ${{...}} "
+                    f"itself (found ${{{refs[0]}}})",
+                    inst.id,
+                )
+            )
+            continue
+        try:
+            params = cls.Params.model_validate(inst.params)
+        except ValidationError:
+            continue
+        for key, value in cls.provided_variables(params).items():
+            if key in owner:
+                issues.append(
+                    ValidationIssue(
+                        f"Constant {key!r} is defined twice: in block '{owner[key]}' and in "
+                        f"block '{name}'",
+                        inst.id,
+                    )
+                )
+                continue
+            if key in pipeline.variables:
+                issues.append(
+                    ValidationIssue(
+                        f"Constant {key!r} in block '{name}' has the same name as a pipeline "
+                        "variable (Pipeline > Variables and settings); rename one of them",
+                        inst.id,
+                    )
+                )
+                continue
+            owner[key] = name
+            provided[key] = value
+    return {**pipeline.variables, **provided, **(overrides or {})}, issues
+
+
 def prepare(
     pipeline: PipelineModel, registry: BlockRegistry, overrides: Mapping[str, Any] | None = None
 ) -> PreparedGraph:
@@ -287,15 +359,14 @@ def prepare(
     Returns:
         The prepared graph with all issues found.
     """
-    issues: list[ValidationIssue] = []
-    variables = {**pipeline.variables, **(overrides or {})}
+    variables, issues = collect_variables(pipeline, registry, overrides)
 
     blocks: dict[str, PreparedBlock] = {}
     for inst in pipeline.blocks:
         if inst.id in blocks:
             issues.append(ValidationIssue(f"Duplicate block id {inst.id!r}", inst.id))
             continue
-        blocks[inst.id] = _prepare_block(inst, registry, variables, issues)
+        blocks[inst.id] = _prepare_block(inst, registry, variables, issues, overrides)
 
     connections: list[Connection] = []
     sources_per_input: dict[tuple[str, str], int] = defaultdict(int)

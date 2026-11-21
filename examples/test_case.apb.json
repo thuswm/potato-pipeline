@@ -10,8 +10,6 @@
     "default_unit_system": "SI"
   },
   "variables": {
-    "min_frequency": 20.0,
-    "safety_factor": 1.5,
     "doc_number": "APB-TC-001",
     "revision": "A"
   },
@@ -62,17 +60,28 @@
       "notes": ""
     },
     {
-      "id": "fmin",
-      "type_id": "table.constant",
+      "id": "const",
+      "type_id": "table.constants",
       "type_version": 1,
-      "label": "Required frequency",
+      "label": "Project constants",
       "params": {
-        "value": "${min_frequency}",
-        "unit": "Hz"
+        "constants": [
+          {
+            "name": "f_min",
+            "value": 20.0,
+            "unit": "Hz",
+            "description": "REQ-DYN-001: lowest allowed first eigenfrequency (made up)"
+          },
+          {
+            "name": "SF",
+            "value": 1.5,
+            "description": "Safety factor on the CBUSH loads (made up)"
+          }
+        ]
       },
       "position": [
-        620.0,
-        140.0
+        330.0,
+        180.0
       ],
       "notes": ""
     },
@@ -119,20 +128,6 @@
       "position": [
         330.0,
         420.0
-      ],
-      "notes": ""
-    },
-    {
-      "id": "sf",
-      "type_id": "table.constant",
-      "type_version": 1,
-      "label": "Safety factor",
-      "params": {
-        "value": "${safety_factor}"
-      },
-      "position": [
-        330.0,
-        520.0
       ],
       "notes": ""
     },
@@ -309,7 +304,18 @@
           },
           {
             "kind": "paragraph",
-            "text": "This report presents a modal analysis and the margins of safety of the CBUSH elements of an example structure (fake data, real MSC Nastran result files). The first eigenfrequency must be higher than {min_frequency:.1f}; the safety factor on the CBUSH loads is {safety_factor:.2f}."
+            "text": "This report presents a modal analysis and the margins of safety of the CBUSH elements of an example structure (fake data, real MSC Nastran result files). The first eigenfrequency must be higher than {f_min:.1f}; the safety factor on the CBUSH loads is {SF:.2f}."
+          },
+          {
+            "kind": "table",
+            "item": "constants",
+            "caption": "Constants used in this analysis",
+            "columns": [
+              "NAME",
+              "VALUE",
+              "UNIT",
+              "DESCRIPTION"
+            ]
           },
           {
             "kind": "units"
@@ -358,7 +364,7 @@
           },
           {
             "kind": "paragraph",
-            "text": "Margins of safety of the CBUSH elements at each location for the global load case (safety factor {safety_factor:.2f})."
+            "text": "Margins of safety of the CBUSH elements at each location for the global load case (safety factor {SF:.2f})."
           },
           {
             "kind": "table",
@@ -482,8 +488,8 @@
     {
       "id": "c4",
       "source": {
-        "block": "fmin",
-        "port": "value"
+        "block": "const",
+        "port": "f_min"
       },
       "target": {
         "block": "req",
@@ -542,8 +548,8 @@
     {
       "id": "c9",
       "source": {
-        "block": "sf",
-        "port": "value"
+        "block": "const",
+        "port": "SF"
       },
       "target": {
         "block": "global_margins",
@@ -590,8 +596,8 @@
     {
       "id": "c13",
       "source": {
-        "block": "sf",
-        "port": "value"
+        "block": "const",
+        "port": "SF"
       },
       "target": {
         "block": "local_margins",
@@ -662,17 +668,29 @@
     {
       "id": "c19",
       "source": {
-        "block": "fmin",
-        "port": "value"
+        "block": "const",
+        "port": "f_min"
       },
       "target": {
         "block": "report",
         "port": "items"
       },
-      "name": "min_frequency"
+      "name": ""
     },
     {
       "id": "c20",
+      "source": {
+        "block": "const",
+        "port": "table"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "constants"
+    },
+    {
+      "id": "c21",
       "source": {
         "block": "req",
         "port": "result"
@@ -684,7 +702,7 @@
       "name": "requirement"
     },
     {
-      "id": "c21",
+      "id": "c22",
       "source": {
         "block": "req",
         "port": "status"
@@ -696,19 +714,19 @@
       "name": "req_status"
     },
     {
-      "id": "c22",
+      "id": "c23",
       "source": {
-        "block": "sf",
-        "port": "value"
+        "block": "const",
+        "port": "SF"
       },
       "target": {
         "block": "report",
         "port": "items"
       },
-      "name": "safety_factor"
+      "name": ""
     },
     {
-      "id": "c23",
+      "id": "c24",
       "source": {
         "block": "global_margins",
         "port": "margins"
@@ -720,7 +738,7 @@
       "name": "global_margins"
     },
     {
-      "id": "c24",
+      "id": "c25",
       "source": {
         "block": "global_margins",
         "port": "min_ms"
@@ -732,7 +750,7 @@
       "name": "min_ms_global"
     },
     {
-      "id": "c25",
+      "id": "c26",
       "source": {
         "block": "local_margins",
         "port": "margins"
@@ -744,7 +762,7 @@
       "name": "local_margins"
     },
     {
-      "id": "c26",
+      "id": "c27",
       "source": {
         "block": "msgs",
         "port": "table"

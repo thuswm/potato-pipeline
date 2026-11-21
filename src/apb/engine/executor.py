@@ -23,7 +23,7 @@ from typing import Any
 from apb.engine.block import BlockCancelledError, RunContext
 from apb.engine.events import BlockState, EventKind, EventSink, RunEvent
 from apb.engine.graph import PreparedBlock, PreparedGraph, ValidationIssue, prepare
-from apb.engine.model import PipelineModel
+from apb.engine.model import Connection, PipelineModel
 from apb.engine.registry import BlockRegistry
 from apb.engine.store import (
     OutputStore,
@@ -491,7 +491,8 @@ class Executor:
             return None
         incoming = graph.incoming(block_id)
         upstream = [
-            [c.target.port, c.source.port, c.name, keys.get(c.source.block, "")] for c in incoming
+            [c.target.port, c.source.port, c.name, self._source_key(graph, c, keys)]
+            for c in incoming
         ]
         base = make_ctx.pipeline_dir
         delivered = sorted(
@@ -516,6 +517,16 @@ class Executor:
             default=str,
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _source_key(graph: PreparedGraph, conn: Connection, keys: Mapping[str, str]) -> str:
+        """Key of the value on a connector: the port's own fingerprint, else the block's key."""
+        source = graph.blocks[conn.source.block]
+        if source.cls is not None and source.params is not None:
+            own = source.cls.port_fingerprint(source.params, conn.source.port)
+            if own is not None and conn.source.block in keys:
+                return f"port:{own}"
+        return keys.get(conn.source.block, "")
 
     def _skip(self, block_id: str, reason: str) -> BlockResult:
         """Mark a block as skipped."""

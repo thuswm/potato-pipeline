@@ -30,14 +30,15 @@ joint definitions `examples/test_case/locations.csv`, Nastran files `examples/fe
    MODE, FREQUENCY [Hz], T1–T3 [kg], R1–R3 [kg·m²]` (10 modes).
 2. Branch to Excel (`table.write_excel`, sheet "Effective mass") and to the report.
 3. *Pick value* (`FREQUENCY`, `min`) → 25.71 Hz → *Requirement check* (`greater_than`,
-   limit `${min_frequency}`) → `PASS`, margin 0.286.
+   limit from the constant `f_min` = 20 Hz of *Project constants*) → `PASS`, margin 0.286.
 4. Next version: plots of the main global modes, chosen from the effective mass.
 
 **Global loads** (`global_loads`) and **local loads** (`local_loads`), identical structure
 1. *Nastran HDF5 results*: `ELEMENTAL/ELEMENT_FORCE/BUSH` → CBUSH forces `EID, SUBCASE, FX …
    MZ` (global: elements 17–19; local: 2–5).
 2. *Python* block with `scripts/cbush_margins.py` (the same file for both blocks), inputs
-   `forces`, `locations` (from *Read CSV*), `safety_factor`; outputs `margins` (Table),
+   `forces`, `locations` (from *Read CSV*), `safety_factor` (port `SF` of *Project
+   constants*); outputs `margins` (Table),
    `min_ms` (Scalar).
 3. The margin tables go into the same report.
 4. Next version: *load table → model update → Nastran run* in front of the analysis block
@@ -73,7 +74,9 @@ Joint B (M5 aluminium),,Z,5500,4000
 | `TENSION_ALLOWABLE`, `SHEAR_ALLOWABLE` | In the unit of the forces table (N) |
 
 **All allowables, the safety factor (1.5) and the requirement (20 Hz) are made-up values** to
-show the mechanics; they are pipeline variables or CSV data and are replaced by the analyst.
+show the mechanics; they are in the Constants block *Project constants* (spec 03 §3.5) or in
+the CSV data and are replaced by the analyst. Only the document number and revision are
+pipeline variables.
 
 ## 4. The margin script (example only)
 
@@ -117,7 +120,8 @@ meaningful local case, add mass or a force to `local_loads.bdf`.
 
 Built with the section editor; only what is placed appears (REP-11):
 
-1. **Title**, **1 Introduction** (text with `{min_frequency}` and `{safety_factor}`), **units**
+1. **Title**, **1 Introduction** (text with `{f_min}` and `{SF}`, the table "Constants used in
+   this analysis"), **units**
 2. **2 Modal analysis**: the effective mass table (`MODE, FREQUENCY, T1 … R3`, formats `0.00`
    for frequency, `0.0` for masses), the requirement table, and a sentence "The first
    eigenfrequency is {f1:.2f}: requirement {status}."
@@ -146,12 +150,14 @@ file is reproducible and a test compares it with the generator output).
 Mode plots, load table and model update blocks, Nastran/Abaqus run blocks, a real fastener
 criterion (separate project), local loads with non-zero results.
 
-The pipeline also uses the optional `limit` input: a *Constant* block "Required frequency"
-(`${min_frequency}`, unit Hz) feeds both the requirement check and the report text.
+The pipeline also uses the optional `limit` input: the Constants block *Project constants*
+(`f_min` = 20 Hz, `SF` = 1.5) feeds the requirement check, both margin scripts and the report
+(the two values by their ports, the whole table as item `constants`). Round 4 replaced the two
+*Constant* blocks and the variables `min_frequency` / `safety_factor` with it.
 
 ## 9. Open questions
 
 1. The requirement (20 Hz), safety factor (1.5) and allowables are placeholders: send the
-   numbers you want in the example, or replace them in the CSV and the pipeline variables.
+   numbers you want in the example, or replace them in the CSV and in *Project constants*.
 2. Should the Excel workbook also get the margin tables (one sheet each)? The notes ask for
    the effective mass table only; adding them is a one-line change of the pipeline.

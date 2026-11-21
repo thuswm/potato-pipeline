@@ -134,6 +134,8 @@ class Block[P: BaseModel](ABC):
     """Pydantic model of the block's parameters."""
     always_run: ClassVar[bool] = False
     """Never take outputs from the cache; for blocks that write files (Excel, report)."""
+    provides_variables: ClassVar[bool] = False
+    """The block defines variables for other blocks (see :meth:`provided_variables`)."""
 
     @abstractmethod
     def run(self, params: P, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
@@ -194,6 +196,55 @@ class Block[P: BaseModel](ABC):
             params: Validated parameters, or ``None`` if they are invalid.
         """
         return cls.outputs
+
+    @classmethod
+    def provided_variables(cls, params: BaseModel) -> dict[str, Any]:
+        """Return variables this block defines for ``${name}`` in all block parameters.
+
+        Used by blocks whose values are known without running, such as the Constants block
+        (spec 03 §3.5.2). Such a block's own parameters must not contain ``${...}``. The
+        values are collected while the pipeline is prepared, before any parameter is
+        resolved.
+
+        Args:
+            params: Validated parameters of the block instance.
+
+        Returns:
+            Name -> value (default: none).
+        """
+        return {}
+
+    @classmethod
+    def port_fingerprint(cls, params: BaseModel, port: str) -> str | None:
+        """Return a fingerprint of one output, if it is known from the parameters alone.
+
+        Downstream cache keys then depend on this output only, not on the whole block: a
+        change of one constant re-runs only the blocks connected to that constant's port
+        (spec 03 §3.5.1). ``None`` (the default) means "use the block's cache key".
+
+        Args:
+            params: Validated parameters of the block instance.
+            port: Output port name.
+        """
+        return None
+
+    @classmethod
+    def apply_overrides(
+        cls, params: dict[str, Any], overrides: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Return stored parameters with overridden variables applied (CLI ``--set``).
+
+        Only relevant for blocks that provide variables: an override of one of their
+        names must also change what the block itself outputs (spec 03 CON-09).
+
+        Args:
+            params: Stored parameters.
+            overrides: Name -> value from the command line.
+
+        Returns:
+            The parameters to use (default: unchanged).
+        """
+        return params
 
     @classmethod
     def migrate(cls, old_version: int, params: dict[str, Any]) -> dict[str, Any]:

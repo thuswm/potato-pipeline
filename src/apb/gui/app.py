@@ -23,6 +23,7 @@ from apb.blocks.nastran.blocks import Hdf5Results
 from apb.blocks.python.block import PythonBlock
 from apb.blocks.report import editing as report_editing
 from apb.blocks.report.block import WordReport
+from apb.blocks.table.constants import Constants
 from apb.engine.events import EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
@@ -31,6 +32,7 @@ from apb.engine.variables import VariableError, resolve
 from apb.gui import h5viewer
 from apb.gui.analysis_panel import AnalysisPanel
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
+from apb.gui.constants_panel import ConstantsPanel
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
 from apb.gui.forms import ParamForm, suffix_hint
@@ -306,6 +308,15 @@ class EditorPage:
                     open_in_editor=open_with_system,
                     rebuild=self._show_panel,
                 ).build()
+            elif cls is Constants:  # constants table (spec 03 §3.5.3)
+                ConstantsPanel(
+                    block.params,
+                    on_change=lambda name, value: self._set_param(block.id, name, value),
+                    rename=lambda old, new: self._rename_constant(block.id, old, new),
+                    users=lambda name: self.state.constant_users(block.id, name),
+                    taken=lambda: self.state.names_outside(block.id),
+                    confirm=lambda question: confirm(question, ok_label="Delete"),
+                ).build()
             else:
                 ParamForm(
                     cls.Params,
@@ -360,6 +371,18 @@ class EditorPage:
             title="Choose file", start=self.state.base_dir, suffix=suffix, save=suffix == ".py"
         )
         return self.state.relative_path(path) if path else None
+
+    def _rename_constant(self, block_id: str, old: str, new: str) -> list[str]:
+        """Rename a constant with its connectors and ``${name}`` references (CON-10)."""
+        changes = self.state.rename_constant(block_id, old, new)
+        self.runner.mark_edited(block_id)
+        block = self.state.pipeline.block(block_id)
+        self.canvas.replace_node(self.state.node_spec(block), self.state.connections_of(block_id))
+        self._log(
+            f"Renamed constant {old} to {new}" + (": " + "; ".join(changes) if changes else "")
+        )
+        self._show_issues()
+        return changes
 
     def _set_param(self, block_id: str, name: str, value: Any) -> None:
         block = self.state.pipeline.block(block_id)
@@ -623,7 +646,7 @@ class EditorPage:
     def _resolve_variables(self, value: Any) -> Any:
         """Replace ``${variable}`` references; undefined variables are left as they are."""
         try:
-            return resolve(value, self.state.pipeline.variables)
+            return resolve(value, self.state.variables())
         except VariableError:
             return value
 
@@ -762,7 +785,9 @@ class EditorPage:
             ui.label("Pipeline variables and settings").classes("text-lg font-medium")
             ui.label(
                 "Variables are used in block parameters as ${name}, and can be "
-                "overridden on the command line with --set name=value."
+                "overridden on the command line with --set name=value. Use them for file "
+                "names, document number and other text; put engineering values with units "
+                "(safety factors, allowables, limits) in a Constants block instead."
             ).classes("text-xs text-slate-500")
             container = ui.column().classes("w-full gap-1")
 

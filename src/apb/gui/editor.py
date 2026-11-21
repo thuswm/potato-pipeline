@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from apb.blocks.report.editing import ItemInfo, valid_item_name
 from apb.engine.block import AnyBlockType
-from apb.engine.graph import prepare
+from apb.engine.graph import collect_variables, prepare
 from apb.engine.model import (
     BlockInstance,
     Connection,
@@ -28,6 +28,7 @@ from apb.engine.model import (
 )
 from apb.engine.registry import BlockRegistry
 from apb.engine.types import Port, PortType, types_compatible
+from apb.engine.variables import referenced_names, rename_reference
 
 PIPELINE_SUFFIX = ".apb.json"
 
@@ -445,6 +446,123 @@ class EditorState:
         if old != name:
             self._changed()
         return {before[c]: after[c] for c in before if before[c] != after[c]}
+
+    # ---- constants (spec 03 §3.5) ----------------------------------------------------------
+
+    def variables(self) -> dict[str, Any]:
+        """Return the values of ``${name}``: pipeline variables and constants (CON-07)."""
+        return collect_variables(self.pipeline, self.registry)[0]
+
+    def names_outside(self, block_id: str) -> set[str]:
+        """Names a constant of this block may not take: variables and other constants."""
+        names = set(self.pipeline.variables)
+        for block in self.pipeline.blocks:
+            cls = self.block_class(block)
+            if block.id == block_id or cls is None or not cls.provides_variables:
+                continue
+            for row in block.params.get("constants") or []:
+                if isinstance(row, dict) and isinstance(row.get("name"), str):
+                    names.add(row["name"])
+        return names
+
+    def _label(self, block: BlockInstance) -> str:
+        cls = self.block_class(block)
+        return block.label or (cls.title if cls else block.type_id)
+
+    def constant_users(self, block_id: str, name: str) -> list[str]:
+        """Describe where a constant is used: connectors from its port and ``${name}`` (CON-10).
+
+        Args:
+            block_id: The Constants block.
+            name: The constant.
+
+        Returns:
+            E.g. ``["Frequency requirement (limit)", "Design loads (${SF})"]``, sorted.
+        """
+        users: set[str] = set()
+        for conn in self.pipeline.connections:
+            if conn.source.block == block_id and conn.source.port == name:
+                target = self.pipeline.block(conn.target.block)
+                users.add(f"{self._label(target)} ({conn.target.port})")
+        for block in self.pipeline.blocks:
+            if block.id != block_id and name in referenced_names(block.params):
+                users.add(f"{self._label(block)} (${{{name}}})")
+        return sorted(users)
+
+    def rename_constant(self, block_id: str, old: str, new: str) -> list[str]:
+        """Rename a constant and everything that refers to it (spec 03 §3.5.3).
+
+        The row is renamed, connectors from its port move to the new port, ``${old}`` is
+        replaced in the parameters of every block, and report texts that refer to the
+        value through a connector without explicit name follow the new item name.
+
+        Args:
+            block_id: The Constants block.
+            old: Current name.
+            new: New name (checked by the block's name rule and for uniqueness).
+
+        Returns:
+            One line per change, for the log.
+
+        Raises:
+            EditError: If the name is invalid or already used.
+        """
+        from apb.blocks.report.editing import rename_items
+        from apb.blocks.table.constants import name_problem
+
+        block = self.pipeline.block(block_id)
+        rows = [dict(r) for r in block.params.get("constants") or []]
+        if old == new:
+            return []
+        problem = name_problem(new)
+        if problem:
+            raise EditError(problem)
+        if any(r.get("name") == new for r in rows) or new in self.variables():
+            raise EditError(f"The name {new!r} is already used")
+        if not any(r.get("name") == old for r in rows):
+            raise EditError(f"There is no constant {old!r}")
+
+        # Report items fed from this port: their names before the rename.
+        targets = {
+            (c.target.block, c.target.port)
+            for c in self.pipeline.connections
+            if c.source.block == block_id
+            and c.source.port == old
+            and self._is_multiple(c.target.block, c.target.port)
+        }
+        before = {t: self._item_names(*t) for t in targets}
+
+        changes: list[str] = []
+        block.params["constants"] = [
+            {**r, "name": new} if r.get("name") == old else r for r in rows
+        ]
+        for conn in self.pipeline.connections:
+            if conn.source.block == block_id and conn.source.port == old:
+                conn.source = PortRef(block=block_id, port=new)
+                target = self.pipeline.block(conn.target.block)
+                changes.append(f"connector to {self._label(target)} ({conn.target.port})")
+        for other in self.pipeline.blocks:
+            if other.id != block_id and old in referenced_names(other.params):
+                other.params = rename_reference(other.params, old, new)
+                changes.append(f"${{{old}}} in {self._label(other)}")
+        for (target_id, port), names in before.items():
+            after = self._item_names(target_id, port)
+            renames = {b: a for b, a in zip(names, after, strict=False) if b != a}
+            target = self.pipeline.block(target_id)
+            if renames and isinstance(target.params.get("sections"), list):
+                target.params["sections"] = rename_items(target.params["sections"], renames)
+                changes.append(f"item names in the sections of {self._label(target)}")
+        self._changed()
+        return changes
+
+    def _is_multiple(self, block_id: str, port: str) -> bool:
+        """Return ``True`` if an input takes several connectors (named items)."""
+        inputs, _ = self.ports(self.pipeline.block(block_id))
+        return any(p.name == port and p.multiple for p in inputs)
+
+    def _item_names(self, block_id: str, port: str) -> list[str]:
+        """Item names at a ``multiple`` input, in connector order (a rename keeps the order)."""
+        return [i.name for i in self.item_infos(block_id, port)]
 
     def _creates_cycle(self, source: str, target: str) -> bool:
         sorter: graphlib.TopologicalSorter[str] = graphlib.TopologicalSorter()

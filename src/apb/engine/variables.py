@@ -96,3 +96,26 @@ def parse_assignment(text: str) -> tuple[str, Any]:
     except json.JSONDecodeError:
         value = raw
     return name.strip(), value
+
+
+def rename_reference(value: Any, old: str, new: str) -> Any:
+    """Return a parameter value with every ``${old}`` replaced by ``${new}``.
+
+    Escaped ``$${old}`` (a literal text) is left alone. Lists and dicts are processed
+    recursively; other values are returned unchanged.
+
+    Args:
+        value: Parameter value.
+        old: Current name.
+        new: New name.
+    """
+    if isinstance(value, str):
+        placeholder = "\x00"
+        text = value.replace(_ESCAPE, placeholder)
+        text = text.replace("${" + old + "}", "${" + new + "}")
+        return text.replace(placeholder, _ESCAPE)
+    if isinstance(value, list):
+        return [rename_reference(v, old, new) for v in value]
+    if isinstance(value, dict):
+        return {k: rename_reference(v, old, new) for k, v in value.items()}
+    return value

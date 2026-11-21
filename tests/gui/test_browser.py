@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -679,7 +680,7 @@ def test_report_editor_refuses_a_name_in_use_and_flags_missing_items(page):
 
 @pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
 def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
-    assert counts(page) == (16, 26)
+    assert counts(page) == (15, 27)
     assert node(page, "Frequency requirement").locator(".apb-sub").inner_text() == (
         "Requirement check"
     )
@@ -707,10 +708,11 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
     assert names == [
         "effective_mass",
         "f1",
-        "min_frequency",
+        "f_min",
+        "constants",
         "requirement",
         "req_status",
-        "safety_factor",
+        "SF",
         "global_margins",
         "min_ms_global",
         "local_margins",
@@ -718,7 +720,7 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
     ]
     assert page.locator(".apb-unused").count() == 0
     assert page.locator(".apb-section-warning:visible").count() == 0
-    open_section(page, 7)  # the modal effective mass table: columns known from the run
+    open_section(page, 8)  # the modal effective mass table: columns known from the run
     assert "FREQUENCY" in page.locator(".apb-columns").inner_text()
     assert page.locator(".apb-format-column input").count() == 8
 
@@ -753,7 +755,7 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 
     reopen(page, server)
     assert states(page) == {"apb-state-done"}  # recognised as run, nothing was run
-    assert "Stored outputs found for 16 of 16 blocks" in log_text(page)
+    assert "Stored outputs found for 15 of 15 blocks" in log_text(page)
     assert not (workdir / "output" / "x").exists()
 
     select(page, "Frequency requirement")
@@ -772,7 +774,7 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 
     # Run: the blocks that are up to date come from the store; the writers run again.
     run_all(page)
-    assert "14 up to date" in log_text(page)
+    assert "13 up to date" in log_text(page)
     assert states(page) == {"apb-state-done"}
 
 
@@ -780,13 +782,14 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 def test_changes_after_reopening_make_results_outdated(page, server):
     run_all(page)
     reopen(page, server)
-    select(page, "Required frequency")
-    value = page.get_by_role("textbox", name="Value *")
+    select(page, "Project constants")
+    value = page.locator(".apb-constant-row").first.locator(".apb-constant-value input")
     value.fill("30")
     value.press("Enter")
     page.wait_for_timeout(1000)
-    assert state_of(page, "Required frequency") == "stale"
+    assert state_of(page, "Project constants") == "stale"
     assert state_of(page, "Frequency requirement") == "stale"
+    assert state_of(page, "Global margins") == "done"  # uses SF only, not f_min
     assert state_of(page, "Modal results") == "done"
     select(page, "Frequency requirement")
     assert "Outdated" in page.locator(".apb-origin").first.inner_text()
@@ -829,9 +832,9 @@ def test_stored_outputs_dialog_and_clear_all(page, workdir: Path):
     page.get_by_text("Stored outputs…", exact=True).click()
     dialog = page.locator(".q-dialog")
     assert ".apb/test_case" in dialog.locator(".apb-stored-folder").inner_text()
-    assert "16 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
+    assert "15 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
     dialog.get_by_role("button", name="Clear all…").click()
-    page.wait_for_selector("text=Delete the stored outputs of 16 block(s)")
+    page.wait_for_selector("text=Delete the stored outputs of 15 block(s)")
     page.get_by_role("button", name="Clear all", exact=True).click()
     page.wait_for_timeout(1000)
     assert {state_of(page, n) for n in ("Modal results", "Global margins", "Test case report")} == {
@@ -845,7 +848,9 @@ def test_an_unsaved_pipeline_is_stored_at_the_first_save(page, workdir: Path):
     page.get_by_role("button", name="File", exact=True).click()
     page.get_by_text("New", exact=True).click()
     page.wait_for_timeout(500)
-    page.locator(".q-drawer--left .q-expansion-item__content .q-item", has_text="Constant").click()
+    page.locator(
+        ".q-drawer--left .q-expansion-item__content .q-item", has_text=re.compile(r"^Constant$")
+    ).click()
     page.wait_for_selector(".drawflow-node")
     value = page.get_by_role("textbox", name="Value *")  # the new block's panel is open
     value.fill("2.5")
@@ -1069,3 +1074,79 @@ def test_h5_viewer_opens_from_the_block_panel_and_the_file_menu(page, workdir: P
     viewer.wait_for_selector(".apb-h5v-tree")
     assert "global_loads.h5 — HDF5 viewer" in viewer.title()
     viewer.close()
+
+
+# --------------------------------------------------------------------------------------
+# Constants block (spec 03 §3.5)
+# --------------------------------------------------------------------------------------
+
+
+def constant_row(page, index: int):
+    return page.locator(".apb-constant-row").nth(index)
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_constants_panel_edit_add_rename_delete(page, workdir: Path):
+    select(page, "Project constants")
+    assert page.locator(".apb-constant-row").count() == 2
+    assert constant_row(page, 0).locator(".apb-constant-name input").input_value() == "f_min"
+    users = constant_row(page, 0).locator(".apb-constant-users").inner_text()
+    assert "Frequency requirement (limit)" in users and "Test case report (items)" in users
+    block = node(page, "Project constants")
+    assert block.locator(".output").count() == 3  # table, f_min, SF
+
+    # A new constant: an invalid name is refused with a message, a valid one gets a port.
+    page.locator(".apb-constant-add").click()
+    page.wait_for_timeout(300)
+    new = constant_row(page, 2)
+    new.locator(".apb-constant-name input").fill("F F")
+    new.locator(".apb-constant-value input").fill("1.15")
+    new.locator(".apb-constant-value input").press("Enter")
+    page.wait_for_timeout(400)
+    assert "letters, digits" in constant_row(page, 2).locator(".apb-constant-error").inner_text()
+    assert block.locator(".output").count() == 3
+    constant_row(page, 2).locator(".apb-constant-name input").fill("FF")
+    constant_row(page, 2).locator(".apb-constant-name input").press("Enter")
+    page.wait_for_timeout(500)
+    assert block.locator(".output").count() == 4
+    assert "Not used yet" in constant_row(page, 2).locator(".apb-constant-users").inner_text()
+
+    # Rename SF: connectors stay, report text and margin script ports follow.
+    name = constant_row(page, 1).locator(".apb-constant-name input")
+    name.fill("SF_ult")
+    name.press("Enter")
+    page.wait_for_timeout(600)
+    assert page.get_by_text("Renamed SF to SF_ult").first.is_visible()
+    assert counts(page) == (15, 27)
+
+    # Delete the unused constant (no question asked), then save.
+    constant_row(page, 2).locator(".apb-constant-delete").click()
+    page.wait_for_timeout(400)
+    assert page.locator(".apb-constant-row").count() == 2
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save", exact=True).click()
+    page.wait_for_timeout(500)
+    saved = json.loads((workdir / "test_case.apb.json").read_text(encoding="utf-8"))
+    const = next(b for b in saved["blocks"] if b["id"] == "const")
+    assert [r["name"] for r in const["params"]["constants"]] == ["f_min", "SF_ult"]
+    report = next(b for b in saved["blocks"] if b["id"] == "report")
+    assert "{SF_ult:.2f}" in json.dumps(report["params"]["sections"])
+    assert any(c["source"] == {"block": "const", "port": "SF_ult"} for c in saved["connections"])
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_deleting_a_used_constant_asks_first(page):
+    select(page, "Project constants")
+    constant_row(page, 0).locator(".apb-constant-delete").click()
+    page.wait_for_timeout(300)
+    dialog = page.locator(".q-dialog")
+    assert "f_min is used by Frequency requirement (limit)" in dialog.inner_text()
+    dialog.get_by_role("button", name="Cancel").click()
+    page.wait_for_timeout(300)
+    assert page.locator(".apb-constant-row").count() == 2
+    constant_row(page, 0).locator(".apb-constant-delete").click()
+    page.wait_for_timeout(300)
+    page.locator(".q-dialog").get_by_role("button", name="Delete").click()
+    page.wait_for_timeout(500)
+    assert page.locator(".apb-constant-row").count() == 1
+    assert counts(page) == (15, 25)  # its two connectors are gone
