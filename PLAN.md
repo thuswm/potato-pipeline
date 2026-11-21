@@ -120,7 +120,8 @@ The right-hand panel is hard to read and cluttered.
 - [x] 4.3 Common frame (spec 11 §7): header, status line, Settings/Advanced/Ports, tooltips,
       resizable 400 px panel, short paths, titles; `tools/panel_screenshots.py`
 - [x] 4.4 Word report: side panel summary + editor dialog (Sections | Items | Document)
-- [ ] 4.5+ One sub-step per panel (spec note → code → screenshots → user check), e.g.
+- [x] 4.5 Nastran analysis: status on top, computer settings under Advanced
+- [ ] 4.6+ One sub-step per panel (spec note → code → screenshots → user check), e.g.
       HDF5 results, Nastran analysis, Python, Word report, requirement check, table blocks,
       fastener loads, Excel, Constants
 - [ ] 4.x Commit after each panel or group of panels, as the user asks

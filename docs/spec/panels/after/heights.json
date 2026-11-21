@@ -1,7 +1,7 @@
 {
   "nastran.run": {
     "block": "Modal analysis",
-    "height_px": 766
+    "height_px": 525
   },
   "nastran.hdf5_results": {
     "block": "Modal results",

@@ -928,7 +928,7 @@ def test_analysis_blocks_in_the_gui(page):
     assert "HDF5 request found" in page.locator(".apb-analysis-input").inner_text()
     results = page.locator(".apb-analysis-results").inner_text()
     assert "local_loads.f06 ✔" in results and "local_loads.h5 ✔" in results
-    assert page.get_by_role("button", name="Open f06").is_visible()
+    assert page.get_by_role("button", name="Open .f06").is_visible()
     assert page.get_by_role("button", name="Open folder").is_visible()
 
     page.get_by_role("tab", name="messages").click()
@@ -949,6 +949,9 @@ def test_analysis_panel_checks_the_program_and_the_input(page, fake_nastran, wor
     select(page, "Modal analysis")
     program = page.locator(".apb-analysis-program")
     assert program.count() == 1  # found or not on this computer: it says which
+    assert not page.get_by_role("textbox", name="Path").is_visible()  # folded (spec 11 §4.5)
+    page.locator(".apb-advanced").get_by_text("Advanced").click()
+    page.wait_for_timeout(300)
     path_box = page.get_by_role("textbox", name="Path")
     path_box.fill(str(workdir / "no_such_folder"))
     path_box.press("Enter")
@@ -958,7 +961,10 @@ def test_analysis_panel_checks_the_program_and_the_input(page, fake_nastran, wor
     path_box.press("Enter")
     page.wait_for_timeout(500)
     found = page.locator(".apb-analysis-program").inner_text()
-    assert str(fake_nastran.bin) in found and "(path: block)" in found
+    assert " ".join(found.split()).endswith("/nastran (path: block)")  # shortened
+    program.hover()
+    page.wait_for_timeout(500)
+    assert str(fake_nastran.bin) in page.locator(".q-tooltip").inner_text()
     command = page.get_by_role("textbox", name="Command")
     command.fill("nastran {input} jid={job}")
     command.press("Enter")

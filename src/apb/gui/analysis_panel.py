@@ -13,16 +13,9 @@ from typing import Any
 
 from nicegui import ui
 
-from apb.blocks.nastran.analysis import NastranRunParams
+from apb.blocks.nastran.analysis import NastranRun, NastranRunParams
 from apb.blocks.nastran.status import AnalysisStatus, analysis_status
-from apb.gui.forms import ParamForm
-
-#: Help shown under the run mode (one line per mode).
-MODE_HELP = (
-    "never: use the existing .f06 and .h5 as they are · "
-    "if_changed: run Nastran when the input changed · "
-    "always: run Nastran every time the pipeline is run"
-)
+from apb.gui.forms import ParamForm, short_path
 
 
 class AnalysisPanel:
@@ -59,16 +52,18 @@ class AnalysisPanel:
         self.refresh()
 
     def build(self) -> None:
-        """Create the widgets in the current NiceGUI context."""
+        """Create the widgets in the current NiceGUI context (spec 11 §4.5).
+
+        *Settings*: input deck, status lines, run mode, what fails the block. *Advanced*
+        (folded): command, path, options, time limit and message settings, which are
+        usually set once per computer.
+        """
         self.form.field("input_file")
-        self.status_box = ui.column().classes("w-full gap-0 apb-analysis-status")
+        self.status_box = ui.column().classes("w-full gap-0.5 apb-analysis-status")
         self.refresh()
         self.form.field("run_mode")
-        ui.label(MODE_HELP).classes("text-[10px] text-slate-500 -mt-1")
-        for name in ("command", "path", "options", "timeout_minutes", "fail_on"):
-            self.form.field(name)
-        for name in ("ignore_messages", "include_information"):
-            self.form.field(name)
+        self.form.field("fail_on")
+        self.form.advanced(list(NastranRun.advanced_params))
 
     def refresh(self) -> None:
         """Compute the status again and show it."""
@@ -79,10 +74,14 @@ class AnalysisPanel:
 
     # ---- the status lines -----------------------------------------------------------------
 
-    def _line(self, label: str, text: str, tone: str = "text-slate-700", cls: str = "") -> None:
+    def _line(
+        self, label: str, text: str, tone: str = "text-slate-700", cls: str = "", tip: str = ""
+    ) -> None:
         with ui.row().classes("w-full no-wrap gap-2 items-start"):
             ui.label(label).classes("text-[10px] text-slate-500 w-14 shrink-0 mt-0.5")
-            ui.label(text).classes(f"text-xs break-all {tone} {cls}")
+            shown = ui.label(text).classes(f"text-xs break-words min-w-0 {tone} {cls}")
+            if tip:
+                shown.tooltip(tip)
 
     def _show(self, status: AnalysisStatus) -> None:
         if status.problem:
@@ -102,9 +101,10 @@ class AnalysisPanel:
             elif program.found:
                 self._line(
                     "Nastran",
-                    f"{program.found}   (path: {status.path_from})",
+                    f"{short_path(program.found)}   (path: {status.path_from})",
                     "text-green-800",
                     "apb-analysis-program",
+                    tip=str(program.found),
                 )
             else:
                 self._line(
@@ -148,10 +148,10 @@ class AnalysisPanel:
             f06 = next((r for r in status.results if r.name.endswith(".f06") and r.exists), None)
             if f06 is not None:
                 ui.button(
-                    "Open f06", icon="description", on_click=lambda: self.open_file(f06.path)
-                ).props("dense outline size=sm")
+                    "Open .f06", icon="description", on_click=lambda: self.open_file(f06.path)
+                ).props("dense flat no-caps size=sm")
             if status.deck is not None and status.deck.parent.is_dir():
                 folder = status.deck.parent
                 ui.button(
                     "Open folder", icon="folder_open", on_click=lambda: self.open_file(folder)
-                ).props("dense outline size=sm")
+                ).props("dense flat no-caps size=sm")
