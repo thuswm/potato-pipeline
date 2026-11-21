@@ -20,6 +20,9 @@ Two files are written (unit system ``SI_mm``: mm, N, MPa, t):
 * ``synthetic_fastener_joint.h5`` - lap joint with four CBUSH fasteners and two RBE2
   fasteners; four static subcases; CBUSH forces, MPC forces and grid point forces.
 
+Both files get an ``/INDEX/NASTRAN/RESULT`` group (row position and count per domain), as
+the real files have; the HDF5 viewer uses it to find the rows of a subcase (spec 10).
+
 Usage::
 
     python tools/make_synthetic_h5.py [output_dir]      # default: examples/data
@@ -103,6 +106,38 @@ def mark_synthetic(h5: h5py.File, description: str) -> None:
     h5.attrs["APB_DESCRIPTION"] = description
     h5.attrs["APB_UNIT_SYSTEM"] = "SI_mm"
     h5.attrs["APB_GENERATOR"] = "tools/make_synthetic_h5.py"
+
+
+def write_index(path: Path) -> None:
+    """Add the ``/INDEX/NASTRAN/RESULT`` group, as MSC Nastran writes it.
+
+    For every result dataset with a ``DOMAIN_ID`` field whose rows are grouped by domain,
+    one index row per domain gives ``DOMAIN_ID``, ``POSITION`` (first row) and ``LENGTH``
+    (number of rows). Datasets whose domains are not in consecutive rows get no index.
+
+    Args:
+        path: File written by one of the ``make_*`` functions (changed in place).
+    """
+    index_fields = [("DOMAIN_ID", "<i8"), ("POSITION", "<i8"), ("LENGTH", "<i8")]
+    with h5py.File(path, "a") as h5:
+        found: list[tuple[str, np.ndarray[Any, Any]]] = []
+
+        def visit(name: str, obj: Any) -> None:
+            is_result = isinstance(obj, h5py.Dataset) and name != "DOMAINS"
+            if is_result and "DOMAIN_ID" in (obj.dtype.names or ()):
+                found.append((name, obj.fields("DOMAIN_ID")[()]))
+
+        h5["NASTRAN/RESULT"].visititems(visit)
+        for name, dom in found:
+            starts = np.flatnonzero(np.r_[True, dom[1:] != dom[:-1]])
+            if len(np.unique(dom)) != len(starts):
+                continue  # a domain spread over several row groups: no index
+            lengths = np.diff(np.r_[starts, len(dom)])
+            rows = [
+                {"DOMAIN_ID": int(dom[s]), "POSITION": int(s), "LENGTH": int(n)}
+                for s, n in zip(starts, lengths, strict=True)
+            ]
+            write_table(h5, f"/INDEX/NASTRAN/RESULT/{name}", index_fields, rows)
 
 
 def static_domains(subcases: Sequence[int]) -> list[dict[str, Any]]:
@@ -752,6 +787,8 @@ def main(argv: Sequence[str]) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     make_plate(out_dir / "synthetic_plate.h5")
     make_fastener_joint(out_dir / "synthetic_fastener_joint.h5")
+    for name in ("synthetic_plate.h5", "synthetic_fastener_joint.h5"):
+        write_index(out_dir / name)
     print(f"Wrote synthetic .h5 files to {out_dir}")
     return 0
 

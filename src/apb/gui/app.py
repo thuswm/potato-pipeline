@@ -8,7 +8,9 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import webbrowser
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,7 @@ from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
 from apb.engine.store import StoreError, format_size
 from apb.engine.variables import VariableError, resolve
+from apb.gui import h5viewer
 from apb.gui.analysis_panel import AnalysisPanel
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.editor import ConnectionKey, EditError, EditorState
@@ -127,6 +130,8 @@ class EditorPage:
                 ui.separator()
                 ui.menu_item("Save", on_click=self.save)
                 ui.menu_item("Save as…", on_click=self.save_as)
+                ui.separator()
+                ui.menu_item("HDF5 viewer…", on_click=self.open_h5_viewer)
                 ui.separator()
                 ui.menu_item("Quit", on_click=self.quit)
             with ui.button("Pipeline", icon="tune").props("flat color=white dense"), ui.menu():
@@ -909,6 +914,13 @@ class EditorPage:
         if path:
             self._open_path(path)
 
+    async def open_h5_viewer(self) -> None:
+        """File > HDF5 viewer: pick an ``.h5`` file and open it in a new tab (spec 10 §3.2)."""
+        path = await FileDialog(title="Open in HDF5 viewer", start=self._last_folder, suffix=".h5")
+        if path:
+            units = str(self.state.pipeline.settings.default_unit_system)
+            ui.navigate.to(h5viewer.viewer_url(path, units=units), new_tab=True)
+
     def _open_path(self, path: Path, *, redraw: bool = True) -> None:
         try:
             self.state.open(path)
@@ -1012,26 +1024,39 @@ class EditorPage:
         self._render_stored()
 
 
-def run_gui(pipeline: Path | None = None, *, port: int = 8765, show: bool = True) -> None:
+def run_gui(
+    pipeline: Path | None = None,
+    *,
+    port: int = 8765,
+    show: bool = True,
+    open_paths: Sequence[str] = (),
+) -> None:
     """Start the GUI server on localhost and open the browser (GUI-01).
 
     Args:
         pipeline: Pipeline file to open in the editor.
         port: Local port.
         show: Open the default browser.
+        open_paths: Pages to open instead of the editor, e.g. HDF5 viewer URLs from
+            :func:`apb.gui.h5viewer.viewer_url` (one browser tab each, spec 10 §3.2).
     """
     registry = default_registry()
     initial = pipeline.resolve() if pipeline else None
+    h5viewer.register_route()
 
     def root() -> None:
         EditorPage(registry, initial)
+
+    if show and open_paths:
+        base = f"http://127.0.0.1:{port}"
+        app.on_startup(lambda: [webbrowser.open(base + path) for path in open_paths])
 
     ui.run(
         root,
         host="127.0.0.1",
         port=port,
         title="Analysis Pipeline Builder",
-        show=show,
+        show=show and not open_paths,
         reload=False,
         favicon="🔧",
         show_welcome_message=True,

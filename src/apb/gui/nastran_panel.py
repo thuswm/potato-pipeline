@@ -20,6 +20,7 @@ from apb.blocks.nastran import h5reader
 from apb.blocks.nastran.blocks import Hdf5ResultsParams
 from apb.blocks.nastran.h5reader import NastranH5Error, ResultDetail, ResultInfo
 from apb.engine.variables import VariableError
+from apb.gui import h5viewer
 from apb.gui.forms import ParamForm
 from apb.units import UnitSystem
 
@@ -177,6 +178,24 @@ class Hdf5ResultsPanel:
             return
         self.show_peek(table, "")
 
+    def viewer_url(self, path: Path) -> str:
+        """Return the HDF5 viewer URL for the file, with the block's result and filters."""
+        subcases: list[int] = []
+        ids = ""
+        try:
+            p = self._resolved()
+            subcases, ids = list(p.subcases or []), p.ids
+        except _READ_ERRORS:
+            pass  # unresolved variables: open without filters
+        result = str(self.resolve(self.params.get("result") or ""))
+        return h5viewer.viewer_url(
+            path, dataset=result, subcases=subcases, ids=ids, units=str(self._units())
+        )
+
+    def open_viewer(self, path: Path) -> None:
+        """Open the file in the HDF5 viewer in a new browser tab (H5V-02)."""
+        ui.navigate.to(self.viewer_url(path), new_tab=True)
+
     def _select(self, info: ResultInfo) -> None:
         """Make a result the block's output: store it, drop stale filters, peek (NAS-11)."""
         self.on_change("result", info.path)
@@ -237,6 +256,14 @@ class Hdf5ResultsPanel:
 
             if info_text:
                 ui.label(info_text).classes("text-xs text-slate-500 apb-h5-info")
+            if path is not None:
+                ui.button(
+                    "Open in viewer",
+                    icon="open_in_new",
+                    on_click=lambda p=path: self.open_viewer(p),
+                ).props("dense flat no-caps size=sm").classes("apb-h5-open-viewer").tooltip(
+                    "Look through the whole file in the HDF5 viewer (new tab)"
+                )
             ui.label("Results in file").classes("text-xs font-medium text-slate-600")
             search = (
                 ui.input(placeholder="Search results", value=self._search)

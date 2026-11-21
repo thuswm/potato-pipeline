@@ -25,6 +25,7 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
 | GUI-15 | Copy / paste blocks; multi-select | L |
 | GUI-16 | Light/dark theme | L |
 | GUI-21 | **Stored outputs** (spec 08 §3.9): states and previews of a reopened pipeline come from the stored outputs; the preview says where a result comes from; *Pipeline > Stored outputs…* and *Clear output* in the block panel | M |
+| GUI-23 | **HDF5 viewer** in its own browser tab (route `/h5`): *File > HDF5 viewer…*, **Open in viewer** in the HDF5 results panel, `apb h5view` (spec 10) | M |
 | GUI-22 | Panel of the Nastran analysis block: status lines (program found, input, results current?), open the `.f06` and the folder, messages table, warning mark on the canvas (spec 09 §3.9) | M |
 | GUI-17 | The file dialog can create a **new folder** in the folder it shows (§3.5) | M |
 | GUI-18 | Every block on the canvas shows its **block type** under its label, also when the label equals the type name; the property panel states the block type and category explicitly (§3.5) | M |

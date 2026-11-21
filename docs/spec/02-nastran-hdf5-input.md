@@ -31,7 +31,7 @@ pyNastran is deliberately **not** used.
 | NAS-16 | Modal effective mass results (`MEFFMASS` request) are supported with units: modal effective mass, effective weight, mass fractions, participation factors, total mass fraction | M |
 | NAS-17 | The reader is tested against real MSC Nastran 2023.3 files kept in the repository (`examples/fem/`) | M |
 | NAS-18 | Grid point weight generator output as a mass / centre of gravity table (§3.8) | S |
-| NAS-19 | Browse and read the model data (`/NASTRAN/INPUT`, e.g. CBUSH connectivity) through the same browser | L |
+| NAS-19 | Browse and read the model data (`/NASTRAN/INPUT`, e.g. CBUSH connectivity) through the same browser. *Browsing* is done by the HDF5 viewer (spec 10, button **Open in viewer** in this panel); reading model tables into the pipeline stays later | L |
 | NAS-20 | The result blocks (results, eigenvalues, RBE2 loads, point masses) accept the `.h5` path from a connector (`file` input), so an analysis block can feed them (spec 09 §3.8) | M |
 
 ## 3. Design
@@ -194,6 +194,9 @@ Reader additions in `h5reader` (pure library, also usable from scripts):
 Implementation notes:
 
 - Code: `gui/nastran_panel.py` (panel) and `h5reader.file_info / describe_result`.
+- The whole file (model data, DOMAINS, INDEX, attributes) can be looked through in the HDF5
+  viewer (spec 10), opened with **Open in viewer**. The viewer shares the table step
+  `h5reader.result_table` with `read_result`, so its result view equals the block output.
 - While the file is readable, the result is chosen from the list only; the plain text field
   for `result` (and for subcases, IDs, columns) appears when the file cannot be read.
 - Changing a filter (subcases, IDs, columns, unit system) peeks again.

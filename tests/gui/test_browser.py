@@ -949,3 +949,123 @@ def test_result_browser_follows_the_connected_analysis(page):
     assert "modal.h5" in page.locator("body").inner_text()
     assert "MSC Nastran 2023.3" in page.locator(".apb-h5-info").inner_text()
     assert "Modal effective mass" in page.locator(".apb-h5-results").inner_text()
+
+
+# --------------------------------------------------------------------------------------
+# HDF5 viewer (spec 10)
+# --------------------------------------------------------------------------------------
+
+
+def open_viewer(pg, server: str, file: Path, **kwargs: object) -> None:
+    """Go to the HDF5 viewer page of a file on the test server."""
+    from apb.gui.h5viewer import viewer_url
+
+    pg.goto(server.rstrip("/") + viewer_url(file, **kwargs))  # type: ignore[arg-type]
+    pg.wait_for_selector(".apb-h5v-tree")
+    pg.wait_for_timeout(500)
+
+
+def test_h5_viewer_tree_result_view_filters_and_raw_view(page, server, workdir: Path):
+    open_viewer(page, server, workdir / "fem" / "modal.h5", dataset="NODAL/EIGENVECTOR", units="SI")
+    assert "modal.h5 — HDF5 viewer" in page.title()
+    header = page.locator(".q-page, body").first.inner_text()
+    assert "MSC Nastran 2023.3 · SOL 103 · modal.bdf" in header
+    assert "Subcases: 1 (10 modes)" in header
+    count = page.locator(".apb-h5v-count")
+    assert "30 080 rows · showing 1-100" in count.inner_text()
+    table = page.locator(".apb-h5v-table")
+    assert "EIGENVALUE" in table.inner_text()
+
+    # Mode filter (via the domains) and ID filter.
+    page.locator(".apb-h5v-modes").click()
+    page.get_by_role("option", name="2", exact=True).click()
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(500)
+    assert "3 008 rows of 30 080 (filtered)" in count.inner_text()
+    ids = page.locator(".apb-h5v-ids input")
+    ids.fill("1-5")
+    ids.press("Enter")
+    page.wait_for_timeout(500)
+    assert "5 rows of 30 080 (filtered) · showing 1-5" in count.inner_text()
+
+    # Raw view: the dataset as stored, with DOMAIN_ID and the row numbers.
+    page.locator(".apb-h5v-view").get_by_text("Raw", exact=True).click()
+    page.wait_for_timeout(500)
+    assert "DOMAIN_ID" in table.inner_text()
+    assert "3008" in table.inner_text()  # first row of mode 2
+
+    # Another dataset from the tree (found with the search): filters do not carry over.
+    page.locator(".apb-h5v-search input").fill("GRID")
+    page.wait_for_timeout(300)
+    page.locator(".apb-h5v-tree").get_by_text("GRID", exact=True).first.click()
+    page.wait_for_timeout(600)
+    assert page.locator(".apb-h5v-path").inner_text() == "/NASTRAN/INPUT/NODE/GRID"
+    assert "3 008 rows · showing 1-100" in count.inner_text()
+    page.locator(".apb-h5v-pager").get_by_role("button", name="2", exact=True).click()
+    page.wait_for_timeout(500)
+    assert "showing 101-200" in count.inner_text()
+
+    # Details of a group: its attributes.
+    open_viewer(page, server, workdir / "fem" / "modal.h5", dataset="/NASTRAN")
+    assert page.locator(".apb-h5v-path").inner_text() == "/NASTRAN"
+    assert "msc20233" in page.locator(".apb-h5v-attrs").inner_text()
+
+
+def test_h5_viewer_copy_path_and_export_csv(page, server, workdir: Path):
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    h5 = workdir / "data" / "synthetic_plate.h5"
+    open_viewer(page, server, h5, dataset="NODAL/DISPLACEMENT", subcases=[2])
+    count = page.locator(".apb-h5v-count")
+    assert "55 rows of 165 (filtered)" in count.inner_text()
+    assert "[mm]" in page.locator(".apb-h5v-table").inner_text()  # unit system of the file
+
+    page.get_by_role("button", name="Copy path").click()
+    page.wait_for_timeout(300)
+    assert page.get_by_text("Copied NODAL/DISPLACEMENT").is_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "NODAL/DISPLACEMENT"
+
+    page.get_by_role("button", name="Export CSV").click()
+    page.wait_for_timeout(300)
+    name = page.get_by_label("File name")
+    assert name.input_value() == "synthetic_plate_DISPLACEMENT.csv"
+    page.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(800)
+    assert page.get_by_text("Wrote 55 rows").is_visible()
+    lines = (workdir / "data" / "synthetic_plate_DISPLACEMENT.csv").read_text().splitlines()
+    assert lines[0].startswith("GRID,SUBCASE,")
+    assert "[mm]" in lines[0]
+    assert len(lines) == 56
+
+
+def test_h5_viewer_reports_unreadable_files(page, server, workdir: Path):
+    from apb.gui.h5viewer import viewer_url
+
+    page.goto(server.rstrip("/") + viewer_url(workdir / "missing.h5"))
+    page.wait_for_selector(".apb-h5v-message")
+    assert "File not found" in page.locator(".apb-h5v-message").inner_text()
+    page.goto(server.rstrip("/") + viewer_url(workdir / "fastener_loads.apb.json"))
+    page.wait_for_selector(".apb-h5v-message")
+    assert "Cannot open" in page.locator(".apb-h5v-message").inner_text()
+
+
+def test_h5_viewer_opens_from_the_block_panel_and_the_file_menu(page, workdir: Path):
+    select(page, "CBUSH forces")
+    with page.context.expect_page() as new_tab:
+        page.locator(".apb-h5-open-viewer").click()
+    viewer = new_tab.value
+    viewer.wait_for_selector(".apb-h5v-tree")
+    viewer.wait_for_timeout(500)
+    assert "/h5?" in viewer.url
+    assert viewer.locator(".apb-h5v-path").inner_text().endswith("/ELEMENTAL/ELEMENT_FORCE/BUSH")
+    viewer.close()
+
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("HDF5 viewer…", exact=True).click()
+    page.wait_for_timeout(300)
+    page.get_by_label("File name").fill("fem/global_loads.h5")
+    with page.context.expect_page() as new_tab:
+        page.get_by_role("button", name="Open", exact=True).click()
+    viewer = new_tab.value
+    viewer.wait_for_selector(".apb-h5v-tree")
+    assert "global_loads.h5 — HDF5 viewer" in viewer.title()
+    viewer.close()

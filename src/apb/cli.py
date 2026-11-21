@@ -281,6 +281,55 @@ def gui(
     run_gui(pipeline, port=port, show=not no_browser)
 
 
+def _server_answers(port: int) -> bool:
+    """Return ``True`` if an APB GUI server already answers on the local port."""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/h5", timeout=2) as response:
+            return response.status == 200 and b"HDF5 viewer" in response.read()
+    except OSError:
+        return False
+
+
+@app.command()
+def h5view(
+    files: Annotated[list[Path], typer.Argument(help="HDF5 file(s) to look into")],
+    port: Annotated[int, typer.Option(help="Local port of the GUI server")] = 8765,
+    units: Annotated[
+        str, typer.Option(help="Unit system for the unit labels: SI, SI_mm or empty")
+    ] = "",
+    no_browser: Annotated[bool, typer.Option(help="Do not open the browser")] = False,
+) -> None:
+    """Open the HDF5 viewer for one or more .h5 files, one browser tab each (spec 10)."""
+    import webbrowser
+
+    from apb.gui.h5viewer import UNIT_CHOICES, viewer_url
+
+    missing = [f for f in files if not f.is_file()]
+    if missing:
+        for f in missing:
+            typer.secho(f"File not found: {f}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+    if units not in UNIT_CHOICES:
+        typer.secho(
+            f"Unknown unit system {units!r} (use SI or SI_mm)", fg=typer.colors.RED, err=True
+        )
+        raise typer.Exit(2)
+    urls = [viewer_url(f, units=units) for f in files]
+    if _server_answers(port):
+        typer.echo(f"Using the GUI server already running on port {port}")
+        if not no_browser:
+            for url in urls:
+                webbrowser.open(f"http://127.0.0.1:{port}{url}")
+        return
+    from apb.gui.app import run_gui
+
+    for url in urls:
+        typer.echo(f"http://127.0.0.1:{port}{url}")
+    run_gui(None, port=port, show=not no_browser, open_paths=urls)
+
+
 @app.command()
 def version() -> None:
     """Print the version."""

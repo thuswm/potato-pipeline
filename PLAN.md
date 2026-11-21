@@ -1,6 +1,6 @@
 # PLAN — review round 4 (2026-11-21)
 
-Status: **waiting for approval**. Completed plans are archived in `docs/plans/`.
+Status: **approved 2026-11-21, in progress**. Completed plans are archived in `docs/plans/`.
 
 Source: the user's notes after testing round 3. Each step: spec → user review → code →
 tests (`ruff format`, `ruff check`, `mypy src`, `pytest`) → user asks for the commit.
@@ -36,7 +36,7 @@ small synthetic multi-subcase test file is used (step 1).
 A separate view in its own browser tab, to look through an `.h5` file and find the
 data blocks need.
 
-- [ ] 1.1 Spec 10: purpose, requirements, layout, links to spec 02 and 06
+- [x] 1.1 Spec 10: purpose, requirements, layout, links to spec 02 and 06
   - Opened from File > "HDF5 viewer…", from the HDF5 block panel ("Open in viewer" for the
     connected/selected file) and from the CLI (`apb h5view <file>`); route `/h5?file=…`, new tab
   - Left: tree of the whole file (groups, datasets incl. `INPUT`, `INDEX`, `RESULT`) with
@@ -47,14 +47,15 @@ data blocks need.
     frequency/eigenvalue, analysis code), filter by subcase/mode/ID, units shown
   - "Copy path" for the dataset path used in an HDF5 block; optional CSV export of the view
   - Read-only; the file is never locked or changed (opened `r`, closed after each read)
-- [ ] 1.2 User review of spec 10
-- [ ] 1.3 Reader helpers in `src/apb/blocks/nastran/h5reader.py` (or a new `h5browse.py`):
+- [x] 1.2 User review of spec 10 (result view default, several files per `h5view`, CSV export in this step)
+- [x] 1.3 Reader helpers in `src/apb/blocks/nastran/h5reader.py` (or a new `h5browse.py`):
       tree listing, paged raw read, domain join — with tests on the real files
-- [ ] 1.4 Synthetic multi-subcase test file (tools script + fixture) and tests
-- [ ] 1.5 Viewer page `src/apb/gui/h5viewer.py` (NiceGUI `ui.tree` + paged `ui.aggrid`/`ui.table`)
-- [ ] 1.6 Entry points: File menu, button in `nastran_panel.py`, `apb h5view` in `cli.py`
-- [ ] 1.7 Browser tests (Playwright) and screenshots; update spec 02/06 cross-references
-- [ ] 1.8 Commit
+- [x] 1.4 Synthetic multi-subcase test file (tools script + fixture) and tests — the existing
+      synthetic files already have 3–4 subcases; the generator now adds the `/INDEX` group
+- [x] 1.5 Viewer page `src/apb/gui/h5viewer.py` (NiceGUI `ui.tree` + paged `ui.aggrid`/`ui.table`)
+- [x] 1.6 Entry points: File menu, button in `nastran_panel.py`, `apb h5view` in `cli.py`
+- [x] 1.7 Browser tests (Playwright) and screenshots; update spec 02/06 cross-references
+- [x] 1.8 Commit
 
 ## Step 2 — Constants block (`table.constants`, spec 03 new section)
 
@@ -120,3 +121,13 @@ The right-hand panel is hard to read and cluttered.
 Later (unchanged): load table → model update block; mode shape plots; Abaqus blocks; Word
 template as block input; data organisation for collaboration; toolbox restructure; undo/redo
 (GUI-13); push to a git remote so CI runs.
+
+Open points carried over (from the old HANDOFF notes):
+- Real MSC Nastran never run here: the default keywords `batch=no old=no scr=yes` in
+  `src/apb/blocks/nastran/command.py` (spec 09 §3.3) need a test on a real model.
+- Test case Excel workbook: decide whether the margin tables go in as extra sheets
+  (`tools/make_test_case.py`, spec 07).
+- CQUAD4, CBEAM, MPC force and grid point force readers are only tested on synthetic files
+  (spec 02 §5); needs a real file with those requests.
+- Practical: the full test suite takes ~6 min (browser tests need
+  `uv run playwright install chromium`); run it in the background.

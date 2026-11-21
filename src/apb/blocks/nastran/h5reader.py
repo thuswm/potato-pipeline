@@ -477,22 +477,10 @@ def read_result(
                 block = ds[int(rows[0]) : int(rows[-1]) + 1]
                 data = block[mask[rows[0] : rows[-1] + 1]]
 
-        df = _to_frame(data, mapping)
         info_attrs = dict(h5["NASTRAN"].attrs) if "NASTRAN" in h5 else {}
         version = _version(h5)
 
-    if mapping:
-        df = df.rename(columns={**{mapping.id_field or "": mapping.id_column}, **mapping.rename})
-    if "DOMAIN_ID" in df.columns:
-        used = domains[domains["ID"].isin(df["DOMAIN_ID"].unique())]
-        dom = _domain_columns(used)
-        dom = dom[[c for c in dom.columns if c == "DOMAIN_ID" or c not in df.columns]]
-        df = df.merge(dom, on="DOMAIN_ID", how="left").drop(columns="DOMAIN_ID")
-    if mapping:
-        for derive in mapping.derive:
-            derive(df)
-    df = _order_columns(df, mapping)
-
+    df = result_table(data, rel, domains)
     if columns:
         missing = [c for c in columns if c not in df.columns]
         if missing:
@@ -519,6 +507,43 @@ def read_result(
         if attr in info_attrs:
             df.attrs[key] = _attr_text(info_attrs[attr])
     return df
+
+
+def result_table(
+    data: npt.NDArray[Any],
+    result: str,
+    domains: pd.DataFrame,
+    domain_scope: Iterable[int] | None = None,
+) -> pd.DataFrame:
+    """Turn raw rows of a result dataset into the output table (no units, no filtering).
+
+    Applies the mapping (transform, renames, derived columns), joins the domain columns
+    and orders the columns. Shared by :func:`read_result` and the HDF5 viewer (spec 10).
+
+    Args:
+        data: Raw rows of the dataset (NumPy structured array).
+        result: Dataset path relative to ``/NASTRAN/RESULT``.
+        domains: The file's DOMAINS table (:func:`read_domains`).
+        domain_scope: Domain IDs that decide which domain columns are added; default the
+            domains referenced by ``data``. Passing the domains of the whole dataset keeps
+            the columns the same for every page of it.
+
+    Returns:
+        The table as :func:`read_result` delivers it, before column selection and units.
+    """
+    mapping = RESULT_MAPPINGS.get(result)
+    df = _to_frame(data, mapping)
+    if mapping:
+        df = df.rename(columns={**{mapping.id_field or "": mapping.id_column}, **mapping.rename})
+    if "DOMAIN_ID" in df.columns:
+        scope = df["DOMAIN_ID"].unique() if domain_scope is None else list(domain_scope)
+        dom = _domain_columns(domains[domains["ID"].isin(scope)])
+        dom = dom[[c for c in dom.columns if c == "DOMAIN_ID" or c not in df.columns]]
+        df = df.merge(dom, on="DOMAIN_ID", how="left").drop(columns="DOMAIN_ID")
+    if mapping:
+        for derive in mapping.derive:
+            derive(df)
+    return _order_columns(df, mapping)
 
 
 #: ID, domain and row-label columns: placed first and always kept by a column selection.
