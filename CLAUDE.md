@@ -24,3 +24,10 @@ The code must contain docstrings and code hints
 
 ## The first version
 - Make a first working version with some basic 
+
+## Way of working (plan cycle)
+- Work in cycles. A cycle starts with a new plan in `PLAN.md` (repository root) with implementation steps as checkboxes (`- [ ]`).
+- The user approves the plan before any implementation starts.
+- Implement the steps in order and tick each box (`- [x]`) as soon as it is done, so `PLAN.md` always shows the current state.
+- When a cycle is complete, move `PLAN.md` to `docs/plans/round-N.md` and start the next cycle with a new plan.
+- Keep `README.md` a clean project readme (fit for GitHub); plans and progress do not go there.
