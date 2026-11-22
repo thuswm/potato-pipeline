@@ -7,6 +7,8 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-22
+
 ### Changed
 - CI runs once per push (branches only; a release tag no longer starts a second run) and can
   be started by hand (`gh workflow run CI`).
@@ -59,6 +61,7 @@ First public release.
 ### Breaking
 - None (first release).
 
-[Unreleased]: https://github.com/thuswm/potato-pipeline/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/thuswm/potato-pipeline/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/thuswm/potato-pipeline/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/thuswm/potato-pipeline/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/thuswm/potato-pipeline/releases/tag/v0.1.0
