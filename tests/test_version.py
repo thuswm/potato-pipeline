@@ -29,3 +29,13 @@ def test_help_still_lists_commands():
     assert result.exit_code == 0
     assert "Potato Pipeline" in result.output
     assert "gui" in result.output
+
+
+def test_python_dash_m_apb():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "apb", "--version"], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.strip() == __version__

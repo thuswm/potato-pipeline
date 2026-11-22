@@ -30,7 +30,7 @@ commit. Tick the boxes as work is done.
       - `CHANGELOG.md` in the "Keep a Changelog" format. The first entry, 0.1.0, summarises
         rounds 1–4.
       - Each release gets a git tag `vX.Y.Z`. The version goes from `0.1.0.dev0` to `0.1.0`.
-- [ ] 4. **Running without uv** (README). Windows and Linux steps using only Python 3.12+
+- [x] 4. **Running without uv** (README). Windows and Linux steps using only Python 3.12+
       and pip:
       - Install Python from python.org (Windows: the `py` launcher).
       - `py -m venv .venv`, `.venv\Scripts\activate`, then `pip install .` from a clone, or
