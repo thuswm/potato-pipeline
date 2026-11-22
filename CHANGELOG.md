@@ -7,6 +7,13 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-22
+
+### Fixed
+- Windows: shortened paths in the property panel no longer mix `\` and `/`.
+- Windows: the code passes the type check, and the test suite runs on Windows in CI (it did
+  not get that far in 0.1.0).
+
 ## [0.1.0] - 2026-11-22
 
 First public release.
@@ -45,5 +52,6 @@ First public release.
 ### Breaking
 - None (first release).
 
-[Unreleased]: https://github.com/thuswm/potato-pipeline/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/thuswm/potato-pipeline/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/thuswm/potato-pipeline/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/thuswm/potato-pipeline/releases/tag/v0.1.0

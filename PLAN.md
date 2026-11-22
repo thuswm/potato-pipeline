@@ -46,9 +46,11 @@ commit. Tick the boxes as work is done.
       - README: short and fit for GitHub (what it is, screenshot, install with uv, install
         without uv, quick start, development, link to the specs).
       - No license file in this round (decision 2026-11-22). Adding one later is a separate step.
-- [ ] 6. **Push.** `gh repo create thuswm/potato-pipeline --public`, push `main` and tag
+- [x] 6. **Push.** `gh repo create thuswm/potato-pipeline --public`, push `main` and tag
       `v0.1.0`. Check that CI (Ubuntu and Windows, Python 3.12 and 3.13) passes on GitHub and
       fix any failures.
+      Done: v0.1.0 pushed; Windows CI failed (type check, path-separator tests, one display
+      bug), fixed on branch `ci/windows-fix` and released as v0.1.1.
 
 ## Part B — Several load cases in one table (after the push)
 
