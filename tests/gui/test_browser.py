@@ -309,8 +309,16 @@ def test_result_browser_lists_selects_and_peeks(page, workdir: Path):
     assert page.get_by_text("is not in this file").is_visible()
 
     # Search, then click a result: it is selected and previewed without running.
-    page.get_by_placeholder("Search results").fill("effective mass")
-    expect(results).not_to_contain_text("Eigenvectors")
+    # The panel may be rebuilt once more after the file change (slow runners); the search
+    # box is then new and empty, so type again until the filter is applied.
+    for attempt in range(3):
+        page.get_by_placeholder("Search results").fill("effective mass")
+        try:
+            expect(results).not_to_contain_text("Eigenvectors", timeout=3000)
+            break
+        except AssertionError:
+            if attempt == 2:
+                raise
     results.get_by_text("Modal effective mass", exact=True).click()
     page.wait_for_timeout(800)
     assert "Modal effective mass" in page.locator(".apb-h5-selected").inner_text()
@@ -732,7 +740,7 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
     assert "0.285593" in page.locator(".q-tab-panels").first.inner_text()
 
     select(page, "Global margins")
-    assert "def run(" in page.locator(".apb-script-code").inner_text()
+    expect(page.locator(".apb-script-code")).to_contain_text("def run(")  # drawn by the browser
     assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
 
     # The report editor knows the items by the names given on the connectors.
