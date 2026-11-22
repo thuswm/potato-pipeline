@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import expect
 
 playwright = pytest.importorskip("playwright.sync_api")
 
@@ -220,7 +221,7 @@ def test_run_states_and_preview(page, workdir: Path):
     assert (workdir / "output" / "fastener_report.docx").exists()
     select(page, "Fastener margins")
     preview = page.locator(".q-tab-panels").first
-    assert page.get_by_role("tab", name="min_ms").is_visible()
+    expect(page.get_by_role("tab", name="min_ms")).to_be_visible()  # waits on slow runners
     assert "SHEAR [N]" in preview.inner_text()
     page.get_by_role("tab", name="min_ms").click()
     page.wait_for_timeout(300)
@@ -309,8 +310,7 @@ def test_result_browser_lists_selects_and_peeks(page, workdir: Path):
 
     # Search, then click a result: it is selected and previewed without running.
     page.get_by_placeholder("Search results").fill("effective mass")
-    page.wait_for_timeout(400)
-    assert "Eigenvectors" not in results.inner_text()
+    expect(results).not_to_contain_text("Eigenvectors")
     results.get_by_text("Modal effective mass", exact=True).click()
     page.wait_for_timeout(800)
     assert "Modal effective mass" in page.locator(".apb-h5-selected").inner_text()
@@ -866,7 +866,8 @@ def test_stored_outputs_dialog_and_clear_all(page, workdir: Path):
     page.get_by_role("button", name="Pipeline", exact=True).click()
     page.get_by_text("Stored outputs…", exact=True).click()
     dialog = page.locator(".q-dialog")
-    assert ".apb/test_case" in dialog.locator(".apb-stored-folder").inner_text()
+    folder = dialog.locator(".apb-stored-folder").inner_text().replace("\\", "/")
+    assert ".apb/test_case" in folder
     assert "15 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
     dialog.get_by_role("button", name="Clear all…").click()
     page.wait_for_selector("text=Delete the stored outputs of 15 block(s)")
@@ -963,7 +964,8 @@ def test_analysis_panel_checks_the_program_and_the_input(page, fake_nastran, wor
     path_box.press("Enter")
     page.wait_for_timeout(500)
     found = page.locator(".apb-analysis-program").inner_text()
-    assert " ".join(found.split()).endswith("/nastran (path: block)")  # shortened
+    shown = " ".join(found.split())
+    assert re.search(r"…[/\\]nastran(\.bat)? \(path: block\)$", shown, re.I), shown  # shortened
     program.hover()
     page.wait_for_timeout(500)
     assert str(fake_nastran.bin) in page.locator(".q-tooltip").inner_text()

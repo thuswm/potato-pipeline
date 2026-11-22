@@ -61,7 +61,7 @@ def test_the_analyses_check_their_f06_files(outcome):
         "OK",
         "WARNINGS",
     ]
-    assert result.output("local_run", "h5").endswith("fem/local_loads.h5")
+    assert Path(result.output("local_run", "h5")).parts[-2:] == ("fem", "local_loads.h5")
     assert result.output("modal_run", "messages").empty
     messages = result.output("msgs", "table")
     assert len(messages) == 1  # the 9058 warning of the local loads, nothing else

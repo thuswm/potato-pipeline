@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from typing import Literal
 
 import pytest
@@ -11,7 +12,7 @@ from apb.blocks.report.block import ReportMetadata, WordReportParams
 from apb.engine import default_registry
 from apb.engine.events import BlockState
 from apb.gui.editor import UNSET, EditorState
-from apb.gui.forms import classify, default_of, humanize, suffix_hint
+from apb.gui.forms import classify, default_of, humanize, short_path, suffix_hint
 from apb.gui.runner import RunController, summary
 from apb.units import UnitSystem
 from tests.conftest import DATA_DIR
@@ -127,3 +128,12 @@ def test_unit_options_keep_an_unknown_stored_unit():
     assert "Hz" in options and "-" not in options
     assert unit_options("lbf")["lbf"] == "lbf (unknown unit)"
     assert unit_options("lbf", other=True)["lbf"] == "lbf"
+
+
+def test_short_path_keeps_the_separator_of_the_path():
+    if sys.platform == "win32":
+        win = r"C:\Users\runneradmin\AppData\Local\Temp\pytest-0\bin\nastran.BAT"
+        assert short_path(win, limit=30).endswith("…\\nastran.BAT")
+        return
+    posix = "/home/someone/projects/a/very/long/folder/bin/nastran"
+    assert short_path(posix, limit=30).endswith("…/nastran")

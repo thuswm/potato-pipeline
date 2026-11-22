@@ -80,7 +80,7 @@ def test_outputs_lists_the_entries(pipeline):
     runner.invoke(app, ["run", str(pipeline)])
     out = runner.invoke(app, ["outputs", str(pipeline)])
     assert out.exit_code == 0
-    assert "Store: " in out.output and "/.apb/p" in out.output
+    assert "Store: " in out.output and "/.apb/p" in out.output.replace("\\", "/")
     lines = {line.split()[0]: line for line in out.output.splitlines()[1:]}
     assert lines["csv"].split()[1] == "done" and "Data" in lines["csv"]
     assert lines["xlsx"].split()[1] == "done"

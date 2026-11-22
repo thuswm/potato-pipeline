@@ -95,7 +95,8 @@ def short_path(path: str | Path, base: Path | None = None, limit: int = 44) -> s
     name = p.name
     if len(name) + 2 >= limit:
         return "…" + text[-(limit - 1) :]
-    return text[: limit - len(name) - 2] + "…/" + name
+    sep = "\\" if "\\" in text else "/"  # keep the separator the text already uses
+    return text[: limit - len(name) - 2] + "…" + sep + name
 
 
 def field_label(name: str, field: FieldInfo) -> str:

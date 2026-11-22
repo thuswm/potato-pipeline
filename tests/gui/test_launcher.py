@@ -68,6 +68,7 @@ def test_candidates_on_windows():
     assert names.index(next(n for n in names if "msedge" in n)) > 2  # Chrome first
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="PATH lookup of Linux executables")
 def test_candidates_on_linux_come_from_path(tmp_path: Path):
     for name in ("chromium", "microsoft-edge"):
         exe = tmp_path / name
@@ -92,7 +93,7 @@ def test_find_browser(tmp_path: Path):
 
 def test_app_command(tmp_path: Path):
     command = launcher.app_command(Path("/usr/bin/chromium"), "http://127.0.0.1:8765/", tmp_path)
-    assert command[0] == "/usr/bin/chromium"
+    assert command[0] == str(Path("/usr/bin/chromium"))
     assert "--app=http://127.0.0.1:8765/" in command
     assert f"--user-data-dir={tmp_path}" in command
     assert "--no-first-run" in command
