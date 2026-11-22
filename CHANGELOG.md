@@ -7,6 +7,13 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 
 ## [Unreleased]
 
+### Changed
+- CI runs once per push (branches only; a release tag no longer starts a second run) and can
+  be started by hand (`gh workflow run CI`).
+
+### Fixed
+- Two browser tests that failed now and then on the slower Windows CI machines.
+
 ## [0.1.1] - 2026-11-22
 
 ### Fixed
