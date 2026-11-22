@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    branches: ["**"]   # every branch, but not tag pushes (a release tag would run CI twice)
   pull_request:
+  workflow_dispatch:   # run by hand: gh workflow run CI
 
 jobs:
   test:
