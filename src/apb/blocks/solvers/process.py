@@ -10,6 +10,7 @@ import os
 import queue
 import signal
 import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -46,7 +47,7 @@ def kill_tree(process: subprocess.Popen[str]) -> None:
     """End a process and everything it started (process group, or ``taskkill /T``)."""
     if process.poll() is not None:
         return
-    if os.name == "nt":
+    if sys.platform == "win32":  # sys.platform checks let mypy skip the other platform
         subprocess.run(
             ["taskkill", "/F", "/T", "/PID", str(process.pid)],
             capture_output=True,
@@ -101,8 +102,8 @@ def run_command(
         "errors": "replace",
         "bufsize": 1,
     }
-    if os.name == "nt":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         kwargs["start_new_session"] = True
     start = time.monotonic()

@@ -27,8 +27,8 @@ PREVIEW_ROWS = 500
 
 def open_with_system(path: Path) -> None:
     """Open a file with the program registered for it (Word, Excel ...)."""
-    if sys.platform.startswith("win"):
-        os.startfile(path)  # type: ignore[attr-defined]
+    if sys.platform == "win32":
+        os.startfile(path)
     elif sys.platform == "darwin":
         subprocess.Popen(["open", str(path)])
     else:
