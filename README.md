@@ -1,4 +1,4 @@
-# Analysis Pipeline Builder
+# Potato Pipeline
 
 Build structural analysis pipelines graphically (Simulink style): MSC Nastran HDF5 results →
 data manipulation, hand calculations, custom Python → Word report. Re-run the pipeline when

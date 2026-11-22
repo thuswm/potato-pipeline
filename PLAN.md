@@ -1,146 +1,70 @@
-# PLAN — review round 4 (2026-11-21)
+# PLAN — round 5: GitHub introduction (2026-11-22)
 
-Status: **approved 2026-11-21, in progress**. Completed plans are archived in `docs/plans/`.
+Status: **approved 2026-11-22, in progress**. Completed plans are archived in `docs/plans/`.
 
-Source: the user's notes after testing round 3. Each step: spec → user review → code →
-tests (`ruff format`, `ruff check`, `mypy src`, `pytest`) → user asks for the commit.
-Tick the boxes as work is done.
+Source: the "Next Step" section of the user's notes after round 4. Each step: spec → user
+review → code → tests (`ruff format`, `ruff check`, `mypy src`, `pytest`) → user asks for the
+commit. Tick the boxes as work is done.
 
-## Check of the round 3 notes
+## Decisions
 
-| Note | Status |
-|------|--------|
-| Save as has no "Create new folder" | done (step 2, `filedialog.py` New folder button) |
-| HDF5 reader should preview the results in the file | done (step 1, result browser + peek). The full file browser is round 4 step 1 |
-| No clean exit; warn about unsaved changes | partly: File > Quit asks about running work and unsaved changes, and the browser warns before a tab with unsaved changes closes. Nothing is saved automatically. **Gap:** the browser tab stays open and only shows "Closed" (round 4 step 3) |
-| Hide the server setup | later (round 4 step 3 makes a start) |
-| What does the fastener loads block do / too specialised? | decided: it stays as it is until it moves into a fastener toolbox |
-| Block type under the label, also for Load case names, and in the property panel | done (step 2; every block shows `type_title`) |
-| A reopened pipeline is seen as already run; clear outputs | done (step 5, stored outputs + Clear outputs) |
-| Python block: view the code, templates, never overwrite | done (step 3) |
-| Data organisation for collaboration | later |
-| Nastran and Abaqus analysis blocks, f06 checks | Nastran done (step 6); Abaqus later |
-| One term: block / node / box | done ("block", "connector") |
-| Blocks in an extendable toolbox folder | later |
-| Word block: template file input | later |
+| Topic | Decision |
+|-------|----------|
+| Name | Display name **Potato Pipeline**. Package `apb`, command `apb` and `*.apb.json` files are unchanged |
+| Repository | Public, `github.com/thuswm/potato-pipeline` |
+| License | None for now; the user decides later (MIT was suggested). Without a license file the code is visible but "all rights reserved" |
+| Several load cases | Not part of the GitHub introduction: part B, after the push |
 
-**Finding about load cases:** the HDF5 reader and the result browser handle any number of
-subcases (the Subcases filter lists them all). The example files have only one load case
-each: `global_loads.bdf`, `local_loads.bdf` and `modal.bdf` have no `SUBCASE` cards, and
-their `DOMAINS` tables have subcase 1 only. The modal file has 22 domains = 1 subcase with
-the modes. A deck with several subcases from the user would show the rest; until then a
-small synthetic multi-subcase test file is used (step 1).
+## Part A — GitHub introduction
 
-## Step 1 — HDF5 viewer (new spec `10-hdf5-viewer.md`)
+- [x] 1. Archive round 4 as `docs/plans/round-4.md` and start this plan.
+- [x] 2. **Display name.** "Potato Pipeline" in the README title and intro, the GUI page and
+      window title, the CLI help text and the pyproject `description`. Add a note in
+      `docs/spec/00-architecture.md` that the internal name stays `apb`.
+- [x] 3. **Versioning** (spec first: `docs/spec/12-versioning.md`).
+      - Semantic versioning (`MAJOR.MINOR.PATCH`). While below 1.0, a minor bump may break
+        pipeline files. Each break is listed in the changelog.
+      - The version is kept in one place, pyproject `version`. `apb.__version__` reads it
+        through `importlib.metadata`.
+      - `apb --version`. The GUI shows the version in Help > About and in the window title.
+      - `CHANGELOG.md` in the "Keep a Changelog" format. The first entry, 0.1.0, summarises
+        rounds 1–4.
+      - Each release gets a git tag `vX.Y.Z`. The version goes from `0.1.0.dev0` to `0.1.0`.
+- [ ] 4. **Running without uv** (README). Windows and Linux steps using only Python 3.12+
+      and pip:
+      - Install Python from python.org (Windows: the `py` launcher).
+      - `py -m venv .venv`, `.venv\Scripts\activate`, then `pip install .` from a clone, or
+        `pip install git+https://github.com/thuswm/potato-pipeline` with no clone.
+      - Then `apb gui …`, or `python -m apb …` if the venv is not active.
+      - Verify: install into a clean venv with pip only (no uv), then start `apb --version`
+        and `apb gui` against an example.
+- [ ] 5. **Prepare the repository.**
+      - Check what becomes public: `CLAUDE.md`, `PLAN.md` and `docs/plans/` stay as project
+        history. `my_notes.md` is already git-ignored. The example FEM data is fake data. No
+        local paths or personal data in tracked files (already checked: none found).
+      - pyproject: `[project.urls]` (Homepage, Issues), `authors`.
+      - README: short and fit for GitHub (what it is, screenshot, install with uv, install
+        without uv, quick start, development, link to the specs).
+      - No license file in this round (decision 2026-11-22). Adding one later is a separate step.
+- [ ] 6. **Push.** `gh repo create thuswm/potato-pipeline --public`, push `main` and tag
+      `v0.1.0`. Check that CI (Ubuntu and Windows, Python 3.12 and 3.13) passes on GitHub and
+      fix any failures.
 
-A separate view in its own browser tab, to look through an `.h5` file and find the
-data blocks need.
+## Part B — Several load cases in one table (after the push)
 
-- [x] 1.1 Spec 10: purpose, requirements, layout, links to spec 02 and 06
-  - Opened from File > "HDF5 viewer…", from the HDF5 block panel ("Open in viewer" for the
-    connected/selected file) and from the CLI (`apb h5view <file>`); route `/h5?file=…`, new tab
-  - Left: tree of the whole file (groups, datasets incl. `INPUT`, `INDEX`, `RESULT`) with
-    shape, dtype, row count; attributes of the selected item
-  - Right, raw view: dataset rows with paging (large datasets never loaded at once),
-    nested fields flattened to columns
-  - Right, result view (datasets below `RESULT`): domains joined in (subcase, mode,
-    frequency/eigenvalue, analysis code), filter by subcase/mode/ID, units shown
-  - "Copy path" for the dataset path used in an HDF5 block; optional CSV export of the view
-  - Read-only; the file is never locked or changed (opened `r`, closed after each read)
-- [x] 1.2 User review of spec 10 (result view default, several files per `h5view`, CSV export in this step)
-- [x] 1.3 Reader helpers in `src/apb/blocks/nastran/h5reader.py` (or a new `h5browse.py`):
-      tree listing, paged raw read, domain join — with tests on the real files
-- [x] 1.4 Synthetic multi-subcase test file (tools script + fixture) and tests — the existing
-      synthetic files already have 3–4 subcases; the generator now adds the `/INDEX` group
-- [x] 1.5 Viewer page `src/apb/gui/h5viewer.py` (NiceGUI `ui.tree` + paged `ui.aggrid`/`ui.table`)
-- [x] 1.6 Entry points: File menu, button in `nastran_panel.py`, `apb h5view` in `cli.py`
-- [x] 1.7 Browser tests (Playwright) and screenshots; update spec 02/06 cross-references
-- [x] 1.8 Commit
+Need: a Nastran analysis has several load cases (subcases), and each one outputs e.g.
+CBUSH forces. The analyst checks all load cases, so they must all be in **one** table.
 
-## Step 2 — Constants block (`table.constants`, spec 03 new section)
+The HDF5 result block already reads every selected subcase into one long table with a
+`SUBCASE` column (empty selection = all subcases). Because all example files have a single
+subcase, this has never been shown working end to end.
 
-A block holding the project constants (e.g. safety factors). Output: one table. Columns:
-Name, Value, Description. Proposal and points for the user to decide in the review:
-
-- [x] 2.1 Spec: block, parameters, validation, how receiving blocks use a constant
-      (draft: spec 03 §3.5)
-  - Name rule: letter or `_` first, then letters, digits, `_` (no spaces), unique.
-    Proposal: this Python identifier rule, so names also work in Python scripts
-  - Value: number. *Decide:* allow text values too?
-  - *Proposal:* a 4th column **Unit** (empty = dimensionless), since units must always be
-    visible in reports
-  - Use in receiving blocks, *proposal:* connect the Constants output to the block (new
-    optional `constants` input on the requirement check, Python and report blocks); any
-    numeric parameter can then be written `${SF_yield}` (the existing variable syntax);
-    names from connected Constants blocks come before pipeline variables. A connector
-    shows the dependency on the canvas and makes the cache key right when a constant
-    changes. The Python block gets the constants as a table or dict argument
-  - *Decide:* keep the pipeline variables dialog, or replace it with the Constants block
-  - Report: the table goes into the Word report like any table (e.g. "Safety factors used")
-- [x] 2.2 User review (all proposals of spec 03 §3.5.1 accepted)
-- [x] 2.3 Block class + params model in `src/apb/blocks/table/` with validation; register it
-- [x] 2.4 Table editor in the property panel (add/delete/move rows, inline validation)
-- [x] 2.5 Engine: collect the constants of all Constants blocks while preparing the pipeline,
-      resolve `${name}` like variables, clash check, `--set` overrides (`engine/graph.py`)
-- [x] 2.6 One output port per constant (dynamic ports); rename keeps connectors and updates
-      `${name}` references; "used by" list. *(Replaces the earlier idea of a `constants`
-      input on the requirement check / Python / report blocks — see spec 03 §3.5.1)*
-- [x] 2.7 Test case: Constants block with SF 1.5 and the 20 Hz requirement feeding the check,
-      margin scripts and report (`tools/make_test_case.py`, regenerate, spec 07)
-- [x] 2.8 Tests (unit + browser) and commit
-
-## Step 3 — Clean exit (spec 06 new section; first part of "hide the server")
-
-Today File > Quit stops the server but the browser tab stays. A web page can only close
-windows it opened itself, so a real exit needs the program to own the window.
-
-- [x] 3.1 Spec with a choice for the user (spec 06 §3.6):
-  - *Proposal A (no new dependency):* `apb gui` starts Chrome or Edge in app mode
-    (`--app=<url>` with its own profile folder): a window without tabs or address bar.
-    Quit ends that browser process, so the window closes; closing the window ends the
-    server. Firefox has no app mode: there the tab shows "Closed" as today
-  - *Proposal B:* NiceGUI native mode (pywebview): a real desktop window, but an extra
-    dependency that needs WebView2 (Windows) or GTK/Qt WebKit (Linux)
-  - Both: the server also stops when the last window has been closed for a few seconds;
-    unsaved-change warning kept
-- [x] 3.2 User review / choice — option A (Chrome/Edge app window)
-- [x] 3.3 Launcher (`src/apb/gui/launcher.py`): find browser, start, watch, shut down
-- [x] 3.4 Quit and window close wired to it; tests (launcher logic unit-tested, browser tests)
-- [x] 3.5 Commit
-
-## Step 4 — Property panel review (one panel at a time)
-
-The right-hand panel is hard to read and cluttered.
-
-- [x] 4.1 Inventory (spec 11, screenshots in `docs/spec/panels/before/`): screenshot of every block type's panel, listed with what is hard to
-      read; general layout rules (fixed header with label + block type, sections that fold,
-      help text in tooltips, wider/resizable panel, "Open editor" dialog for big content
-      like tables, code and report sections)
-- [x] 4.2 User review: agree the rules and the order of the panels (spec 11 §6)
-- [x] 4.3 Common frame (spec 11 §7): header, status line, Settings/Advanced/Ports, tooltips,
-      resizable 400 px panel, short paths, titles; `tools/panel_screenshots.py`
-- [x] 4.4 Word report: side panel summary + editor dialog (Sections | Items | Document)
-- [x] 4.5 Nastran analysis: status on top, computer settings under Advanced
-- [x] 4.6 HDF5 results (taller list, short file line) and RBE2/eigenvalue/mass forms
-      (connected file line, subcase drop-down)
-- [x] 4.7 Python: short code preview + editor, ports edited in the Ports section
-- [x] 4.8 Requirement check (connected limit, comparison labels, unit drop-down) and table
-      blocks (column choices from the upstream table, unit drop-downs)
-- [x] 4.9 Remaining panels: file lines, Read Excel sheet drop-down, Write Excel sheet name
-      per table, fastener labels, constants (wrapping description, editor dialog, compact
-      list above 8)
-- [x] 4.x Commit after each panel or group of panels, as the user asks
-
-Later (unchanged): load table → model update block; mode shape plots; Abaqus blocks; Word
-template as block input; data organisation for collaboration; toolbox restructure; undo/redo
-(GUI-13); push to a git remote so CI runs.
-
-Open points carried over (from the old HANDOFF notes):
-- Real MSC Nastran never run here: the default keywords `batch=no old=no scr=yes` in
-  `src/apb/blocks/nastran/command.py` (spec 09 §3.3) need a test on a real model.
-- Test case Excel workbook: decide whether the margin tables go in as extra sheets
-  (`tools/make_test_case.py`, spec 07).
-- CQUAD4, CBEAM, MPC force and grid point force readers are only tested on synthetic files
-  (spec 02 §5); needs a real file with those requests.
-- Practical: the full test suite takes ~6 min (browser tests need
-  `uv run playwright install chromium`); run it in the background.
+- [ ] 7. **Spec update** (`02-nastran-hdf5-input.md`): the multi-load-case use case, the
+      table layout (one row per element × location × subcase), and how load-case names
+      (subcase `LABEL`/`SUBTITLE`, or the Load case names block) join onto the table.
+- [ ] 8. **Multi-subcase example.** A small Nastran-like `.h5` with CBUSH forces for 3–4
+      subcases (made by `tools/make_synthetic_h5.py`), plus a test that runs the HDF5 block
+      → CBUSH margins script → envelope/requirement check over all subcases.
+- [ ] 9. **Close the gaps found in step 8** (GUI subcase multi-select, preview, margin
+      script, report table) and add an example pipeline `examples/multi_loadcase.apb.json`.
+- [ ] 10. Release 0.2.0: changelog entry, tag, push.

@@ -23,7 +23,29 @@ from apb.engine import (
 from apb.engine.store import OutputStore, StoreError, format_size
 from apb.engine.variables import parse_assignment
 
-app = typer.Typer(help="Analysis Pipeline Builder", no_args_is_help=True, add_completion=False)
+app = typer.Typer(help="Potato Pipeline", no_args_is_help=True, add_completion=False)
+
+
+def _print_version(value: bool) -> None:
+    """Print the version and exit when ``--version`` is given (spec 12 VER-03)."""
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    show_version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_print_version,
+            is_eager=True,
+            help="Print the version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Potato Pipeline."""
 
 
 def _load(path: Path) -> PipelineModel:

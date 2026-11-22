@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apb.units import UnitSystem
 
@@ -86,6 +86,18 @@ class PipelineModel(_Model):
     macros: list[dict[str, Any]] = Field(
         default_factory=list, description="Reserved for macro blocks (later version)."
     )
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def _known_schema(cls, value: Any) -> Any:
+        """Refuse files written by a newer tool with a clear message (spec 12 §3.4)."""
+        if isinstance(value, int) and not isinstance(value, bool) and value > SCHEMA_VERSION:
+            msg = (
+                f"made with a newer Potato Pipeline (file schema {value}, this version reads "
+                f"schema {SCHEMA_VERSION}); please update"
+            )
+            raise ValueError(msg)
+        return value
 
     def block(self, block_id: str) -> BlockInstance:
         """Return the block instance with the given ID.

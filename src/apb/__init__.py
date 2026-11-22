@@ -1,3 +1,11 @@
-"""Analysis Pipeline Builder: graphical pipelines from Nastran results to Word reports."""
+"""Potato Pipeline: graphical pipelines from Nastran results to Word reports."""
 
-__version__ = "0.1.0.dev0"
+from importlib.metadata import PackageNotFoundError, version
+
+DISTRIBUTION = "analysis-pipeline-builder"
+"""Name of the installed distribution; its metadata holds the version (spec 12 §3.2)."""
+
+try:
+    __version__: str = version(DISTRIBUTION)
+except PackageNotFoundError:  # pragma: no cover - only when src/ is used without install
+    __version__ = "0+unknown"

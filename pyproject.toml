@@ -1,7 +1,7 @@
 [project]
 name = "analysis-pipeline-builder"
 version = "0.1.0.dev0"
-description = "Graphical pipeline builder for structural analysis: Nastran results to Word report."
+description = "Potato Pipeline: graphical pipeline builder for structural analysis, from Nastran results to Word report."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

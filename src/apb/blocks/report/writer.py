@@ -369,7 +369,7 @@ class ReportBuilder:
     def _traceability(self, section: TraceabilitySection) -> None:
         self.doc.add_heading(section.heading, level=1)
         now = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
-        lines = [f"Generated {now} with Analysis Pipeline Builder {__version__}."]
+        lines = [f"Generated {now} with Potato Pipeline {__version__}."]
         base_dir = self.pipeline_file.parent if self.pipeline_file else None
         if self.pipeline_file is not None:
             lines.append("Pipeline: " + self._describe_file(self.pipeline_file, base_dir))

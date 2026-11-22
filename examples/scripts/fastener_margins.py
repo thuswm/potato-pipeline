@@ -1,6 +1,6 @@
 """Fastener margins.
 
-Script for an Analysis Pipeline Builder Python block. The block calls ``run`` with one
+Script for an Potato Pipeline Python block. The block calls ``run`` with one
 argument per input port and expects a dict with one entry per output port. Tables arrive
 as pandas DataFrames (units in ``df.attrs["units"]``), scalars as plain numbers.
 Use print() for messages: they appear in the block's log.

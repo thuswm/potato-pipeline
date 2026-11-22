@@ -135,6 +135,11 @@ def test_unknown_keys_in_file_are_rejected():
         PipelineModel.from_json('{"schema_version": 1, "blokcs": []}')
 
 
+def test_file_from_newer_tool_gets_clear_message():
+    with pytest.raises(ValueError, match=r"newer Potato Pipeline.*please update"):
+        PipelineModel.from_json('{"schema_version": 2, "blocks": []}')
+
+
 # ---- variables --------------------------------------------------------------------------
 
 

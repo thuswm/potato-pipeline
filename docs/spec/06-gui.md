@@ -140,7 +140,7 @@ raised. The button is available in every mode of the dialog (open, save, choose 
 2. If this tab, or another open tab of the same server, has unsaved changes: "Unsaved
    changes in: *name*, … Quit without saving?" (Changes are only written by Save / Save as;
    nothing is saved automatically.)
-3. All open tabs show a page "Analysis Pipeline Builder has been closed — you can close this
+3. All open tabs show a page "Potato Pipeline has been closed — you can close this
    tab", then the server stops and `apb gui` returns in the terminal.
 
 Closing a browser tab does not stop the server (a reload or a second tab must keep working);

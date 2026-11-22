@@ -309,7 +309,7 @@
           "title": "Fastener loads and margins, lap joint",
           "document_number": "${doc_number}",
           "revision": "${revision}",
-          "author": "Analysis Pipeline Builder example"
+          "author": "Potato Pipeline example"
         },
         "sections": [
           {

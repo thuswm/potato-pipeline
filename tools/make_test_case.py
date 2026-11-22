@@ -248,7 +248,7 @@ def build() -> PipelineModel:
             "title": "Test case: modal analysis and CBUSH margins",
             "document_number": "${doc_number}",
             "revision": "${revision}",
-            "author": "Analysis Pipeline Builder example",
+            "author": "Potato Pipeline example",
         },
         sections=sections,
     )

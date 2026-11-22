@@ -120,7 +120,7 @@ _SESSION = _Session()
 
 _CLOSED_HTML = (
     '<div style="font-family:sans-serif;text-align:center;margin-top:20vh">'
-    "<h2>Analysis Pipeline Builder has been closed</h2>"
+    "<h2>Potato Pipeline has been closed</h2>"
     "<p>You can close this tab.</p></div>"
 )
 MAX_LOG_LINES = 500
@@ -196,7 +196,7 @@ class EditorPage:
     def _build_header(self) -> None:
         with ui.header(elevated=True).classes("items-center gap-2 py-1 px-3 bg-slate-800"):
             ui.icon("account_tree", size="sm")
-            ui.label("Analysis Pipeline Builder").classes("font-medium")
+            ui.label("Potato Pipeline").classes("font-medium")
             with ui.button("File", icon="folder").props("flat color=white dense"), ui.menu():
                 ui.menu_item("New", on_click=self.new)
                 ui.menu_item("Open…", on_click=self.open)
@@ -547,7 +547,7 @@ class EditorPage:
 
     def _update_title(self) -> None:
         self.title.text = self.state.display_name
-        ui.page_title(f"{self.state.display_name} — Analysis Pipeline Builder")
+        ui.page_title(f"{self.state.display_name} — Potato Pipeline")
         # Ask the browser to warn before closing the tab with unsaved changes (GUI-12).
         flag = "true" if self.state.dirty else "false"
         ui.run_javascript(
@@ -1312,7 +1312,7 @@ def _stop_server(reason: str) -> None:
     """Stop running work and the server; safe to call from any thread (GUI-27, GUI-28)."""
 
     def stop() -> None:
-        print(f"Analysis Pipeline Builder: {reason}; stopping the server.", flush=True)
+        print(f"Potato Pipeline: {reason}; stopping the server.", flush=True)
         for page in list(_PAGES):
             page.runner.stop()
         app.shutdown()
@@ -1399,7 +1399,7 @@ def run_gui(
         root,
         host="127.0.0.1",
         port=port,
-        title="Analysis Pipeline Builder",
+        title="Potato Pipeline",
         show=False,
         reload=False,
         favicon="🔧",

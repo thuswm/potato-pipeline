@@ -6,9 +6,11 @@ Structural analysts repeatedly perform the same chain of work: run MSC Nastran, 
 results, massage them (often in Excel), do hand calculations, and write a report. When the
 input changes, the whole chain is redone by hand.
 
-The Analysis Pipeline Builder lets the analyst build this chain **once** as a graphical
+The Potato Pipeline lets the analyst build this chain **once** as a graphical
 pipeline (Simulink-style boxes and connectors) and **re-run it** whenever the input changes,
 regenerating all intermediate results and the Word report.
+
+**Name.** The tool is shown as **Potato Pipeline** (README, GUI, command-line help, reports). Its internal name stays `apb`: the Python package `apb`, the command `apb`, pipeline files `*.apb.json`, the config folder `apb` and the plugin entry-point group `apb.blocks`.
 
 ### 1.1 Vocabulary
 
