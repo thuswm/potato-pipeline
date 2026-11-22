@@ -1,8 +1,9 @@
 [project]
 name = "analysis-pipeline-builder"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Potato Pipeline: graphical pipeline builder for structural analysis, from Nastran results to Word report."
 readme = "README.md"
+authors = [{ name = "thuswm" }]
 requires-python = ">=3.12"
 dependencies = [
     "h5py>=3.16.0",
@@ -16,6 +17,11 @@ dependencies = [
     "python-docx>=1.2.0",
     "typer>=0.29.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/thuswm/potato-pipeline"
+Issues = "https://github.com/thuswm/potato-pipeline/issues"
+Changelog = "https://github.com/thuswm/potato-pipeline/blob/main/CHANGELOG.md"
 
 [project.scripts]
 apb = "apb.cli:app"

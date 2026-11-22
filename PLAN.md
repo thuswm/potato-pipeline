@@ -38,7 +38,7 @@ commit. Tick the boxes as work is done.
       - Then `apb gui …`, or `python -m apb …` if the venv is not active.
       - Verify: install into a clean venv with pip only (no uv), then start `apb --version`
         and `apb gui` against an example.
-- [ ] 5. **Prepare the repository.**
+- [x] 5. **Prepare the repository.**
       - Check what becomes public: `CLAUDE.md`, `PLAN.md` and `docs/plans/` stay as project
         history. `my_notes.md` is already git-ignored. The example FEM data is fake data. No
         local paths or personal data in tracked files (already checked: none found).
