@@ -33,6 +33,23 @@ class _FileBlock[P: _FileParams](Block[P]):
         return [ctx.resolve_path(params.file)]
 
 
+def sheet_list(path: Path) -> list[str] | None:
+    """Return the sheet names of a workbook, or ``None`` if it cannot be read.
+
+    The workbook is opened read-only and closed again (for the GUI's sheet drop-down).
+    """
+    if not path.is_file():
+        return None
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+    except Exception:  # not a workbook, locked, damaged: the GUI keeps the text field
+        return None
+    try:
+        return list(wb.sheetnames)
+    finally:
+        wb.close()
+
+
 def read_excel_range(path: Path, sheet: str, cell_range: str) -> pd.DataFrame:
     """Read a cell range (first row = headers) from a workbook.
 
@@ -59,7 +76,11 @@ def read_excel_range(path: Path, sheet: str, cell_range: str) -> pd.DataFrame:
 class ReadExcelParams(_FileParams):
     """Parameters of :class:`ReadExcel`."""
 
-    sheet: str = Field(default="", description="Sheet name; empty = first sheet")
+    sheet: str = Field(
+        default="",
+        description="Sheet name; empty = first sheet",
+        json_schema_extra={"apb_empty": "(first sheet)"},
+    )
     header_row: int = Field(default=1, ge=1, description="Row with the column names (1 = first)")
     range: str = Field(
         title="Cell range",

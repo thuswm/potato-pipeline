@@ -234,3 +234,53 @@ block" line, not only the HDF5 file. *Envelope*'s `columns` got the title "Value
 Screenshots in [`panels/after/`](panels/after/), e.g.
 [check.requirement](panels/after/check.requirement.png),
 [table.envelope](panels/after/table.envelope.png), [table.join](panels/after/table.join.png).
+
+### 4.9 Remaining panels — design
+
+After 4.3 these panels are already short (260–440 px); 4.9 fixes what is still unclear.
+
+**Input files: Read CSV, Read Excel** (and the generated file field in general)
+
+- A short line under the *File* field, like the Python panel's folder line (PNL-08):
+  "found · 4.2 kB · changed 2026-11-20 14:02", or in red "not found" (relative to the
+  pipeline folder; `${variable}` resolved). Only file metadata, the file is not read.
+- *Read Excel*, *Sheet*: a drop-down of the sheets in the workbook ("(first sheet)" +
+  the names, read with openpyxl in read-only mode) when the file can be read; the text
+  field as today when not. A stored sheet that is missing shows "Data (not in file)".
+
+**Write Excel**
+
+- *File*: the line under it tells whether the workbook exists ("written 13:49 · 565 B"),
+  with an *Open* icon (system program, like the Python panel) when it does.
+- *Sheet names*: one row per connected table instead of a comma-separated list: the
+  connector's item name on the left, the sheet name field on the right (empty = the
+  default name from the table, as today). Stored as today (`sheet_names` list in
+  connection order), so existing pipelines keep working. Without connections: text
+  field as today.
+
+**Fastener loads**
+
+- *Tension mode* labels: "Signed (compression negative)" and "Tension only (compression
+  = 0)"; *Axial axis* label "Fastener axis". Nothing else: the panel is short already.
+
+**Constants**
+
+- *Description* wraps over several lines (grows with its text) instead of being cut.
+- More than 8 constants: the side panel shows a compact list, one line per constant
+  ("f_min = 20 Hz", description as tooltip, "used by" count), and **Open editor** opens
+  the large dialog (PNL-06) with all constants as editable rows (name, value, unit,
+  description, used by, move, delete) and *Add constant*. Up to 8 constants: the cards as
+  today, plus the same *Open editor* button.
+
+### 4.9 Remaining panels — done (2026-11-22)
+
+Implemented as designed above. New in the generated form: every file field has the line
+under it (also the HDF5 blocks with a typed file); `OutputPath` (in `engine/block.py`)
+marks files a block writes; `apb_per_item: "<port>"` gives one row per connector (sheet
+names), `apb_empty` the label of the empty choice ("(first sheet)"). `sheet_list` in
+`blocks/table/readers.py` reads the sheet names. Constants: `COMPACT_LIMIT = 8` in
+`gui/constants_panel.py`; adding a constant from the compact list opens the editor.
+Screenshots: [table.write_excel](panels/after/table.write_excel.png),
+[table.read_excel](panels/after/table.read_excel.png),
+[table.constants](panels/after/table.constants.png),
+[loads.fastener_loads](panels/after/loads.fastener_loads.png).

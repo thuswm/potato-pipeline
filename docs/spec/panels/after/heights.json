@@ -1,7 +1,7 @@
 {
   "nastran.run": {
     "block": "Modal analysis",
-    "height_px": 525
+    "height_px": 527
   },
   "nastran.hdf5_results": {
     "block": "Modal results",
@@ -13,7 +13,7 @@
   },
   "table.constants": {
     "block": "Project constants",
-    "height_px": 439
+    "height_px": 456
   },
   "check.requirement": {
     "block": "Frequency requirement",
@@ -21,15 +21,15 @@
   },
   "table.write_excel": {
     "block": "Modal workbook",
-    "height_px": 307
+    "height_px": 345
   },
   "table.read_csv": {
     "block": "Locations",
-    "height_px": 261
+    "height_px": 280
   },
   "python.script": {
     "block": "Global margins",
-    "height_px": 512
+    "height_px": 514
   },
   "table.concat": {
     "block": "Nastran messages",
@@ -61,15 +61,15 @@
   },
   "nastran.hdf5_eigenvalues": {
     "block": "Extra eig",
-    "height_px": 269
+    "height_px": 288
   },
   "nastran.hdf5_masses": {
     "block": "Extra mass",
-    "height_px": 269
+    "height_px": 288
   },
   "table.read_excel": {
     "block": "Extra rxl",
-    "height_px": 307
+    "height_px": 326
   },
   "table.join": {
     "block": "Extra join",
@@ -77,7 +77,7 @@
   },
   "nastran.hdf5_rbe2_loads": {
     "block": "RBE2 loads",
-    "height_px": 445
+    "height_px": 464
   },
   "loads.fastener_loads": {
     "block": "Fastener loads CBUSH",

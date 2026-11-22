@@ -34,6 +34,10 @@ from apb.units import UnitSystem
 #: String parameter holding a file path; the GUI shows a file picker for it.
 FilePath = Annotated[str, Field(json_schema_extra={"apb_widget": "file"})]
 
+#: String parameter holding the path of a file the block writes (GUI: file picker and a
+#: "written" line with an *Open* icon).
+OutputPath = Annotated[str, Field(json_schema_extra={"apb_widget": "file", "apb_output": True})]
+
 #: String parameter holding code; the GUI shows a code editor for it.
 Code = Annotated[str, Field(json_schema_extra={"apb_widget": "code"})]
 

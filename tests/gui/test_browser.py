@@ -1274,3 +1274,90 @@ def test_table_blocks_offer_the_upstream_columns_after_a_run(page, workdir: Path
     saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
     block = next(b for b in saved["blocks"] if b.get("label") == "Critical fastener")
     assert block["params"]["columns"] == ["TENSION", "SHEAR", "EID"]
+
+
+# ---- spec 11 step 4.9: file lines, Excel, fastener and constants panels -------------------
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_file_lines_and_sheet_name_per_table(page, workdir: Path):
+    select(page, "Locations")
+    assert page.locator(".apb-file-state").inner_text().startswith("found · ")
+    select(page, "Modal workbook")
+    assert "not written yet" in page.locator(".apb-file-state").inner_text()
+    rows = page.locator(".apb-per-item-value")
+    assert rows.count() == 1  # one connected table
+    assert "Modal results" in page.locator(".apb-per-item").inner_text()
+    rows.first.locator("input").fill("Mass")
+    rows.first.locator("input").press("Enter")
+    page.wait_for_timeout(400)
+    run_all(page)
+    select(page, "Locations")
+    select(page, "Modal workbook")
+    assert page.locator(".apb-file-state").inner_text().startswith("written · ")
+    assert page.locator(".apb-open-file").count() == 1
+    save_file(page)
+    saved = json.loads((workdir / "test_case.apb.json").read_text(encoding="utf-8"))
+    book = next(b for b in saved["blocks"] if b.get("label") == "Modal workbook")
+    assert book["params"]["sheet_names"] == ["Mass"]
+    import openpyxl
+
+    wb = openpyxl.load_workbook(workdir / "output" / "test_case_modal.xlsx", read_only=True)
+    assert wb.sheetnames == ["Mass"]
+    wb.close()
+
+
+def test_read_excel_offers_the_sheets_and_fastener_labels(page, workdir: Path):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.active.title = "Loads"
+    wb.create_sheet("Notes")
+    wb.save(workdir / "book.xlsx")
+    select(page, "Fastener loads CBUSH")
+    assert page.get_by_label("Fastener axis").count() == 1
+    assert page.get_by_text("Signed (compression negative)").count() >= 1
+
+    page.locator(".q-drawer .q-item", has_text="Read Excel").first.click()
+    page.wait_for_timeout(500)
+    select(page, "Read Excel")
+    file = page.get_by_label("File *")
+    file.fill("book.xlsx")
+    file.press("Enter")
+    page.wait_for_timeout(400)
+    assert page.locator(".apb-file-state").inner_text().startswith("found · ")
+    select(page, "Fastener loads CBUSH")
+    select(page, "Read Excel")
+    page.locator(".apb-choice").click()
+    page.wait_for_timeout(300)
+    options = [o.strip() for o in page.locator(".q-menu .q-item").all_inner_texts()]
+    assert options == ["(first sheet)", "Loads", "Notes"]
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_constants_editor_dialog_and_compact_list(page, workdir: Path):
+    select(page, "Project constants")
+    assert page.locator(".apb-constant-row").count() == 2
+    page.locator(".apb-constants-open").click()
+    page.wait_for_timeout(400)
+    dialog = page.locator(".apb-constants-editor")
+    assert dialog.locator(".apb-constant-row").count() == 2
+    for i in range(7):  # 9 constants: more than the side panel shows as cards
+        dialog.locator(".apb-constant-add").click()
+        page.wait_for_timeout(250)
+        row = dialog.locator(".apb-constant-row").nth(2 + i)
+        row.locator(".apb-constant-name input").fill(f"K{i}")
+        row.locator(".apb-constant-value input").fill(str(i + 1))
+        row.locator(".apb-constant-value input").press("Enter")
+        page.wait_for_timeout(350)
+    assert dialog.locator(".apb-constant-error").count() == 0
+    dialog.get_by_role("button", name="Close").click()
+    page.wait_for_timeout(400)
+    assert page.locator(".apb-constant-row").count() == 0  # compact list in the side panel
+    lines = page.locator(".apb-constant-line").all_inner_texts()
+    assert len(lines) == 9 and lines[0].startswith("f_min = 20 Hz")
+    assert node(page, "Project constants").locator(".output").count() == 10
+    save_file(page)
+    saved = json.loads((workdir / "test_case.apb.json").read_text(encoding="utf-8"))
+    const = next(b for b in saved["blocks"] if b["id"] == "const")
+    assert [r["name"] for r in const["params"]["constants"]][-1] == "K6"

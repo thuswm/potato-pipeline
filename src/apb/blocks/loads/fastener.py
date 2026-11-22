@@ -71,9 +71,18 @@ class FastenerLoadsParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    axial_axis: Axis = Field(default="X", description="Fastener axis (component of the forces)")
+    axial_axis: Axis = Field(
+        title="Fastener axis", default="X", description="Component of the forces along the fastener"
+    )
     tension_mode: Literal["signed", "tension_only"] = Field(
-        default="signed", description="signed = compression negative; tension_only = set to 0"
+        default="signed",
+        description="How compression along the fastener is reported",
+        json_schema_extra={
+            "apb_labels": {
+                "signed": "Signed (compression negative)",
+                "tension_only": "Tension only (compression = 0)",
+            }
+        },
     )
     include_moments: bool = Field(default=False, description="Add BENDING and TORSION")
     keep_forces: bool = Field(default=False, description="Keep the original force columns")

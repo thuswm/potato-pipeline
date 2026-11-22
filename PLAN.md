@@ -126,10 +126,10 @@ The right-hand panel is hard to read and cluttered.
 - [x] 4.7 Python: short code preview + editor, ports edited in the Ports section
 - [x] 4.8 Requirement check (connected limit, comparison labels, unit drop-down) and table
       blocks (column choices from the upstream table, unit drop-downs)
-- [ ] 4.9+ One sub-step per panel (spec note → code → screenshots → user check), e.g.
-      HDF5 results, Nastran analysis, Python, Word report, requirement check, table blocks,
-      fastener loads, Excel, Constants
-- [ ] 4.x Commit after each panel or group of panels, as the user asks
+- [x] 4.9 Remaining panels: file lines, Read Excel sheet drop-down, Write Excel sheet name
+      per table, fastener labels, constants (wrapping description, editor dialog, compact
+      list above 8)
+- [x] 4.x Commit after each panel or group of panels, as the user asks
 
 Later (unchanged): load table → model update block; mode shape plots; Abaqus blocks; Word
 template as block input; data organisation for collaboration; toolbox restructure; undo/redo

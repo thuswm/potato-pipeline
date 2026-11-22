@@ -25,6 +25,7 @@ from apb.blocks.python.block import PythonBlock
 from apb.blocks.report import editing as report_editing
 from apb.blocks.report.block import WordReport
 from apb.blocks.table.constants import Constants
+from apb.blocks.table.readers import ReadExcel, sheet_list
 from apb.engine.events import EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
@@ -393,6 +394,9 @@ class EditorPage:
                     choices=choices,
                     replaced=replaced,
                     columns=lambda ports: self._input_columns(block.id, ports),
+                    resolve_path=self._full_path,
+                    items=lambda port: [i.source for i in self.state.item_infos(block.id, port)],
+                    open_file=open_with_system,
                 ).build(advanced=cls.advanced_params)
             self._ports_section(block)
 
@@ -782,6 +786,17 @@ class EditorPage:
                     name, value = link
                     shown = "" if value is None else self._format_value(value)
                     replaced[port.name] = (name, shown, "")
+        if cls is ReadExcel:
+            workbook = self._full_path(
+                str(self.state.pipeline.block(block_id).params.get("file") or "")
+            )
+
+            def sheets(name: str) -> list[Any] | None:
+                if name != "sheet" or workbook is None:
+                    return None
+                return sheet_list(workbook)
+
+            return replaced, sheets
         if "file" not in fields or not cls.type_id.startswith("nastran.hdf5"):
             return replaced, None
         link = self._connected_file(block_id)
@@ -795,14 +810,9 @@ class EditorPage:
             )
             path = Path(delivered) if delivered else None
         else:
-            typed = str(
-                self._resolve_variables(
-                    self.state.pipeline.block(block_id).params.get("file") or ""
-                )
+            path = self._full_path(
+                str(self.state.pipeline.block(block_id).params.get("file") or "")
             )
-            if typed:
-                candidate = Path(typed).expanduser()
-                path = candidate if candidate.is_absolute() else self.state.base_dir / candidate
 
         def choices(name: str) -> list[Any] | None:
             if name != "subcases" or path is None or not path.is_file():
@@ -813,6 +823,23 @@ class EditorPage:
                 return None
 
         return replaced, choices
+
+    def _full_path(self, raw: str, written: bool = False) -> Path | None:
+        """Full path of a stored file parameter (``${variable}`` replaced).
+
+        Args:
+            raw: The stored value.
+            written: The block writes the file: relative to the output folder, which the
+                GUI run puts in the pipeline folder too.
+
+        Returns:
+            The path, or ``None`` when empty or a variable is undefined.
+        """
+        text = str(self._resolve_variables(raw or "")).strip()
+        if not text or "${" in text:
+            return None
+        candidate = Path(text).expanduser()
+        return candidate if candidate.is_absolute() else self.state.base_dir / candidate
 
     def _connected_value(self, block_id: str, port: str) -> tuple[str, Any] | None:
         """Return ``(block name, value)`` of the connector into input ``port``, if any.

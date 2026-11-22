@@ -10,6 +10,11 @@ Field type -> widget:
                                ``apb_widget: unit`` -> unit drop-down)
 * ``apb_columns: <port>``      column names of the table on that input: drop-down
                                (``str``) or multi-select (``list[str]``) when known
+* ``apb_per_item: <port>``     ``list[str]`` with one entry per connector into that
+                               ``multiple`` input: one row per connected value
+* ``apb_empty: <label>``       label of the empty value in a drop-down of choices
+* file fields                  a line under the field: found / not found, size, time
+                               (``apb_output: True``: written file, with an *Open* icon)
 * ``int`` / ``float``          text accepting a number or ``${variable}``
 * ``bool``                     switch
 * ``Literal`` / ``Enum``       drop-down (optional fields add "(default)";
@@ -29,6 +34,7 @@ import json
 import re
 import types
 from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin
@@ -38,6 +44,7 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 from apb.blocks.python.scripting import PortSpec
+from apb.engine.store import format_size
 from apb.engine.types import PortType
 from apb.gui.editor import UNSET
 from apb.units import known_units
@@ -126,6 +133,32 @@ def describe(widget: Any, hint: str, placeholder: bool = True) -> None:
         widget.props(f"placeholder={json.dumps(example)}")
 
 
+def file_state(path: Path | None, written: bool = False) -> tuple[str, bool]:
+    """Describe a file for the line under a file field (spec 11 §4.9).
+
+    Only the file's metadata is read, never its content.
+
+    Args:
+        path: The full path, or ``None`` when no file is given.
+        written: The block writes the file (a missing file is not an error then).
+
+    Returns:
+        ``(text, problem)``, e.g. ``("found · 4.2 kB · changed 2026-11-20 14:02", False)``
+        or ``("not found", True)``; ``("", False)`` without a path.
+    """
+    if path is None:
+        return "", False
+    try:
+        info = path.stat()
+    except OSError:
+        return ("not written yet", False) if written else ("not found", True)
+    if not path.is_file():
+        return "not a file", True
+    when = datetime.fromtimestamp(info.st_mtime).strftime("%Y-%m-%d %H:%M")
+    verb = "written" if written else "found"
+    return f"{verb} · {format_size(info.st_size)} · {'' if written else 'changed '}{when}", False
+
+
 def connected_line(label: str, block: str, detail: str = "", tip: str = "") -> None:
     """Show that a connector delivers a parameter's value, instead of its field (PNL-07).
 
@@ -210,6 +243,12 @@ class ParamForm:
         columns: Returns the column names of the table on an input port (the
             ``apb_columns`` mark of a field, ``"left,right"`` = columns in both), or
             ``None`` when not known; known columns give a drop-down (PNL-11).
+        resolve_path: Returns the full path of a file parameter's stored value
+            (``${variable}`` replaced; ``written=True`` for files the block writes), or
+            ``None``; used for the line under file fields.
+        items: Returns the names of the values connected to a ``multiple`` input, in
+            connector order (for ``apb_per_item`` fields).
+        open_file: Opens a file with its system program (the *Open* icon of written files).
     """
 
     def __init__(
@@ -222,6 +261,9 @@ class ParamForm:
         choices: Callable[[str], list[Any] | None] | None = None,
         replaced: Mapping[str, tuple[str, str, str]] | None = None,
         columns: Callable[[str], list[str] | None] | None = None,
+        resolve_path: Callable[[str, bool], Path | None] | None = None,
+        items: Callable[[str], list[str]] | None = None,
+        open_file: Callable[[Path], None] | None = None,
     ) -> None:
         self.model = model
         self.values = values
@@ -230,6 +272,9 @@ class ParamForm:
         self.choices = choices
         self.replaced = dict(replaced or {})
         self.columns = columns
+        self.resolve_path = resolve_path
+        self.items = items
+        self.open_file = open_file
 
     def build(self, advanced: Sequence[str] = ()) -> None:
         """Create the widgets in the current NiceGUI context.
@@ -291,10 +336,20 @@ class ParamForm:
             block, shown, tip = self.replaced[name]
             connected_line(field_label(name, field), block, shown, tip)
             return
-        options = self.choices(name) if self.choices and kind == "list" else None
-        if options is not None and not isinstance(value, str):
+        options = self.choices(name) if self.choices and kind in {"list", "text"} else None
+        if options is not None and kind == "list" and not isinstance(value, str):
             self._choose_many(label, hint, value, setter, options)
             return
+        if options is not None and kind == "text" and not _VARIABLE.match(str(value or "")):
+            empty = str(extra.get("apb_empty", "(none)"))
+            self._choose_one(label, hint, value, setter, options, empty)
+            return
+        per_item = extra.get("apb_per_item")
+        if isinstance(per_item, str) and kind == "list" and self.items is not None:
+            names = self.items(per_item)
+            if names and not isinstance(value, str):
+                self._per_item(label, hint, value, setter, names)
+                return
         port = extra.get("apb_columns")
         if isinstance(port, str) and kind in {"text", "list"}:
             known = self.columns(port) if self.columns else None
@@ -307,7 +362,7 @@ class ParamForm:
         if kind == "text" and widget == "unit":
             self._unit(label, hint, value, setter, other=bool(extra.get("apb_other")))
         elif kind == "text" and widget == "file":
-            self._file(label, hint, value, setter)
+            self._file(label, hint, value, setter, written=bool(extra.get("apb_output")))
         elif kind == "text" and widget == "code":
             self._code(label, hint, value, setter)
         elif kind == "text":
@@ -363,7 +418,9 @@ class ParamForm:
         box.on("blur", lambda: setter(box.value))
         box.on("keydown.enter", lambda: setter(box.value))
 
-    def _file(self, label: str, hint: str, value: Any, setter: Setter) -> None:
+    def _file(
+        self, label: str, hint: str, value: Any, setter: Setter, written: bool = False
+    ) -> None:
         with ui.row().classes("w-full no-wrap items-start gap-1"):
             box = (
                 ui.input(label, value="" if value is None else str(value))
@@ -371,8 +428,6 @@ class ParamForm:
                 .classes("grow")
             )
             self._hint(box, hint)
-            box.on("blur", lambda: setter(box.value))
-            box.on("keydown.enter", lambda: setter(box.value))
 
             async def browse() -> None:
                 if self.pick_file is None:
@@ -385,6 +440,34 @@ class ParamForm:
             ui.button(icon="folder_open", on_click=browse).props("flat dense").tooltip(
                 "Choose file"
             )
+        line = ui.row().classes("w-full items-center no-wrap gap-1 -mt-1 apb-file-state")
+
+        def show() -> None:
+            line.clear()
+            raw = str(box.value or "").strip()
+            path = self.resolve_path(raw, written) if self.resolve_path and raw else None
+            text, problem = file_state(path, written)
+            if not text or path is None:
+                return
+            with line:
+                shown = ui.label(text).classes(
+                    "text-[11px] " + ("text-red-700" if problem else "text-slate-500")
+                )
+                shown.tooltip(str(path))
+                opener = self.open_file
+                if written and opener is not None and path.is_file():
+                    target = path
+                    ui.button(icon="open_in_new", on_click=lambda: opener(target)).props(
+                        "flat dense size=xs"
+                    ).classes("apb-open-file").tooltip("Open with the system program")
+
+        def commit() -> None:
+            setter(box.value)
+            show()
+
+        box.on("blur", commit)
+        box.on("keydown.enter", commit)
+        show()
 
     def _code(self, label: str, hint: str, value: Any, setter: Setter) -> None:
         # Folded away when empty (e.g. inline code of a Python block that uses a script file).
@@ -467,6 +550,57 @@ class ParamForm:
         )
         sel.on_value_change(lambda e: setter(list(e.value or [])))
         describe(sel, hint, placeholder=False)
+
+    def _choose_one(
+        self, label: str, hint: str, value: Any, setter: Setter, options: list[Any], empty: str
+    ) -> None:
+        """Drop-down of the values present (e.g. the sheets of a workbook), spec 11 §4.9."""
+        current = "" if value is None else str(value)
+        mapping: dict[str, str] = {"": empty, **{str(o): str(o) for o in options}}
+        if current not in mapping:
+            mapping[current] = f"{current} (not in file)"
+        sel = (
+            ui.select(mapping, value=current, label=label)
+            .props("dense outlined")
+            .classes("w-full apb-choice")
+        )
+        sel.on_value_change(lambda e: setter("" if e.value is None else str(e.value)))
+        describe(sel, hint, placeholder=False)
+
+    def _per_item(
+        self, label: str, hint: str, value: Any, setter: Setter, names: list[str]
+    ) -> None:
+        """One text field per connected value (e.g. a sheet name per table), §4.9."""
+        stored = [str(v) for v in value] if isinstance(value, list) else []
+        entries = stored + [""] * (len(names) - len(stored))
+        boxes: list[ui.input] = []
+
+        def commit() -> None:
+            typed = [str(b.value or "").strip() for b in boxes] + entries[len(boxes) :]
+            while typed and not typed[-1]:
+                typed.pop()
+            if typed != stored:
+                stored[:] = typed
+                setter(list(typed))
+
+        with ui.column().classes("w-full gap-0 apb-per-item"):
+            with ui.row().classes("w-full items-center gap-1"):
+                ui.label(label).classes("text-xs text-slate-600")
+                if hint:
+                    ui.icon("info_outline", size="xs").classes(
+                        "text-slate-400 cursor-help apb-info"
+                    ).tooltip(hint)
+            for name, entry in zip(names, entries, strict=False):
+                with ui.row().classes("w-full no-wrap items-center gap-2"):
+                    ui.label(name).classes("text-xs text-slate-700 w-1/3 truncate").tooltip(name)
+                    box = (
+                        ui.input(value=entry, placeholder="(table title)")
+                        .props("dense outlined")
+                        .classes("grow apb-per-item-value")
+                    )
+                    box.on("blur", commit)
+                    box.on("keydown.enter", commit)
+                    boxes.append(box)
 
     def _choose_columns(
         self, label: str, hint: str, value: Any, setter: Setter, known: list[str], many: bool

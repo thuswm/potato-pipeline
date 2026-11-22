@@ -15,7 +15,10 @@ from typing import Any
 from nicegui import ui
 
 from apb.blocks.table.constants import name_problem, unit_problem
-from apb.units import known_units
+from apb.gui.forms import unit_options
+
+#: More constants than this: the side panel shows a compact list (spec 11 §4.9).
+COMPACT_LIMIT = 8
 
 
 @dataclass
@@ -90,7 +93,10 @@ def to_stored(row: DraftRow) -> dict[str, Any]:
 
 
 class ConstantsPanel:
-    """Builds the constants editor for one Constants block (CON-10).
+    """Builds the constants editor for one Constants block (CON-10, spec 11 §4.9).
+
+    Up to :data:`COMPACT_LIMIT` constants the side panel shows them as editable cards,
+    with more a compact list; *Open editor* shows all of them as wide rows in a dialog.
 
     Args:
         params: Stored parameters of the block.
@@ -129,7 +135,35 @@ class ConstantsPanel:
 
     def build(self) -> None:
         """Create the widgets in the current NiceGUI context."""
-        self.box = ui.column().classes("w-full gap-1 apb-constants")
+        self.side = ui.column().classes("w-full gap-1 apb-constants")
+        self.box = self.side
+        self._render()
+
+    @property
+    def wide(self) -> bool:
+        """The rows are shown in the editor dialog (one line per constant)."""
+        return self.box is not self.side
+
+    def open_editor(self) -> None:
+        """Open the large editor dialog with all constants (PNL-06)."""
+        with (
+            ui.dialog().props("persistent") as dialog,
+            ui.card().classes("w-[80vw] max-w-none h-[85vh] p-0 gap-0 apb-constants-editor"),
+        ):
+            with ui.row().classes("w-full items-center px-4 py-2 border-b"):
+                ui.icon("tune").classes("text-slate-600")
+                ui.label("Constants editor").classes("text-lg font-medium")
+                ui.space()
+                ui.button("Close", on_click=dialog.close).props("flat no-caps")
+            with ui.scroll_area().classes("w-full grow px-4"):
+                self.box = ui.column().classes("w-full gap-1 py-2 apb-constants")
+        dialog.on("hide", self._editor_closed)
+        self._render()
+        dialog.open()
+
+    def _editor_closed(self) -> None:
+        """Back to the side panel, showing the edits made in the dialog."""
+        self.box = self.side
         self._render()
 
     def _show_status(self, index: int) -> None:
@@ -149,13 +183,17 @@ class ConstantsPanel:
     def _render(self) -> None:
         self.box.clear()
         self.status: list[ui.label] = []
-        units = {"": "(none)", **{u: u for u in known_units() if u != "-"}}
+        if not self.wide and len(self.rows) > COMPACT_LIMIT:
+            self._render_compact()
+            return
         with self.box:
             if not self.rows:
                 ui.label("No constants yet.").classes("text-xs text-slate-500")
             for index, row in enumerate(self.rows):
+                units = unit_options(row.unit)
                 with ui.column().classes("w-full gap-0 border rounded p-1 apb-constant-row"):
-                    with ui.row().classes("w-full no-wrap items-start gap-1"):
+                    top = ui.row().classes("w-full no-wrap items-start gap-1")
+                    with top:
                         name = (
                             ui.input("Name", value=row.name)
                             .props("dense")
@@ -167,9 +205,7 @@ class ConstantsPanel:
                             .classes("w-20 apb-constant-value")
                         )
                         unit = (
-                            ui.select(
-                                units, value=row.unit if row.unit in units else "", label="Unit"
-                            )
+                            ui.select(units, value=row.unit, label="Unit")
                             .props("dense options-dense")
                             .classes("w-20 apb-constant-unit")
                         )
@@ -183,11 +219,16 @@ class ConstantsPanel:
                         ui.button(icon="delete", on_click=lambda i=index: self._delete(i)).props(
                             f'flat dense size=sm aria-label="Delete {row.name}"'
                         ).classes("apb-constant-delete").tooltip("Delete this constant")
-                    description = (
-                        ui.input("Description", value=row.description)
-                        .props("dense")
-                        .classes("w-full apb-constant-description")
-                    )
+                    with top if self.wide else ui.row().classes("w-full"):
+                        description = (
+                            ui.textarea("Description", value=row.description)
+                            .props("dense autogrow rows=1")
+                            .classes(
+                                ("grow" if self.wide else "w-full") + " apb-constant-description"
+                            )
+                        )
+                    if self.wide:  # description before the move/delete buttons
+                        description.move(top, target_index=3)
                     self.status.append(ui.label())
                     self._show_status(index)
 
@@ -200,13 +241,44 @@ class ConstantsPanel:
                     ) -> None:
                         self._commit(i, n.value or "", v.value or "", u.value or "", d.value or "")
 
-                    for widget in (name, value, description):
+                    for widget in (name, value):
                         widget.on("keydown.enter", lambda c=commit: c())
                         widget.on("blur", lambda c=commit: c())
+                    # Enter commits; the description wraps but holds no line breaks.
+                    description.on("keydown.enter.prevent", lambda c=commit: c())
+                    description.on("blur", lambda c=commit: c())
                     unit.on_value_change(lambda _e, c=commit: c())
-            ui.button("Add constant", icon="add", on_click=self._add).props(
-                "flat dense no-caps size=sm"
-            ).classes("apb-constant-add")
+            with ui.row().classes("items-center gap-2"):
+                ui.button("Add constant", icon="add", on_click=self._add).props(
+                    "flat dense no-caps size=sm"
+                ).classes("apb-constant-add")
+                if not self.wide:
+                    self._editor_button()
+
+    def _editor_button(self) -> None:
+        ui.button("Open editor", icon="open_in_full", on_click=self.open_editor).props(
+            "flat dense no-caps size=sm"
+        ).classes("apb-constants-open")
+
+    def _render_compact(self) -> None:
+        """One line per constant ("f_min = 20 Hz"), the editing is done in the dialog."""
+        with self.box:
+            ui.label(f"{len(self.rows)} constants").classes("text-xs text-slate-600")
+            with ui.column().classes("w-full gap-0 apb-constants-compact"):
+                for row in self.rows:
+                    used = len(self.users(row.stored)) if row.stored else 0
+                    with ui.row().classes("w-full no-wrap items-center gap-2 apb-constant-line"):
+                        text = f"{row.name} = {row.value}" + (f" {row.unit}" if row.unit else "")
+                        shown = ui.label(text).classes(
+                            "text-sm truncate " + ("text-red-700" if row.error else "")
+                        )
+                        if row.description or row.error:
+                            shown.tooltip(row.error or row.description)
+                        ui.space()
+                        ui.label(f"used by {used}" if used else "not used").classes(
+                            "text-[10px] text-slate-500 shrink-0"
+                        )
+            self._editor_button()
 
     # ---- editing --------------------------------------------------------------------------
 
@@ -259,6 +331,9 @@ class ConstantsPanel:
 
     def _add(self) -> None:
         self.rows.append(DraftRow())
+        if not self.wide and len(self.rows) > COMPACT_LIMIT:
+            self.open_editor()  # a new row cannot be typed in the compact list
+            return
         self._render()
 
     def _move(self, index: int, step: int) -> None:
