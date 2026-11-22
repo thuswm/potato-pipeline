@@ -33,6 +33,10 @@ pyNastran is deliberately **not** used.
 | NAS-18 | Grid point weight generator output as a mass / centre of gravity table (§3.8) | S |
 | NAS-19 | Browse and read the model data (`/NASTRAN/INPUT`, e.g. CBUSH connectivity) through the same browser. *Browsing* is done by the HDF5 viewer (spec 10, button **Open in viewer** in this panel); reading model tables into the pipeline stays later | L |
 | NAS-20 | The result blocks (results, eigenvalues, RBE2 loads, point masses) accept the `.h5` path from a connector (`file` input), so an analysis block can feed them (spec 09 §3.8) | M |
+| NAS-21 | **Several load cases in one table:** one analysis with several subcases gives one table holding every selected subcase, one row per entity (× location) × subcase, so a downstream block sees all load cases at once (§3.10) | M |
+| NAS-22 | **Load case names from the file:** the subcase names in the case control (`SUBTITLE`, `LABEL`, `TITLE`) are added as a `LABEL` column, the column the Load case names block makes (§3.10) | M |
+| NAS-23 | The subcase choices in the panel show each subcase with its name (`2 — Pull-off`) | S |
+| NAS-24 | An example pipeline checks CBUSH margins over all load cases and reports the governing load case per element (§3.10) | M |
 
 ## 3. Design
 
@@ -242,6 +246,87 @@ MSC Nastran 2023.3, unit system `SI` (m, kg, N):
 
 Test values are checked against the `.f06` (e.g. CBUSH 17: FZ = 2500 N; mode 1: 25.71 Hz).
 
+### 3.10 Several load cases in one table (NAS-21 … NAS-24)
+
+*Status: **proposal, not scheduled** (2026-11-22). Written in round 5; the round closed
+before implementation. A later plan decides which parts are built.*
+
+**Use case.** A static analysis has several load cases (subcases), e.g. four flight load
+cases, and each one writes CBUSH forces. The analyst checks every load case and needs the
+governing one, so all load cases must be in **one** table.
+
+**What already works.** The HDF5 result blocks read every selected subcase into one long
+table with a `SUBCASE` column. An empty subcase selection means all subcases (§3.3, §3.4).
+The `fastener_loads` example reads CBUSH forces of four subcases from
+`examples/data/synthetic_fastener_joint.h5`. It names them with a Load case names block,
+builds a load case table and envelopes the margins. The real reference files (§3.9) have one
+subcase each, so the chain has not been shown on real-format data yet.
+
+**Table layout** (unchanged, written down here):
+
+| SUBCASE | LABEL *(new, optional)* | EID | FX | FY | FZ | … |
+|--------:|-------|----:|---:|---:|---:|---|
+| 1 | Shear X | 17 | … | … | … | |
+| 1 | Shear X | 18 | … | … | … | |
+| 2 | Pull-off | 17 | … | … | … | |
+
+Rows are sorted by subcase, then ID. A side-by-side layout (one column per load case) is
+made by the Load case table block (spec 03), not by the reader.
+
+**Load case names from the file (NAS-22).** MSC Nastran writes the case control of every
+subcase to `/NASTRAN/INPUT/PARAMETER/CASECC/SUBCASE`, one row per subcase: `SID` (the subcase
+ID), `TITLE`, `SUBTITLE` and `LABEL` (128 characters each, blank-padded). New parameter on
+every result block that has a `SUBCASE` column (results, RBE2 loads):
+
+| Parameter | Values | Default |
+|-----------|--------|---------|
+| `case_names` | `auto`, `subtitle`, `label`, `title`, `none` | `auto` |
+
+- `auto` uses `SUBTITLE`, or `LABEL` where the subtitle is blank. A `TITLE` is usually the
+  same for the whole run, so it is never chosen automatically.
+- The `LABEL` column is placed right after `SUBCASE`. It is added only if at least one of
+  the selected subcases has a non-blank name. Subcases without a name get an empty value.
+- If the file has no `CASECC` table (older versions, synthetic files), nothing is added and
+  there is no error.
+- The column name `LABEL` is the one the Load case names block (`table.case_labels`)
+  produces, so the Load case table and the report use it the same way. Names typed into a
+  Load case names block still win: joining that block's table replaces the `LABEL` from the
+  file.
+- Effect on existing pipelines: the reference files have blank `SUBTITLE` and `LABEL`
+  (`global_loads`: `TITLE = STATIC`), so `auto` adds nothing and existing pipelines give the
+  same tables as before.
+
+**Panel (NAS-23).** The Subcases multi-select lists `1 — Shear X`, `2 — Pull-off` … (the
+name as chosen by `case_names`), and the peek preview shows the `LABEL` column.
+
+**Test data.**
+1. `tools/make_synthetic_h5.py` also writes a `CASECC/SUBCASE` table (with `SUBTITLE`s) to
+   `synthetic_fastener_joint.h5`, so names, the `auto` rule and the missing-table case can
+   be tested.
+2. *Proposal:* a real MSC Nastran run with several subcases. `global_loads.bdf` with three or
+   four `SUBCASE`s (gravity in X, Y and Z, plus a combined case), each with a `SUBTITLE`. I
+   prepare the `.bdf`, you run it in Nastran 2023.3 and add the `.h5`/`.f06` to
+   `examples/fem/` (e.g. `global_loads_multi`). This closes the gap between the synthetic and
+   the real layout.
+
+**Example pipeline (NAS-24)** `examples/multi_loadcase.apb.json`:
+
+```
+HDF5 results (CBUSH forces, all subcases, names from file)
+   └─► Python: cbush_margins.py (MS per load case, element and location)
+          ├─► Envelope: min MS per element and location, with its SUBCASE and LABEL
+          │      └─► Requirement check: min MS ≥ 0
+          ├─► Write Excel (all margins + envelope)
+          └─► Word report (envelope table, check result)
+```
+
+The existing `cbush_margins.py` already works per `SUBCASE`. It is changed to pass a
+`LABEL` column through when the input has one.
+
+**Out of scope here:** stacking several `.h5` files, one per load case, into one table
+(later, if needed). Load case combinations computed in the pipeline (e.g. 1.2 × LC1 +
+LC2): this is done by the Compute block or in Python today.
+
 ## 4. Out of scope (v1)
 
 Reading the rest of the input model (geometry, properties, materials) from `/NASTRAN/INPUT`
@@ -254,3 +339,5 @@ files, running Nastran.
 1. ~~Sample `.h5` files from MSC Nastran 2023.3.~~ Supplied 2026-11-15 (§3.9).
 2. The CQUAD4, CBEAM, MPC force and grid point force mappings are still unverified; a real
    file with shell/beam output and `MPCFORCES`/`GPFORCE` requests would close this.
+3. Round 5 part B (§3.10): will you run a multi-subcase version of `global_loads.bdf` in
+   Nastran so the reference set includes a real file with several load cases?

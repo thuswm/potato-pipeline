@@ -1,6 +1,6 @@
 # PLAN — round 5: GitHub introduction (2026-11-22)
 
-Status: **approved 2026-11-22, in progress**. Completed plans are archived in `docs/plans/`.
+Status: **complete 2026-11-22**. Part A released as v0.1.0–v0.1.2; part B moved out of the round (see below). Completed plans are archived in `docs/plans/`.
 
 Source: the "Next Step" section of the user's notes after round 4. Each step: spec → user
 review → code → tests (`ruff format`, `ruff check`, `mypy src`, `pytest`) → user asks for the
@@ -13,7 +13,7 @@ commit. Tick the boxes as work is done.
 | Name | Display name **Potato Pipeline**. Package `apb`, command `apb` and `*.apb.json` files are unchanged |
 | Repository | Public, `github.com/thuswm/potato-pipeline` |
 | License | None for now; the user decides later (MIT was suggested). Without a license file the code is visible but "all rights reserved" |
-| Several load cases | Not part of the GitHub introduction: part B, after the push |
+| Several load cases | Moved out of this round (2026-11-22): the function already exists; what is left is decided after the user's Windows test |
 
 ## Part A — GitHub introduction
 
@@ -50,23 +50,25 @@ commit. Tick the boxes as work is done.
       `v0.1.0`. Check that CI (Ubuntu and Windows, Python 3.12 and 3.13) passes on GitHub and
       fix any failures.
       Done: v0.1.0 pushed; Windows CI failed (type check, path-separator tests, one display
-      bug), fixed on branch `ci/windows-fix` and released as v0.1.1.
+      bug), fixed on branch `ci/windows-fix` and released as v0.1.1. Two flaky browser tests
+      fixed and CI limited to branch pushes in v0.1.2 (pushed without CI at the user's request).
 
-## Part B — Several load cases in one table (after the push)
+## Part B — Several load cases in one table (moved out of the round)
 
 Need: a Nastran analysis has several load cases (subcases), and each one outputs e.g.
 CBUSH forces. The analyst checks all load cases, so they must all be in **one** table.
 
-The HDF5 result block already reads every selected subcase into one long table with a
-`SUBCASE` column (empty selection = all subcases). Because all example files have a single
-subcase, this has never been shown working end to end.
+**Finding (2026-11-22):** this already works. The HDF5 result block reads every selected
+subcase into one long table with a `SUBCASE` column (empty selection = all subcases). The
+`fastener_loads` example does it for CBUSH forces of four subcases on synthetic data (load case
+names, load case table, governing margin), and tests cover it. It has not been shown on a
+**real** Nastran file with several subcases, because the reference files have one subcase each.
 
-- [ ] 7. **Spec update** (`02-nastran-hdf5-input.md`): the multi-load-case use case, the
-      table layout (one row per element × location × subcase), and how load-case names
-      (subcase `LABEL`/`SUBTITLE`, or the Load case names block) join onto the table.
-- [ ] 8. **Multi-subcase example.** A small Nastran-like `.h5` with CBUSH forces for 3–4
-      subcases (made by `tools/make_synthetic_h5.py`), plus a test that runs the HDF5 block
-      → CBUSH margins script → envelope/requirement check over all subcases.
-- [ ] 9. **Close the gaps found in step 8** (GUI subcase multi-select, preview, margin
-      script, report table) and add an example pipeline `examples/multi_loadcase.apb.json`.
-- [ ] 10. Release 0.2.0: changelog entry, tag, push.
+What would remain is verification and convenience, written up as a proposal in spec 02 §3.10:
+load case names from the file's case control, names in the subcase list, a real multi-subcase
+Nastran run (`global_loads.bdf` with several `SUBCASE`s, run by the user) and an example
+pipeline of the CBUSH margin chain. Decision: the round closes here; the next plan is written
+from the user's test on the Windows work computer and takes over what still matters.
+
+- [x] 7. Spec 02 §3.10 written and committed as a proposal (not scheduled).
+- ~~8.–10.~~ Not done in this round (see above).
