@@ -41,8 +41,8 @@ from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
 from apb.gui.preview import open_with_system, show_result, show_value, stored_time
 from apb.gui.python_panel import PythonPanel
 from apb.gui.report_editor import ReportPanel
-from apb.gui.runner import EVENT_STATES, RunController, summary
-from apb.units import UnitSystem
+from apb.gui.runner import EVENT_STATES, RunController, describe_value, summary
+from apb.units import Quantity, UnitSystem
 
 HEADER_HEIGHT = 52
 
@@ -392,6 +392,7 @@ class EditorPage:
                     pick_file=self._pick_file,
                     choices=choices,
                     replaced=replaced,
+                    columns=lambda ports: self._input_columns(block.id, ports),
                 ).build(advanced=cls.advanced_params)
             self._ports_section(block)
 
@@ -767,11 +768,21 @@ class EditorPage:
     ) -> tuple[dict[str, tuple[str, str, str]], Callable[[str], list[Any] | None] | None]:
         """Connected inputs that replace parameters, and choices from the result file.
 
-        HDF5 blocks whose file comes from a connector show a "from block" line instead of
-        the file field (PNL-07); their ``subcases`` are offered from the file (PNL-11).
+        A parameter with the same name as a connected input (e.g. the requirement
+        ``limit``) shows a "from block" line instead of its field (PNL-07). HDF5 blocks
+        show the delivered file that way; their ``subcases`` are offered from the file
+        (PNL-11).
         """
         replaced: dict[str, tuple[str, str, str]] = {}
-        if "file" not in cls.Params.model_fields or not cls.type_id.startswith("nastran.hdf5"):
+        fields = cls.Params.model_fields
+        for port in cls.inputs:
+            if port.name in fields and port.name != "file":
+                link = self._connected_value(block_id, port.name)
+                if link is not None:
+                    name, value = link
+                    shown = "" if value is None else self._format_value(value)
+                    replaced[port.name] = (name, shown, "")
+        if "file" not in fields or not cls.type_id.startswith("nastran.hdf5"):
             return replaced, None
         link = self._connected_file(block_id)
         path: Path | None = None
@@ -803,23 +814,63 @@ class EditorPage:
 
         return replaced, choices
 
-    def _connected_file(self, block_id: str) -> tuple[str, str | None] | None:
-        """Return ``(block name, file)`` if a block delivers the result file of ``block_id``.
+    def _connected_value(self, block_id: str, port: str) -> tuple[str, Any] | None:
+        """Return ``(block name, value)`` of the connector into input ``port``, if any.
 
-        ``file`` is ``None`` while that block has no output yet.
+        ``value`` is ``None`` while the source block has no output (run or stored).
         """
         for conn in self.state.pipeline.connections:
-            if conn.target.block == block_id and conn.target.port == "file":
+            if conn.target.block == block_id and conn.target.port == port:
                 result = self.runner.result(conn.source.block)
-                path: str | None = None
+                value: Any = None
                 if result is not None:
                     try:
                         value = result.outputs.get(conn.source.port)
                     except StoreError:
                         value = None
-                    path = value if isinstance(value, str) else None
-                return self._block_name(conn.source.block), path
+                return self._block_name(conn.source.block), value
         return None
+
+    @staticmethod
+    def _format_value(value: Any) -> str:
+        """Short text of a delivered scalar, e.g. ``20 Hz``."""
+        if isinstance(value, Quantity):
+            return f"{value:g}"
+        if isinstance(value, float):
+            return f"{value:g}"
+        return describe_value(value) if isinstance(value, pd.DataFrame) else str(value)
+
+    def _input_columns(self, block_id: str, ports: str) -> list[str] | None:
+        """Column names of the table(s) arriving at the given input(s) (PNL-11).
+
+        Args:
+            block_id: The receiving block.
+            ports: Input port name, or several separated by commas: then only the columns
+                present in all of them are returned (Join keys).
+
+        Returns:
+            The columns in the order of the (first) table, or ``None`` when a table is not
+            known (no connector, or the upstream block has no output yet).
+        """
+        common: list[str] | None = None
+        for port in (p.strip() for p in ports.split(",")):
+            link = self._connected_value(block_id, port)
+            if link is None or not isinstance(link[1], pd.DataFrame):
+                return None
+            names = [str(c) for c in link[1].columns]
+            common = names if common is None else [c for c in common if c in names]
+        return common
+
+    def _connected_file(self, block_id: str) -> tuple[str, str | None] | None:
+        """Return ``(block name, file)`` if a block delivers the result file of ``block_id``.
+
+        ``file`` is ``None`` while that block has no output yet.
+        """
+        link = self._connected_value(block_id, "file")
+        if link is None:
+            return None
+        name, value = link
+        return name, value if isinstance(value, str) else None
 
     def _resolve_variables(self, value: Any) -> Any:
         """Replace ``${variable}`` references; undefined variables are left as they are."""

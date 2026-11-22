@@ -6,10 +6,14 @@ references are kept. Validation happens in the engine (the panel shows its messa
 Field type -> widget:
 
 * ``str``                      text (``apb_widget: file`` -> text + file picker,
-                               ``apb_widget: code`` -> code editor)
+                               ``apb_widget: code`` -> code editor,
+                               ``apb_widget: unit`` -> unit drop-down)
+* ``apb_columns: <port>``      column names of the table on that input: drop-down
+                               (``str``) or multi-select (``list[str]``) when known
 * ``int`` / ``float``          text accepting a number or ``${variable}``
 * ``bool``                     switch
-* ``Literal`` / ``Enum``       drop-down (optional fields add "(default)")
+* ``Literal`` / ``Enum``       drop-down (optional fields add "(default)";
+                               ``apb_labels`` gives display labels)
 * ``list[str | int | float]``  comma-separated text
 * ``list[Literal]``            multi-select drop-down
 * ``dict[str | int, str]``     key/value rows
@@ -36,12 +40,29 @@ from pydantic.fields import FieldInfo
 from apb.blocks.python.scripting import PortSpec
 from apb.engine.types import PortType
 from apb.gui.editor import UNSET
+from apb.units import known_units
 
 _VARIABLE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
 _EXAMPLE = re.compile(r"\be\.g\.\s*(.+?)\s*(?:; | — |$)")
 
 #: Writes a stored value (or ``UNSET`` to fall back to the default).
 type Setter = Callable[[Any], None]
+
+#: Hint added to a column field whose upstream columns are not known (PNL-11).
+RUN_UPSTREAM = "Run the upstream block to choose from its columns"
+
+
+def unit_options(current: str = "", other: bool = False) -> dict[str, str]:
+    """Return the choices of a unit drop-down: ``""`` = "(none)", then the known units.
+
+    Args:
+        current: The stored value; kept as a choice when it is not a known unit.
+        other: The field accepts labels outside the list (shown without a remark).
+    """
+    options = {"": "(none)", **{u: u for u in known_units() if u != "-"}}
+    if current and current not in options:
+        options[current] = current if other else f"{current} (unknown unit)"
+    return options
 
 
 def humanize(name: str) -> str:
@@ -186,6 +207,9 @@ class ParamForm:
             file), or ``None``; a parameter with choices gets a multi-select (PNL-11).
         replaced: Parameter -> ``(block, value, tooltip)`` for parameters delivered by a
             connected input; they are shown as a "from block" line (PNL-07).
+        columns: Returns the column names of the table on an input port (the
+            ``apb_columns`` mark of a field, ``"left,right"`` = columns in both), or
+            ``None`` when not known; known columns give a drop-down (PNL-11).
     """
 
     def __init__(
@@ -197,6 +221,7 @@ class ParamForm:
         *,
         choices: Callable[[str], list[Any] | None] | None = None,
         replaced: Mapping[str, tuple[str, str, str]] | None = None,
+        columns: Callable[[str], list[str] | None] | None = None,
     ) -> None:
         self.model = model
         self.values = values
@@ -204,6 +229,7 @@ class ParamForm:
         self.pick_file = pick_file
         self.choices = choices
         self.replaced = dict(replaced or {})
+        self.columns = columns
 
     def build(self, advanced: Sequence[str] = ()) -> None:
         """Create the widgets in the current NiceGUI context.
@@ -269,7 +295,18 @@ class ParamForm:
         if options is not None and not isinstance(value, str):
             self._choose_many(label, hint, value, setter, options)
             return
-        if kind == "text" and widget == "file":
+        port = extra.get("apb_columns")
+        if isinstance(port, str) and kind in {"text", "list"}:
+            known = self.columns(port) if self.columns else None
+            variable = isinstance(value, str) and bool(_VARIABLE.match(value.strip()))
+            if known is not None and not variable:
+                self._choose_columns(label, hint, value, setter, known, many=kind == "list")
+                return
+            if known is None:
+                hint = (hint + " — " if hint else "") + RUN_UPSTREAM
+        if kind == "text" and widget == "unit":
+            self._unit(label, hint, value, setter, other=bool(extra.get("apb_other")))
+        elif kind == "text" and widget == "file":
             self._file(label, hint, value, setter)
         elif kind == "text" and widget == "code":
             self._code(label, hint, value, setter)
@@ -283,7 +320,16 @@ class ParamForm:
             if hint:
                 switch.tooltip(hint)
         elif kind == "choice":
-            self._choice(label, hint, value, setter, detail, optional)
+            labels = extra.get("apb_labels")
+            self._choice(
+                label,
+                hint,
+                value,
+                setter,
+                detail,
+                optional,
+                labels=labels if isinstance(labels, dict) else None,
+            )
         elif kind == "multichoice":
             sel = (
                 ui.select(detail, value=list(value or []), label=label, multiple=True)
@@ -386,9 +432,16 @@ class ParamForm:
         box.on("keydown.enter", commit)
 
     def _choice(
-        self, label: str, hint: str, value: Any, setter: Setter, options: list[Any], optional: bool
+        self,
+        label: str,
+        hint: str,
+        value: Any,
+        setter: Setter,
+        options: list[Any],
+        optional: bool,
+        labels: Mapping[Any, Any] | None = None,
     ) -> None:
-        mapping: dict[Any, str] = {o: str(o) for o in options}
+        mapping: dict[Any, str] = {o: str((labels or {}).get(o, o)) for o in options}
         if optional:
             mapping = {"__none__": "(pipeline default)", **mapping}
         current = "__none__" if optional and value is None else value
@@ -413,6 +466,49 @@ class ParamForm:
             .classes("w-full apb-choices")
         )
         sel.on_value_change(lambda e: setter(list(e.value or [])))
+        describe(sel, hint, placeholder=False)
+
+    def _choose_columns(
+        self, label: str, hint: str, value: Any, setter: Setter, known: list[str], many: bool
+    ) -> None:
+        """Drop-down / multi-select of the upstream columns; typed names allowed (PNL-11)."""
+        stored = [str(v) for v in value] if isinstance(value, list) else []
+        current: Any = stored if many else ("" if value is None else str(value))
+        mapping: dict[str, str] = {c: c for c in known}
+        for name in stored if many else [current]:
+            if name and name not in mapping:
+                mapping[name] = f"{name} (not in table)"
+        sel = (
+            ui.select(
+                mapping,
+                value=current if many or current else None,
+                label=label,
+                multiple=many,
+                with_input=True,
+                new_value_mode="add-unique",
+            )
+            .props("dense outlined" + (" use-chips clearable" if many else ""))
+            .classes("w-full apb-column-choice" + (" apb-choices" if many else ""))
+        )
+        if many:
+            sel.on_value_change(lambda e: setter([str(v) for v in e.value or []]))
+        else:
+            sel.on_value_change(lambda e: setter("" if e.value is None else str(e.value)))
+        describe(sel, hint, placeholder=False)
+
+    def _unit(self, label: str, hint: str, value: Any, setter: Setter, other: bool) -> None:
+        """Unit drop-down with "(none)"; ``other`` also accepts a typed label (PNL-11)."""
+        current = "" if value is None else str(value)
+        options = unit_options(current, other)
+        extra: dict[str, Any] = (
+            {"with_input": True, "new_value_mode": "add-unique"} if other else {}
+        )
+        sel = (
+            ui.select(options, value=current, label=label, **extra)
+            .props("dense outlined")
+            .classes("w-full apb-unit")
+        )
+        sel.on_value_change(lambda e: setter("" if e.value is None else str(e.value)))
         describe(sel, hint, placeholder=False)
 
     def _list(self, label: str, hint: str, value: Any, setter: Setter, item: type) -> None:

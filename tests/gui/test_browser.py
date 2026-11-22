@@ -1228,3 +1228,49 @@ def test_rbe2_loads_offers_the_subcases_of_the_file(page, workdir: Path):
     saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
     rbe2 = next(b for b in saved["blocks"] if b.get("label") == "RBE2 loads")
     assert rbe2["params"]["subcases"] == [2]
+
+
+# ---- spec 11 step 4.8: requirement check and table block panels ---------------------------
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_requirement_panel_shows_the_connected_limit_and_unit_list(page):
+    select(page, "Frequency requirement")
+    panel = page.locator(".apb-connected")
+    assert "Limit from block 'Project constants'" in panel.inner_text()
+    assert "has not run yet" in panel.inner_text()
+    assert page.get_by_label("Limit", exact=True).count() == 0  # PNL-07: no empty field
+    assert "> greater than" in page.get_by_label("Comparison").locator("..").inner_text()
+    run_all(page)
+    select(page, "Lowest frequency")
+    select(page, "Frequency requirement")
+    assert "20 Hz" in page.locator(".apb-connected").inner_text()
+    page.get_by_text("Advanced", exact=True).click()
+    page.locator(".apb-unit").click()
+    page.wait_for_timeout(300)
+    options = [o.strip() for o in page.locator(".q-menu .q-item").all_inner_texts()]
+    assert options[0] == "(none)" and "Hz" in options and "MPa" in options
+
+
+def test_table_blocks_offer_the_upstream_columns_after_a_run(page, workdir: Path):
+    select(page, "Critical fastener")
+    assert page.locator(".apb-column-choice").count() == 0  # upstream not run: text fields
+    assert page.get_by_label(re.compile(r"^Value columns")).input_value() == "TENSION, SHEAR"
+    run_all(page)
+    select(page, "Drop GRID")
+    select(page, "Critical fastener")
+    choices = page.locator(".apb-column-choice")
+    assert choices.count() == 3  # group by, value columns, governing columns
+    values = choices.nth(1)
+    assert "TENSION" in values.inner_text() and "SHEAR" in values.inner_text()
+    values.click()
+    page.wait_for_timeout(300)
+    options = [o.strip() for o in page.locator(".q-menu .q-item").all_inner_texts()]
+    assert options[:4] == ["EID", "SUBCASE", "TENSION", "SHEAR"]
+    page.locator(".q-menu .q-item", has_text="EID").first.click()  # added at the end
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(400)
+    save_file(page)
+    saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
+    block = next(b for b in saved["blocks"] if b.get("label") == "Critical fastener")
+    assert block["params"]["columns"] == ["TENSION", "SHEAR", "EID"]

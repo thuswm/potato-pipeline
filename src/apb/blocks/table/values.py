@@ -26,7 +26,11 @@ class ConstantParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     value: float = Field(description="Value")
-    unit: str = Field(default="", description="Unit label, e.g. MPa; empty = none")
+    unit: str = Field(
+        default="",
+        description="Unit label, e.g. MPa; empty = none",
+        json_schema_extra={"apb_widget": "unit"},
+    )
 
     @field_validator("unit")
     @classmethod

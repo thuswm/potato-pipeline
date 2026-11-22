@@ -201,11 +201,20 @@ class LoadCaseTableParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id_columns: list[str] = Field(
-        title="ID columns", default_factory=lambda: ["EID"], description="Entity columns"
+        title="ID columns",
+        default_factory=lambda: ["EID"],
+        description="Entity columns",
+        json_schema_extra={"apb_columns": "table"},
     )
-    case_column: str = Field(default="SUBCASE", description="Load case column")
+    case_column: str = Field(
+        default="SUBCASE",
+        description="Load case column",
+        json_schema_extra={"apb_columns": "table"},
+    )
     value_columns: list[str] = Field(
-        title="Value columns", description="Columns to tabulate, e.g. TENSION, SHEAR"
+        title="Value columns",
+        description="Columns to tabulate, e.g. TENSION, SHEAR",
+        json_schema_extra={"apb_columns": "table"},
     )
     envelope: list[EnvelopeMode] = Field(
         default_factory=_default_envelope, description="Envelope columns: max, min, abs_max"

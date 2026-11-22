@@ -27,6 +27,14 @@ SYMBOLS: dict[str, str] = {
     "less_equal": "≤",
 }
 
+#: Comparison -> label in the property panel.
+COMPARISON_LABELS: dict[str, Any] = {
+    "greater_than": "> greater than",
+    "greater_equal": "≥ greater or equal",
+    "less_than": "< less than",
+    "less_equal": "≤ less or equal",
+}
+
 PASS = "PASS"
 FAIL = "FAIL"
 
@@ -88,13 +96,17 @@ class RequirementParams(BaseModel):
         description="Id and description, e.g. 'REQ-DYN-001 First eigenfrequency'",
     )
     comparison: Comparison = Field(
-        default="greater_than", description="How the value must relate to the limit"
+        default="greater_than",
+        description="How the value must relate to the limit",
+        json_schema_extra={"apb_labels": COMPARISON_LABELS},
     )
     limit: float | None = Field(
         default=None, description="Limit (number or ${variable}); empty if the limit input is used"
     )
     unit: str = Field(
-        default="", description="Unit label shown when neither value nor limit carries one"
+        default="",
+        description="Unit label shown when neither value nor limit carries one",
+        json_schema_extra={"apb_widget": "unit"},
     )
 
     @field_validator("unit")

@@ -42,7 +42,11 @@ class _Params(BaseModel):
 class SelectParams(_Params):
     """Parameters of :class:`Select`."""
 
-    columns: list[str] = Field(default_factory=list, description="Columns to keep; empty = all")
+    columns: list[str] = Field(
+        default_factory=list,
+        description="Columns to keep; empty = all",
+        json_schema_extra={"apb_columns": "table"},
+    )
     rename: dict[str, str] = Field(default_factory=dict, description="Old name -> new name")
 
 
@@ -107,7 +111,11 @@ class Filter(Block[FilterParams]):
 class SortParams(_Params):
     """Parameters of :class:`Sort`."""
 
-    by: list[str] = Field(title="Sort by", description="Columns to sort by (first = primary)")
+    by: list[str] = Field(
+        title="Sort by",
+        description="Columns to sort by (first = primary)",
+        json_schema_extra={"apb_columns": "table"},
+    )
     ascending: bool = Field(default=True, description="Ascending order")
 
 
@@ -139,7 +147,11 @@ class ComputeParams(_Params):
 
     new_column: str = Field(description="Name of the new (or replaced) column")
     expression: str = Field(description="Formula, e.g. sqrt(FY**2 + FZ**2)")
-    unit: str = Field(default="", description="Unit label of the result, e.g. N; empty = none")
+    unit: str = Field(
+        default="",
+        description="Unit label of the result, e.g. N; empty = none",
+        json_schema_extra={"apb_widget": "unit", "apb_other": True},
+    )
 
 
 class Compute(Block[ComputeParams]):
@@ -196,13 +208,22 @@ def governing_index(values: pd.Series, mode: EnvelopeMode) -> Any:
 class EnvelopeParams(_Params):
     """Parameters of :class:`Envelope`."""
 
-    group_by: list[str] = Field(default_factory=list, description="e.g. EID; empty = whole table")
-    columns: list[str] = Field(description="Value columns to envelope")
+    group_by: list[str] = Field(
+        default_factory=list,
+        description="e.g. EID; empty = whole table",
+        json_schema_extra={"apb_columns": "table"},
+    )
+    columns: list[str] = Field(
+        title="Value columns",
+        description="Value columns to envelope",
+        json_schema_extra={"apb_columns": "table"},
+    )
     mode: EnvelopeMode = Field(default="max", description="max, min or abs_max (sign kept)")
     governing_columns: list[str] = Field(
         default_factory=lambda: ["SUBCASE"],
         description="Columns of the governing row to report, e.g. SUBCASE, EID "
         "(adds <value>_<column>)",
+        json_schema_extra={"apb_columns": "table"},
     )
     keep_row: bool = Field(
         title="Keep governing row",
@@ -270,7 +291,9 @@ class JoinParams(_Params):
     """Parameters of :class:`Join`."""
 
     on: list[str] = Field(
-        title="Key columns", description="Key columns present in both tables, e.g. EID"
+        title="Key columns",
+        description="Key columns present in both tables, e.g. EID",
+        json_schema_extra={"apb_columns": "left,right"},
     )
     how: Literal["inner", "left", "right", "outer"] = Field(
         title="Rows to keep", default="left", description="Which rows to keep"
@@ -360,7 +383,9 @@ class Concat(Block[ConcatParams]):
 class PickParams(_Params):
     """Parameters of :class:`Pick`."""
 
-    column: str = Field(description="Column to take the value from")
+    column: str = Field(
+        description="Column to take the value from", json_schema_extra={"apb_columns": "table"}
+    )
     row: Literal["max", "min", "abs_max", "first", "last"] = Field(
         title="Which value", default="max", description="Which value"
     )

@@ -117,3 +117,13 @@ def test_runner_reports_validation_issues():
     b = state.add_block("table.sort", 0, 0)
     issues = asyncio.run(RunController(state, lambda e: None).run())
     assert isinstance(issues, list) and any(i.block_id == b.id for i in issues)
+
+
+def test_unit_options_keep_an_unknown_stored_unit():
+    from apb.gui.forms import unit_options
+
+    options = unit_options()
+    assert next(iter(options.items())) == ("", "(none)")
+    assert "Hz" in options and "-" not in options
+    assert unit_options("lbf")["lbf"] == "lbf (unknown unit)"
+    assert unit_options("lbf", other=True)["lbf"] == "lbf"

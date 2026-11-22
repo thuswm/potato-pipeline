@@ -180,3 +180,57 @@ to open the large editor), *Edit* and an *Open in editor* icon (system program).
 *Advanced*: inline code (in *Settings* instead when the block uses inline code and no
 file). The port editors moved into the *Ports* section, which replaces the read-only port
 list for this block, so the ports are no longer shown twice. 1310 px → 512 px.
+
+### 4.8 Requirement check and table blocks — design
+
+**Requirement check** (`check.requirement`)
+
+- *Limit*: when the `limit` input is connected, the field is replaced by the "from block"
+  line (PNL-07): "Limit · from *Project constants* · f_min = 20 Hz". The value is shown
+  when the upstream block has an output (last run or stored), else only the block name.
+- *Comparison*: the drop-down shows symbols with words: "> greater than", "≥ greater or
+  equal", "< less than", "≤ less or equal" (stored values unchanged).
+- *Unit*: a drop-down of the known units with "(none)" (same list as the Constants block);
+  stays under *Advanced*, since the unit normally comes with the value or limit.
+
+**Column choices for table blocks** (PNL-11)
+
+- A column parameter is marked in its block's `Params` with
+  `json_schema_extra={"apb_columns": "<input port>"}`. The form takes the columns of the
+  table that arrives on that port from the upstream block's output (last run or stored
+  output). Nothing new is computed or run to find them.
+- Known columns → list parameters get a multi-select with chips (the order of selection
+  is kept, e.g. *Sort by*), single-column parameters a drop-down. Both still accept a typed
+  name (for a column that only appears after an upstream change); a stored name that is
+  not in the table is shown as "EID (not in table)".
+- Columns not known (upstream not run yet, or a `${variable}` value) → the text field as
+  today, with the hint "Run the upstream block to choose from its columns".
+- Join: the key columns offered are those present in *both* the left and the right table.
+
+| Block | Parameters with column choices |
+|-------|-------------------------------|
+| Select columns | Columns to keep |
+| Sort | Sort by |
+| Envelope | Group by, Value columns, Governing columns |
+| Join | Key columns (both tables) |
+| Load case table | ID columns, Load case column, Value columns |
+| Pick value | Column |
+
+**Unit drop-downs** (PNL-11): the `unit` of *Compute* and *Constant value* gets the same
+unit drop-down as the requirement check (marker `apb_widget: "unit"`). *Constant value*
+already accepts only known units. *Compute* accepts any label today, so its drop-down also
+takes a typed label that is not in the list.
+
+Not in 4.8: *Rename* mappings of *Select columns* (key/value editor stays), filter and
+compute expressions (no column completion yet).
+
+### 4.8 Requirement check and table blocks — done (2026-11-22)
+
+Implemented as designed above. The generated form knows three new field marks:
+`apb_columns: "<port>"` (or `"left,right"` for columns in both tables), `apb_widget: "unit"`
+(with `apb_other: True` for free labels, *Compute*) and `apb_labels` (display labels of a
+drop-down). Any parameter with the same name as a connected input is now shown as a "from
+block" line, not only the HDF5 file. *Envelope*'s `columns` got the title "Value columns".
+Screenshots in [`panels/after/`](panels/after/), e.g.
+[check.requirement](panels/after/check.requirement.png),
+[table.envelope](panels/after/table.envelope.png), [table.join](panels/after/table.join.png).

@@ -17,7 +17,7 @@
   },
   "check.requirement": {
     "block": "Frequency requirement",
-    "height_px": 353
+    "height_px": 346
   },
   "table.write_excel": {
     "block": "Modal workbook",
@@ -49,7 +49,7 @@
   },
   "table.sort": {
     "block": "Extra sort",
-    "height_px": 247
+    "height_px": 252
   },
   "units.convert": {
     "block": "Extra convert",
@@ -73,7 +73,7 @@
   },
   "table.join": {
     "block": "Extra join",
-    "height_px": 269
+    "height_px": 274
   },
   "nastran.hdf5_rbe2_loads": {
     "block": "RBE2 loads",
@@ -85,7 +85,7 @@
   },
   "table.select": {
     "block": "Drop GRID",
-    "height_px": 289
+    "height_px": 323
   },
   "table.case_labels": {
     "block": "Load case names",
@@ -93,11 +93,11 @@
   },
   "table.load_case_table": {
     "block": "Fastener load table",
-    "height_px": 404
+    "height_px": 414
   },
   "table.envelope": {
     "block": "Critical fastener",
-    "height_px": 353
+    "height_px": 358
   },
   "table.constant": {
     "block": "Tension allowable",
