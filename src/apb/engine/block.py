@@ -103,6 +103,14 @@ class RunContext:
     """The pipeline file, if the run started from one."""
     upstream_files: list[Path] = field(default_factory=list)
     """Files read by this block and all blocks upstream of it (for traceability)."""
+    connected_outputs: frozenset[str] | None = None
+    """Output ports with at least one connector (``None`` = not known: treat all as used).
+
+    Only filled for blocks with :attr:`Block.uses_connected_outputs`."""
+
+    def output_used(self, port: str) -> bool:
+        """Return ``True`` if an output port is connected, or if that is not known."""
+        return self.connected_outputs is None or port in self.connected_outputs
 
     def log(self, message: str) -> None:
         """Write a line to the block's log."""
@@ -164,6 +172,9 @@ class Block[P: BaseModel](ABC):
     """Parameters that are rarely changed; the property panel folds them (spec 11 PNL-03)."""
     provides_variables: ClassVar[bool] = False
     """The block defines variables for other blocks (see :meth:`provided_variables`)."""
+    uses_connected_outputs: ClassVar[bool] = False
+    """The block's work depends on which outputs are connected (``ctx.connected_outputs``);
+    the set is then part of the cache key, so connecting an output can make it stale."""
 
     @abstractmethod
     def run(self, params: P, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:

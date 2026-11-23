@@ -11,6 +11,7 @@ import json
 import threading
 from collections import defaultdict
 from collections.abc import Callable, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -123,6 +124,9 @@ _CLOSED_HTML = (
 )
 MAX_LOG_LINES = 500
 
+#: Warnings of the last run listed in the property panel (GUI-35).
+MAX_SHOWN_WARNINGS = 5
+
 
 class EditorPage:
     """One editor in one browser tab."""
@@ -140,6 +144,8 @@ class EditorPage:
         self.client.on_disconnect(lambda: _PAGES.remove(self) if self in _PAGES else None)
         self.runner = RunController(self.state, self._on_run_event)
         self.selected: str | None = None
+        #: Issues and warnings of the selected block (``None`` while no panel shows them).
+        self.issues: ui.column | None = None
         self._offset = 0
         self._states_dirty = True
         self._last_folder = initial.parent if initial else Path.cwd()
@@ -297,6 +303,7 @@ class EditorPage:
 
     def _show_panel(self) -> None:
         self.panel.clear()
+        self.issues = None
         with self.panel:
             if self.selected is None or not any(
                 b.id == self.selected for b in self.state.pipeline.blocks
@@ -345,6 +352,7 @@ class EditorPage:
                     resolve=self._resolve_variables,
                     base_dir=self.state.base_dir,
                     open_file=open_with_system,
+                    h5_used=partial(self._output_connected, block.id, "h5"),
                 )
                 self.analysis_panel.build()
             elif cls is WordReport:  # section editor (spec 05 §3.4)
@@ -475,8 +483,15 @@ class EditorPage:
         graph = prepare(self.state.pipeline, self.state.registry)
         return [i for i in graph.issues if i.block_id == block_id]
 
+    def _output_connected(self, block_id: str, port: str) -> bool:
+        """Return ``True`` if an output port of a block has a connector."""
+        return any(
+            c.source.block == block_id and c.source.port == port
+            for c in self.state.pipeline.connections
+        )
+
     def _show_issues(self) -> None:
-        if self.selected is None:
+        if self.selected is None or self.issues is None:
             return
         self.issues.clear()
         with self.issues:
@@ -484,6 +499,17 @@ class EditorPage:
                 with ui.row().classes("items-start no-wrap gap-1"):
                     ui.icon("error_outline", color="red-7", size="xs").classes("mt-0.5")
                     ui.label(issue.message).classes("text-xs text-red-700")
+            # The reason for the warning mark on the canvas (GUI-35).
+            warnings = self.runner.warnings(self.selected)
+            for text in warnings[:MAX_SHOWN_WARNINGS]:
+                with ui.row().classes("items-start no-wrap gap-1 apb-block-warning"):
+                    ui.icon("warning_amber", color="amber-8", size="xs").classes("mt-0.5")
+                    ui.label(text).classes("text-xs text-amber-800 break-words min-w-0")
+            if len(warnings) > MAX_SHOWN_WARNINGS:
+                more = len(warnings) - MAX_SHOWN_WARNINGS
+                ui.label(f"… and {more} more warning(s), see the log").classes(
+                    "text-xs text-amber-800 ml-5"
+                )
 
     async def _edit_script(self, path: Path) -> None:
         with ui.dialog().props("maximized") as dialog, ui.card().classes("w-full h-full"):
@@ -559,6 +585,8 @@ class EditorPage:
             states = self.runner.display_states()
             self.canvas.set_states(states)
             self.canvas.set_warnings(self.runner.warning_blocks(states))
+            if self.selected is not None and self.issues is not None:
+                self._show_issues()
 
     def _log(self, text: str, level: str = "info", block_id: str | None = None) -> None:
         colours = {

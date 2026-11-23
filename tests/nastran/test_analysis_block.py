@@ -26,10 +26,11 @@ def make(tmp_path, fake: FakeNastran, **params):
     deck = write_deck(tmp_path / "work", params.pop("job", "job"))
     params.setdefault("path", str(fake.bin))
 
-    def run(**override):
+    def run(connected: frozenset[str] | None = None, **override):
         merged = {"input_file": str(deck)} | params | override
         log: list[str] = []
         ctx = RunContext(block_id="nas", pipeline_dir=tmp_path, output_dir=tmp_path)
+        ctx.connected_outputs = connected
         ctx.log = log.append  # type: ignore[method-assign]
         ctx.cancel_event = threading.Event()
         parsed = NastranRun.Params.model_validate(merged)
@@ -481,3 +482,57 @@ def test_messages_of_several_analyses_stack_into_one_table(tmp_path, fake_nastra
     assert table[["SEVERITY", "NUMBER"]].values.tolist() == [["WARNING", 9058]]
     assert table["MODULE"].tolist() == ["SUBDMAP SESTATIC"]
     assert table["SOURCE"].tolist() == ["local_loads.f06"]  # the stacking block names the file
+
+
+# ---- the .h5 is only needed when its output is used (round 6) ----------------------------
+
+F06_ONLY = frozenset({"f06", "messages"})
+
+
+def test_no_h5_is_fine_when_the_h5_output_is_not_connected(tmp_path, fake_nastran):
+    _deck, run = make(tmp_path, fake_nastran)
+    fake_nastran.behave("no_h5")
+    out, log = run(connected=F06_ONLY)
+    assert out["status"] == "OK" and not Path(out["h5"]).exists()
+    assert any("not needed, the HDF5 output is not connected" in line for line in log)
+    ctx = RunContext(block_id="nas", pipeline_dir=tmp_path, output_dir=tmp_path)
+    ctx.connected_outputs = F06_ONLY
+    params = NastranRun.Params.model_validate({"input_file": "x.bdf"})
+    assert NastranRun().output_files(params, out, ctx) == [Path(out["f06"])]
+    with pytest.raises(NastranError, match=r"did not write job\.h5"):
+        run(connected=frozenset({"h5"}))
+
+
+def test_a_deck_without_hdf5_request_runs_when_only_the_f06_is_used(tmp_path, fake_nastran):
+    _deck, run = make(tmp_path, fake_nastran)
+    plain = write_deck(tmp_path / "plain", "plain", hdf5=False)
+    fake_nastran.behave("no_h5")
+    out, _ = run(connected=F06_ONLY, input_file=str(plain))
+    assert out["status"] == "OK" and len(fake_nastran.calls()) == 1
+    _, log = run(connected=F06_ONLY, input_file=str(plain))  # the f06 alone is up to date
+    assert len(fake_nastran.calls()) == 1
+    assert any("up to date" in line for line in log)
+
+
+def test_the_graph_knows_the_connected_outputs():
+    from apb.engine.graph import prepare
+    from apb.engine.model import Connection
+
+    pipeline = PipelineModel.model_validate(
+        {
+            "blocks": [
+                {"id": "nas", "type_id": "nastran.run", "params": {"input_file": "a.bdf"}},
+                {"id": "res", "type_id": "nastran.hdf5_results", "params": {"result": "x"}},
+            ],
+            "connections": [],
+        }
+    )
+    graph = prepare(pipeline, default_registry())
+    assert graph.connected_outputs("nas") == frozenset()
+    pipeline.connections.append(
+        Connection.model_validate(
+            {"source": {"block": "nas", "port": "h5"}, "target": {"block": "res", "port": "file"}}
+        )
+    )
+    assert prepare(pipeline, default_registry()).connected_outputs("nas") == {"h5"}
+    assert RunContext(block_id="b", pipeline_dir=Path(), output_dir=Path()).output_used("h5")

@@ -504,15 +504,18 @@ class Executor:
             stamps = sorted(_file_stamp(f) for f in files)
         except Exception as exc:  # error surfaces again when the block runs
             stamps = [f"error:{exc}"]
+        parts: list[Any] = [
+            block.cls.type_id,
+            block.cls.version,
+            block.params.model_dump(mode="json"),
+            upstream,
+            stamps,
+            delivered,
+        ]
+        if block.cls.uses_connected_outputs:
+            parts.append(sorted(graph.connected_outputs(block_id)))
         payload = json.dumps(
-            [
-                block.cls.type_id,
-                block.cls.version,
-                block.params.model_dump(mode="json"),
-                upstream,
-                stamps,
-                delivered,
-            ],
+            parts,
             sort_keys=True,
             default=str,
         )
@@ -597,6 +600,8 @@ class Executor:
         log: list[str] = []
         ctx = make_ctx(block.id, log)
         ctx.input_names = graph.input_names(block.id)
+        if block.cls.uses_connected_outputs:
+            ctx.connected_outputs = graph.connected_outputs(block.id)
         upstream = graph.upstream(block.id)
         ctx.upstream_files = sorted(
             {f for b in upstream for f in make_ctx.block_files.get(b, [])}

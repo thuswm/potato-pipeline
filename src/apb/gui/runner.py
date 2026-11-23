@@ -127,6 +127,24 @@ class RunController:
             self.edited.discard(block_id)
         return cleared
 
+    def warnings(self, block_id: str) -> list[str]:
+        """Return the warnings of a block's latest result (``WARNING:`` log lines, GUI-35).
+
+        Args:
+            block_id: The block.
+
+        Returns:
+            The warning texts without the ``WARNING:`` prefix (empty if none or not run).
+        """
+        result = self.results.get(block_id)
+        if result is None:
+            return []
+        return [
+            line.removeprefix("WARNING:").strip()
+            for line in result.log
+            if line.startswith("WARNING:")
+        ]
+
     def warning_blocks(self, states: dict[str, str]) -> list[str]:
         """Return the blocks whose latest result has a warning in its log (``WARNING:`` line).
 

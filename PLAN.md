@@ -40,14 +40,14 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       dialog that edits the `[nastran]` section of `config.toml` (path, command arguments,
       default run mode). The block shows the inherited value as placeholder ("from
       settings: …") and only stores a value when the user overrides it.
-- [ ] 7. **Clearer status and warnings:**
+- [x] 7. **Clearer status and warnings:**
       - The warning triangle comes from a `WARNING` line in the block's log (here: a Nastran
         warning message in `local_loads.f06`), not from the missing Nastran path. The panel
         will list the warning lines at the top, so the triangle can be explained.
       - "'nastran' not found" is shown red only when a run is possible; with run mode
         *never* it is grey info ("not needed: run mode is never").
       - "made by this tool, input unchanged" gets a label ("Results:") and a tooltip.
-- [ ] 8. **`.h5` not always required:** the run is only an error without `.h5` (and without
+- [x] 8. **`.h5` not always required:** the run is only an error without `.h5` (and without
       HDF5 request in the deck) if the `h5` output is connected. With only the `f06` output
       used (e.g. modal run read from the f06), a missing `.h5` is fine.
 

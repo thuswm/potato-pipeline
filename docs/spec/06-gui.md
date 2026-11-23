@@ -187,6 +187,7 @@ Windows, where Edge is always installed.
 | GUI-29 | The window mode is chosen with `apb gui --window app\|browser\|none` (`none` = start only the server, the same as `--no-browser`) and as a computer default in the config file: `[gui] window = "browser"`, `[gui] browser = "<path to chrome.exe or msedge.exe>"`. Command line > config file > `app` | M |
 | GUI-30 | The HDF5 viewer (`apb h5view`, spec 10) opens its file(s) in app windows the same way; extra windows of the same run join the same browser process | S |
 | GUI-32 | On start the console says how the pages were shown: which browser (path), that it is a separate app window with its own profile, that closing it or File > Quit stops the tool, and how to get a normal tab instead (`--window browser`) — round 6 | M |
+| GUI-35 | The property panel lists the warnings of the block's last run (the `WARNING:` lines of its log that give the warning mark on the canvas), up to 5 with "… and N more, see the log"; they update when a run finishes — round 6 | M |
 | GUI-31 | Desktop shortcut / start menu entry, and hiding the console window on Windows (`pythonw`) | L |
 
 #### 3.6.1 Design

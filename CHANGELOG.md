@@ -12,7 +12,16 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   with its own profile) and how to get a normal browser tab instead.
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
 
+### Added
+- The property panel lists the warnings of a block's last run, so the warning mark on the
+  canvas can be explained.
+
 ### Fixed
+- The Nastran analysis block failed when no `.h5` was written, also when only the `.f06`
+  was used. The `.h5` (and the HDF5 request in the deck) is now only required when the
+  block's HDF5 output is connected.
+- Nastran analysis panel: "made by this tool, input unchanged" was shown in warning colour;
+  a Nastran program that is not found is shown grey when the run mode is *never*.
 - The file dialog of the Nastran analysis block listed `.h5` files instead of input decks.
   Each file field now names its own file types (deck: `.bdf .dat .nas .blk`), and the
   dialog has a *Show all files* switch.

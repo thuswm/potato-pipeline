@@ -167,6 +167,7 @@ class NastranRun(Block[NastranRunParams]):
         Port("status", PortType.TEXT, label="Status"),
     )
     Params = NastranRunParams
+    uses_connected_outputs = True  # the .h5 is only required when its output is used
     advanced_params = (
         "command",
         "path",
@@ -192,8 +193,12 @@ class NastranRun(Block[NastranRunParams]):
     def output_files(
         self, params: NastranRunParams, outputs: Mapping[str, Any], ctx: RunContext
     ) -> list[Path]:
-        """Return the ``.f06`` and ``.h5``: the block is done only while they exist."""
-        return [Path(outputs["f06"]), Path(outputs["h5"])]
+        """Return the ``.f06`` and ``.h5``: the block is done only while they exist.
+
+        The ``.h5`` counts only if it is needed (its output is connected) or exists.
+        """
+        h5 = Path(outputs["h5"])
+        return [Path(outputs["f06"]), *([h5] if ctx.output_used("h5") or h5.is_file() else [])]
 
     # ---- run ----------------------------------------------------------------------------
 
@@ -206,6 +211,7 @@ class NastranRun(Block[NastranRunParams]):
             raise NastranError(f"Input deck not found: {deck}")
         files = job_files(deck)
         f06, h5 = files["f06"], files["h5"]
+        need_h5 = ctx.output_used("h5")
         try:
             includes = find_includes(deck)
             inputs_all = [deck, *includes]
@@ -222,7 +228,7 @@ class NastranRun(Block[NastranRunParams]):
             params.run_mode,
             Results(
                 files=existing,
-                expected=(f06.name, h5.name),
+                expected=(f06.name, h5.name) if need_h5 else (f06.name,),
                 complete=f06.is_file() and parse_f06(read_text(f06)).finished,
                 newest_input=max(p.stat().st_mtime for p in inputs_all),
                 record=record,
@@ -236,7 +242,7 @@ class NastranRun(Block[NastranRunParams]):
         if decision.action is Action.FAIL:
             raise NastranError(decision.reason)
         if decision.action is Action.RUN:
-            self._execute(params, ctx, deck, inputs_all, settings, digest, listing)
+            self._execute(params, ctx, deck, inputs_all, settings, digest, listing, need_h5)
         elif decision.action is Action.ADOPT:
             self._write_record(
                 deck,
@@ -261,9 +267,14 @@ class NastranRun(Block[NastranRunParams]):
         settings: cmd.Settings,
         digest: str,
         listing: list[dict[str, str]],
+        need_h5: bool = True,
     ) -> None:
-        """Run Nastran: checks, clean-up, command, record."""
-        if not has_hdf5_request(inputs_all):
+        """Run Nastran: checks, clean-up, command, record.
+
+        Without an HDF5 request in the deck the run is refused only if the ``.h5`` is
+        needed (its output is connected).
+        """
+        if need_h5 and not has_hdf5_request(inputs_all):
             raise NastranError(
                 f"{deck.name} has no HDF5 request, so Nastran would not write an .h5 file. "
                 "Add HDF5OUT (or MDLPRM,HDF5,0) to the bulk data"
@@ -334,9 +345,11 @@ class NastranRun(Block[NastranRunParams]):
                 "Look into the .f06 and the .log"
             )
         if not h5.is_file():
-            raise NastranError(
-                f"Nastran did not write {h5.name}. Check the HDF5 request in the input deck"
-            )
+            if ctx.output_used("h5"):
+                raise NastranError(
+                    f"Nastran did not write {h5.name}. Check the HDF5 request in the input deck"
+                )
+            ctx.log(f"No {h5.name}: not needed, the HDF5 output is not connected")
         ignore = set(params.ignore_messages)
         table = messages_table(
             report, f06, include_information=params.include_information, ignore=ignore

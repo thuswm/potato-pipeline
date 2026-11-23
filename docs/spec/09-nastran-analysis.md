@@ -28,7 +28,7 @@ The first run with the real program, and the exact command line it needs at your
 | NRN-05 | The command runs in the folder of the input deck with its output streamed into the block log; *Stop* ends it and everything it started; an optional time limit; a non-zero exit code is an error (§3.4) | M |
 | NRN-06 | "If input changed" compares the input deck **and the files it `INCLUDE`s** with the ones used for the existing results; results that were not made by this tool are never overwritten unless the mode is `always` (§3.2, §3.6) | M |
 | NRN-07 | Mode `never` uses existing result files as they are (the case of the test case), and says so if the input changed after they were made | M |
-| NRN-08 | Before a run the deck is checked for an HDF5 request (`HDF5OUT` or `MDLPRM,HDF5`); after a run the `.h5` must exist | M |
+| NRN-08 | Before a run the deck is checked for an HDF5 request (`HDF5OUT` or `MDLPRM,HDF5`); after a run the `.h5` must exist. **Round 6:** both only when the `.h5` is needed, i.e. the block's `h5` output is connected; a run whose results are read from the `.f06` only (e.g. a modal run without HDF5 output) is fine without `.h5` (§3.8.1) | M |
 | NRN-09 | Blocks downstream of the analysis become stale when the result files change, also within one run (engine, §3.7) | M |
 | NRN-10 | *Nastran HDF5 results* and the related blocks accept the `.h5` path from a connector instead of a typed path (§3.8) | M |
 | NRN-11 | GUI: run mode, status lines (program found? results present and current?), open the `.f06` and the folder, the messages as a table (§3.9) | M |
@@ -250,6 +250,22 @@ the pipeline reads `analysis → h5 → results`. A typed path keeps working unc
 result browser of spec 02 §3.7 shows the results of the file the connected block delivered
 (from its last or stored output); until that block has run it says so.
 
+#### 3.8.1 The `.h5` only when it is used (round 6)
+
+Found in the Windows test: a modal run without HDF5 output failed because no `.h5` was
+written, although only the `.f06` was used. The engine now tells a block which of its
+outputs are connected (`RunContext.connected_outputs`, filled for block types with
+`uses_connected_outputs = True`; `ctx.output_used(port)`). For `nastran.run`:
+
+- `h5` connected: as before (HDF5 request required before a run, `.h5` required after).
+- `h5` not connected: no HDF5 request needed; a missing `.h5` is logged ("not needed, the
+  HDF5 output is not connected"); "results present" means the `.f06` exists; the block is
+  done while the `.f06` exists. The `h5` output still carries the path.
+- The set of connected outputs is part of the block's cache key, so connecting the `h5`
+  output later makes the block stale and the `.h5` is then required.
+- Panel: without a connected `h5` output, a missing `.h5` is not listed and "no HDF5
+  request" is shown as "(not needed)" instead of red.
+
 ### 3.9 GUI
 
 The panel is the generated form plus status lines that are computed without running Nastran:
@@ -263,6 +279,14 @@ Results      modal.f06 ✔ 2026-11-15 14:25 · modal.h5 ✔ 2026-11-15 14:25
              made by this tool, input unchanged   (or: input changed since / not made by this tool)
 [ Open f06 ]  [ Open folder ]
 ```
+
+**Round 6 (Windows test):**
+- With run mode `never` a program that is not found is shown grey: "not found; not needed,
+  run mode is never" (it was red, which looked like an error).
+- The line relating results to input gets the label *Made by* and a tooltip. "made by this
+  tool, input unchanged" is grey; it was amber because the check for "changed" matched
+  "unchanged".
+- The warnings behind the canvas warning mark are listed in the panel (spec 06 GUI-35).
 
 *Run mode* has a help text per mode; `always` says "Runs Nastran every time the pipeline is
 run". While Nastran runs the log shows its output and *Stop* works. After a run the preview

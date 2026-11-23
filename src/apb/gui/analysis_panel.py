@@ -15,7 +15,29 @@ from nicegui import ui
 
 from apb.blocks.nastran.analysis import NastranRun, NastranRunParams
 from apb.blocks.nastran.status import AnalysisStatus, analysis_status
+from apb.blocks.solvers.runmode import RunMode
 from apb.gui.forms import ParamForm, PickFile, short_path
+
+#: Tooltip of the line that relates the results to the input deck (spec 09 §3.2).
+RELATION_TIP = (
+    "Where the result files come from and whether they still match the input deck: "
+    "results made by this tool from the same input are used as they are; changed input "
+    "means a new run (unless the run mode is never)."
+)
+
+
+def relation_is_bad(relation: str) -> bool:
+    """Return ``True`` if the results do not match the input (shown amber).
+
+    ``"input unchanged"`` is good; the old check (``"changed" in text``) matched it too.
+    """
+    return (
+        "older" in relation
+        or "not finish" in relation
+        or "incomplete" in relation
+        or "missing" in relation
+        or relation.endswith("input changed since")
+    )
 
 
 class AnalysisPanel:
@@ -28,6 +50,8 @@ class AnalysisPanel:
         resolve: Replaces ``${variable}`` references.
         base_dir: Folder that relative paths refer to.
         open_file: Opens a file or folder with the program of the system.
+        h5_used: Returns whether the block's HDF5 output is connected (the ``.h5`` is only
+            needed then).
     """
 
     def __init__(
@@ -39,12 +63,15 @@ class AnalysisPanel:
         resolve: Callable[[Any], Any],
         base_dir: Path,
         open_file: Callable[[Path], None],
+        h5_used: Callable[[], bool] = lambda: True,
     ) -> None:
         self.params = params
         self.on_change = on_change
         self.resolve = resolve
         self.base_dir = base_dir
         self.open_file = open_file
+        self.h5_used = h5_used
+        self._need_h5 = True
         self.form = ParamForm(NastranRunParams, params, self._changed, pick_file)
 
     def _changed(self, name: str, value: Any) -> None:
@@ -67,7 +94,9 @@ class AnalysisPanel:
 
     def refresh(self) -> None:
         """Compute the status again and show it."""
-        status = analysis_status(self.params, self.base_dir, self.resolve)
+        need_h5 = self.h5_used()
+        status = analysis_status(self.params, self.base_dir, self.resolve, need_h5=need_h5)
+        self._need_h5 = need_h5
         self.status_box.clear()
         with self.status_box:
             self._show(status)
@@ -106,6 +135,16 @@ class AnalysisPanel:
                     "apb-analysis-program",
                     tip=str(program.found),
                 )
+            elif self.params.get("run_mode") == RunMode.NEVER:
+                # Nothing is started, so a missing program is no problem (round 6).
+                self._line(
+                    "Nastran",
+                    f"'{program.program}' not found; not needed, run mode is never",
+                    "text-slate-500",
+                    "apb-analysis-program",
+                    tip="Set the path in this block or in the config file before running "
+                    "Nastran from the tool",
+                )
             else:
                 self._line(
                     "Nastran",
@@ -116,10 +155,12 @@ class AnalysisPanel:
                 )
         if status.deck_exists:
             extra = f" + {status.includes} included file(s)" if status.includes else ""
-            request = {True: " · HDF5 request found ✔", False: " · no HDF5 request ✘", None: ""}[
+            missing = " · no HDF5 request ✘" if self._need_h5 else " · no HDF5 request (not needed)"
+            request = {True: " · HDF5 request found ✔", False: missing, None: ""}[
                 status.hdf5_request
             ]
-            tone = "text-red-700" if status.hdf5_request is False else "text-slate-700"
+            bad = status.hdf5_request is False and self._need_h5
+            tone = "text-red-700" if bad else "text-slate-700"
             self._line(
                 "Input",
                 f"{status.deck.name if status.deck else ''}{extra} · "
@@ -133,16 +174,12 @@ class AnalysisPanel:
             ]
             self._line("Results", " · ".join(parts), cls="apb-analysis-results")
             if status.relation:
-                bad = (
-                    "older" in status.relation
-                    or "changed" in status.relation
-                    or "not finish" in status.relation
-                )
                 self._line(
-                    "",
+                    "Made by",
                     status.relation,
-                    "text-amber-700" if bad else "text-slate-500",
+                    "text-amber-700" if relation_is_bad(status.relation) else "text-slate-500",
                     "apb-analysis-relation",
+                    tip=RELATION_TIP,
                 )
         with ui.row().classes("gap-1 mt-1"):
             f06 = next((r for r in status.results if r.name.endswith(".f06") and r.exists), None)

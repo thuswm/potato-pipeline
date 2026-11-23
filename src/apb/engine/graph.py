@@ -104,6 +104,10 @@ class PreparedGraph:
         """Return the connections ending at a block, in pipeline order."""
         return [c for c in self.connections if c.target.block == block_id]
 
+    def connected_outputs(self, block_id: str) -> frozenset[str]:
+        """Return the output ports of a block that have at least one connector."""
+        return frozenset(c.source.port for c in self.connections if c.source.block == block_id)
+
     def upstream(self, block_id: str) -> set[str]:
         """Return the block and all blocks it depends on (directly or indirectly)."""
         result: set[str] = set()

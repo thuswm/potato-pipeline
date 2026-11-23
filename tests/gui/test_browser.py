@@ -951,6 +951,12 @@ def test_analysis_blocks_in_the_gui(page):
     assert "apb-warn" not in node(page, "Global analysis").get_attribute("class")
 
     select(page, "Local analysis")
+    # The reason for the mark is listed in the panel (round 6).
+    warning = page.locator(".apb-block-warning")
+    assert warning.count() >= 1 and "9058" in warning.first.inner_text()
+    relation = page.locator(".apb-analysis-relation")
+    if "input unchanged" in relation.inner_text():  # a good state is not amber
+        assert "text-amber-700" not in relation.get_attribute("class")
     assert (
         "nastran local_loads.bdf batch=no old=no scr=yes"
         in page.locator(".apb-analysis-command").inner_text()

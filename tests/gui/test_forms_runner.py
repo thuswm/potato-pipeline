@@ -162,3 +162,14 @@ def test_short_path_keeps_the_separator_of_the_path():
         return
     posix = "/home/someone/projects/a/very/long/folder/bin/nastran"
     assert short_path(posix, limit=30).endswith("…/nastran")
+
+
+def test_analysis_relation_tone():
+    """Round 6: "input unchanged" was shown amber because it contains "changed"."""
+    from apb.gui.analysis_panel import relation_is_bad
+
+    assert not relation_is_bad("made by this tool, input unchanged")
+    assert not relation_is_bad("made outside the tool, newer than the input (will be used)")
+    assert relation_is_bad("made by this tool, input changed since")
+    assert relation_is_bad("made outside the tool, older than the input (will be replaced)")
+    assert relation_is_bad("made by this tool, but the run did not finish")

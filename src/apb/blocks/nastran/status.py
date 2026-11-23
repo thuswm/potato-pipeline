@@ -82,6 +82,7 @@ def analysis_status(
     stored: dict[str, Any],
     base_dir: Path,
     resolve: Callable[[Any], Any] = lambda value: value,
+    need_h5: bool = True,
 ) -> AnalysisStatus:
     """Describe an analysis block for its panel.
 
@@ -89,6 +90,8 @@ def analysis_status(
         stored: The block's parameters as stored in the pipeline (``${variables}`` allowed).
         base_dir: Folder that relative paths refer to.
         resolve: Replaces ``${variable}`` references.
+        need_h5: The ``.h5`` is needed (the block's HDF5 output is connected). If not, a
+            missing ``.h5`` is not listed and a missing HDF5 request is no problem.
 
     Returns:
         The status. It never raises: problems are reported in ``problem`` and ``notes``.
@@ -118,6 +121,7 @@ def analysis_status(
     results = [
         ResultFile(p.name, p, p.is_file(), _time(p.stat().st_mtime) if p.is_file() else "")
         for p in (files["f06"], files["h5"])
+        if need_h5 or p.suffix != ".h5" or p.is_file()
     ]
     status = AnalysisStatus(
         command=command,
