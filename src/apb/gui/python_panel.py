@@ -2,7 +2,9 @@
 
 Shows the script of the block read-only with the result of the static check, offers the
 start choices (existing file / new from template) while there is no script, and never
-overwrites a script that exists (PY-13): there is no replace action.
+overwrites a script that exists (PY-13): there is no replace action. The one change the
+panel makes to an existing script is the ``def run(...)`` line, kept in step with the input
+ports (PY-16, spec 04 §3.9).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from apb.blocks.python.scripting import (
     ports_to_params,
     read_script,
 )
+from apb.blocks.python.signature import ports_from_signature, rewrite_run_signature
 from apb.blocks.python.templates import create_script, template_titles
 from apb.engine.variables import VariableError
 from apb.gui.filedialog import FileDialog
@@ -84,9 +87,67 @@ class PythonPanel:
     # ---- parameters -----------------------------------------------------------------------
 
     def _changed(self, name: str, value: Any) -> None:
+        old_inputs = self._inputs() if name == "inputs" else None
         self.on_change(name, value)
+        if old_inputs is not None:
+            self._sync_run(old_inputs, self._inputs())
         if name in _WATCHED:
             self._render_script()
+
+    # ---- ports and run() in step (PY-16, PY-17) -------------------------------------------
+
+    def _code_source(self) -> tuple[str, Path | None] | None:
+        """Return ``(code, script file)`` (file ``None`` for inline code), or ``None``."""
+        path = self._script_path()
+        if path is not None:
+            if not path.is_file():
+                return None
+            try:
+                return read_script(path), path
+            except ScriptError:
+                return None
+        inline = str(self.params.get("inline_code") or "")
+        return (inline, None) if inline.strip() else None
+
+    def _sync_run(self, old: list[PortSpec], new: list[PortSpec]) -> None:
+        """Rewrite the ``def run(...)`` line for changed input ports (PY-16)."""
+        found = self._code_source()
+        if found is None:
+            return
+        source, path = found
+        try:
+            change = rewrite_run_signature(source, old, new)
+        except ScriptError as exc:
+            ui.notify(f"run() not updated: {exc}", type="warning", multi_line=True)
+            return
+        if not change.changed:
+            return
+        if path is not None:
+            try:
+                path.write_text(change.source, encoding="utf-8", newline="\n")
+            except OSError as exc:
+                ui.notify(f"run() not updated: {exc.strerror or exc}", type="warning")
+                return
+        else:
+            self.on_change("inline_code", change.source)
+        message = f"run() updated: {change.summary()}"
+        if change.renamed:
+            message += ". Only the run() line is changed: rename the name in the code too."
+        ui.notify(message, type="info", multi_line=True)
+        if path is None:
+            self.rebuild()  # the inline code field shows the new text
+
+    def _add_ports(self, proposed: list[PortSpec]) -> None:
+        """Add input ports for ``run()`` arguments that have none (PY-17)."""
+        self.on_change("inputs", ports_to_params([*self._inputs(), *proposed]))
+        ui.notify("Added input port(s): " + ", ".join(p.name for p in proposed), type="info")
+        self.rebuild()
+
+    def _update_run(self) -> None:
+        """Add the ports missing from ``run()`` to its line (PY-16)."""
+        ports = self._inputs()
+        self._sync_run(ports, ports)
+        self._render_script()
 
     def _script_path(self) -> Path | None:
         """Return the absolute path of the script, or ``None`` if the block has none."""
@@ -177,6 +238,8 @@ class PythonPanel:
             ui.button(icon="refresh", on_click=self._render_script).props(
                 'flat dense round size=sm aria-label="Check"'
             ).tooltip("Check: read the file again and check it (the script is not run)")
+        if not check.ok:
+            self._fix_buttons(source)
         code = ui.code(source, language="python").classes(
             "w-full max-h-40 overflow-hidden text-xs border rounded cursor-pointer apb-script-code"
         )
@@ -189,6 +252,27 @@ class PythonPanel:
             ui.button(icon="open_in_new", on_click=lambda: self._open(path)).props(
                 'dense flat round aria-label="Open in editor"'
             ).tooltip("Open in editor: the program your system uses for .py files")
+
+    def _fix_buttons(self, source: str) -> None:
+        """Offer the fixes for a ``run()`` that does not match the ports (PY-16, PY-17)."""
+        proposed = ports_from_signature(source, self._inputs())
+        check = check_script_source(source, self._inputs())
+        lacks_ports_in_run = any("has no argument" in p for p in check.problems)
+        with ui.row().classes("gap-1 apb-script-fix"):
+            if proposed:
+                names = ", ".join(p.name for p in proposed)
+                ui.button(
+                    f"Add input port(s): {names}",
+                    icon="add",
+                    on_click=lambda: self._add_ports(proposed),
+                ).props("dense outline no-caps size=sm").tooltip(
+                    "Add an input port for each run() argument that has none "
+                    "(type from the annotation)"
+                )
+            if lacks_ports_in_run:
+                ui.button("Add the ports to run()", icon="edit", on_click=self._update_run).props(
+                    "dense outline no-caps size=sm"
+                ).tooltip("Rewrite only the def run(...) line so it takes every input port")
 
     def _open(self, path: Path) -> None:
         try:

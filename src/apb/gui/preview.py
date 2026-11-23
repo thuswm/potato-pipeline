@@ -147,6 +147,16 @@ def result_origin(result: BlockResult, outdated: bool = False) -> str:
     return "Done (cached)" if result.cached else f"Done in {result.duration:.2f} s"
 
 
+def _block_log(lines: list[str], opened: bool) -> None:
+    """The block's log lines in a foldable section."""
+    with (
+        ui.expansion(f"Block log ({len(lines)} lines)", value=opened)
+        .classes("w-full apb-block-log")
+        .props("dense")
+    ):
+        ui.label("\n".join(lines)).classes("text-xs font-mono whitespace-pre-wrap")
+
+
 def show_result(result: BlockResult | None, outdated: bool = False) -> None:
     """Render a block's latest result: error, outputs (one tab each) and log.
 
@@ -170,17 +180,27 @@ def show_result(result: BlockResult | None, outdated: bool = False) -> None:
                 ui.label(result.traceback).classes("text-xs font-mono whitespace-pre-wrap")
     elif result.state is BlockState.SKIPPED:
         ui.label(result.error).classes("text-sm text-amber-700")
-    if result.outputs:
-        names = list(result.outputs)
+    # A failed block: its log comes first and open; it says where the error is and lists
+    # the variables (spec 04 §3.10).
+    failed = result.state is BlockState.ERROR
+    if result.log and failed:
+        _block_log(result.log, opened=True)
+    # Outputs, then the values a script passed to apb.show() (spec 04 §3.10).
+    values: dict[str, Any] = {n: n for n in result.outputs}
+    values |= {f"show: {n}": n for n in result.shown}
+    if values:
+        names = list(values)
         with ui.tabs().props("dense align=left").classes("text-xs") as tabs:
             tab_items = {n: ui.tab(n) for n in names}
         with ui.tab_panels(tabs, value=tab_items[names[0]]).classes("w-full"):
             for n in names:
                 with ui.tab_panel(tab_items[n]).classes("p-1"):
                     try:
-                        show_value(n, result.outputs[n])
+                        if n in result.outputs:
+                            show_value(n, result.outputs[n])
+                        else:
+                            show_value(n, result.shown[values[n]])
                     except StoreError as exc:
                         ui.label(str(exc)).classes("text-sm text-red-700 apb-store-error")
-    if result.log:
-        with ui.expansion(f"Block log ({len(result.log)} lines)").classes("w-full").props("dense"):
-            ui.label("\n".join(result.log)).classes("text-xs font-mono whitespace-pre-wrap")
+    if result.log and not failed:
+        _block_log(result.log, opened=False)

@@ -26,6 +26,11 @@ proves useful can later be promoted into a standard block (see §3.4).
 | PY-12 | **Templates:** a new Python block can start from a template (a ready-made `run()` with example code and, for the specialised templates, default ports) as an alternative to choosing an existing file (§3.5) | M |
 | PY-13 | **A script that exists is never overwritten** by a template or skeleton, in the GUI or on the command line without `--force`; the GUI has no overwrite option at all (§3.5) | M |
 | PY-14 | The panel shows whether `run()` matches the declared ports and reports syntax errors, **without executing the script** (static check) (§3.5) | M |
+| PY-16 | **Ports and code in step (round 6):** adding, renaming or removing an input port rewrites the `def run(...)` line of the script (file or inline code), and only that line (§3.9) | M |
+| PY-17 | `run()` arguments without an input port are offered as new ports ("Add input port(s): …", type from the annotation); ports missing from `run()` can be added to it with one click (§3.9) | M |
+| PY-18 | After a run, returned keys that are not output ports and output ports that were not returned are reported by name, with what to do (§3.9) | M |
+| PY-19 | **When a script fails** the block log says where (the lines of the user's code in the traceback) and lists the variables at the failing line, tables as size, columns and first rows; the preview shows that log open, right under the error (§3.10) | M |
+| PY-20 | `from apb import show`; `show(value, name)` adds the value as a tab *show: name* to the block's preview, also when the script fails later (§3.10) | M |
 | PY-15 | Templates of the user (a folder of `.py` files offered next to the built-in ones) | L |
 
 ## 3. Design
@@ -185,6 +190,64 @@ stays a run-time error (PY-07).
 **Not in v1:** templates supplied by the user from a folder (PY-15) — it depends on how
 toolboxes and shared data are organised (spec README, "Later") and is decided together with
 the toolbox restructure. A script does not record which template it came from.
+
+### 3.9 Ports and code in step (PY-16 … PY-18) — round 6
+
+Found in the Windows test: a `run()` argument written in the code did not become a port,
+and ports defined in the panel did not appear in the code. Agreed approach (2026-11-23):
+**the ports stay the definition of the block**, the code follows on request or
+automatically for the `def` line only.
+
+- **Port change → `def run(...)` line** (`blocks/python/signature.py`,
+  `rewrite_run_signature`). Arguments are matched to ports by position when the number of
+  ports is unchanged, so a renamed port renames its argument; kept arguments keep their
+  type hints and defaults; new ports get the hint of their type (`pd.DataFrame`, `float`,
+  `str`, `Figure`, `object`; optional ports `| None = None`); arguments of removed ports
+  are dropped; other arguments, `*args`, `**kwargs` and the return annotation are kept;
+  arguments without default come first (Python requires it). A long line is written with
+  one argument per line. The body is **not** changed: after a rename the panel says
+  "Only the run() line is changed: rename the name in the code too". A script with a
+  syntax error is not touched ("run() not updated: …"). This is the one change the panel
+  makes to an existing script (PY-13 still holds for templates and skeletons).
+- **Arguments → ports** (`ports_from_signature`): when the check finds `run()` arguments
+  without default and without port, a button *Add input port(s): a, b* adds them (type
+  from the annotation: `DataFrame` → Table, `float`/`int` → Scalar, `str` → Text,
+  `Figure` → Figure, else Any). When ports are missing from `run()`, a button *Add the
+  ports to run()* rewrites the `def` line.
+- **Outputs** cannot be read reliably from the code, so they are checked after the run:
+  "run() returned 'x', which is not an output port: add an output port 'x' (Ports) or leave
+  it out of the returned dict" and "the output port 'y' is missing from the dict run()
+  returned".
+
+### 3.10 Debugging a script (PY-19, PY-20) — round 6
+
+Found in the Windows test: "I need some way to get printouts of tables and variables in
+case there is an error." `print()` already went to the block log; now:
+
+- **On an error** the block log gets (`scripting.error_details`):
+  ```
+  Where it failed (your code):
+    line 38 in run(): ratio = allowable_shear / (safety_factor - 1.5)
+  Variables in run() at line 38:
+    loads = DataFrame 24 rows x 4 columns: EID, SUBCASE, TENSION, SHEAR
+            EID  SUBCASE  TENSION  SHEAR
+        0  1001        1      0.0  1350.0
+        …
+    safety_factor = 1.5
+  ```
+  Only frames in the user's file (or inline code) are listed; the variables are those of
+  the innermost such frame (modules, functions, classes and `_names` left out, at most 25).
+  Tables: size, columns and the first 5 rows; other values: `repr`, cut at 200 characters
+  (`apb.debug.summarize`).
+- **The preview of a failed block** shows the error, then the block log **open**, then
+  the shown values.
+- **`show(value, name="")`** (`apb/debug.py`, importable as `from apb import show`): the
+  value is copied at that moment and shown as an extra preview tab *show: name* (default
+  names `value1`, `value2` …), also when the script fails later; the log gets one line
+  `show: name = <summary>`. It returns the value, so `df = show(df.merge(...), "merged")`
+  works. Outside the tool (script run on its own) it prints the summary. The values travel
+  as `RunContext.shown` → `BlockResult.shown`; they are kept for the last run only (not
+  cached, not stored).
 
 ## 4. Out of scope (v1)
 

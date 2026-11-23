@@ -27,9 +27,11 @@ from apb.blocks.python.scripting import (
     check_signature,
     compile_inline,
     describe,
+    error_details,
     inline_filename,
     loaded_script,
 )
+from apb.debug import collecting
 from apb.engine.block import Block, Code, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.units import (
@@ -192,9 +194,16 @@ class PythonBlock(Block[PythonParams]):
         check_signature(func, params.inputs)
         writer = _LogWriter(ctx.log)
         try:
-            with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
+            with (
+                collecting(ctx.shown.__setitem__),
+                contextlib.redirect_stdout(writer),
+                contextlib.redirect_stderr(writer),
+            ):
                 return func(**kwargs)
         except Exception as exc:
+            writer.flush()
+            for line in error_details(exc, location):  # where, and the variables (PY-19)
+                ctx.log(line)
             raise ScriptError(describe(exc, location)) from exc
         finally:
             writer.flush()
@@ -206,6 +215,16 @@ class PythonBlock(Block[PythonParams]):
             result = {params.outputs[0].name: result}
         if not isinstance(result, dict):
             raise ScriptError(f"run() must return a dict, got {type(result).__name__}")
+        declared = [p.name for p in params.outputs]
+        extra = [str(k) for k in result if k not in declared]
+        missing = [n for n in declared if n not in result]
+        problems = [
+            f"run() returned '{k}', which is not an output port: add an output port '{k}' "
+            "(Ports) or leave it out of the returned dict"
+            for k in extra
+        ] + [f"the output port '{n}' is missing from the dict run() returned" for n in missing]
+        if problems:
+            raise ScriptError("; ".join(problems))
         types = {p.name: p.type for p in params.outputs}
         out = {k: _normalise_output(v, types.get(k, PortType.ANY)) for k, v in result.items()}
         for value in out.values():

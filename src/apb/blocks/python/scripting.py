@@ -10,6 +10,7 @@ import ast
 import inspect
 import itertools
 import keyword
+import linecache
 import math
 import sys
 import traceback
@@ -376,6 +377,8 @@ def compile_inline(code: str, block_id: str) -> Callable[..., Any]:
         compiled = compile(code, filename, "exec")
     except SyntaxError as exc:
         raise ScriptError(f"Syntax error in inline code, line {exc.lineno}: {exc.msg}") from exc
+    # Lets tracebacks and error_details() show the lines of the inline code.
+    linecache.cache[filename] = (len(code), None, code.splitlines(keepends=True), filename)
     namespace: dict[str, Any] = {
         "np": np,
         "pd": pd,
@@ -445,3 +448,60 @@ def describe(exc: BaseException, path: Path | str) -> str:
             line = frame.lineno
     where = f" ({Path(path).name if isinstance(path, Path) else path}, line {line})" if line else ""
     return f"{type(exc).__name__}: {exc}{where}"
+
+
+#: Variables listed when a script fails.
+MAX_VARIABLES = 25
+
+
+def error_details(exc: BaseException, path: Path | str) -> list[str]:
+    """Return log lines that help to find an error in user code (spec 04 §3.10).
+
+    The traceback cut to the user's file (line numbers and code), then the local variables
+    of the innermost function of the user's file at the failing line, each summarised
+    (tables as size, columns and first rows; see :func:`apb.debug.summarize`).
+
+    Args:
+        exc: The exception raised by the script.
+        path: Script file, or the pseudo file name of inline code.
+    """
+    from apb.debug import summarize
+
+    target = str(Path(path).resolve()) if isinstance(path, Path) else path
+    lines = ["Where it failed (your code):"]
+    last = None
+    tb = exc.__traceback__
+    while tb is not None:
+        code = tb.tb_frame.f_code
+        fname = (
+            code.co_filename
+            if code.co_filename.startswith("<")
+            else str(Path(code.co_filename).resolve())
+        )
+        if fname == target:
+            text = linecache.getline(code.co_filename, tb.tb_lineno).strip()
+            lines.append(f"  line {tb.tb_lineno} in {code.co_name}(): {text}")
+            last = tb
+        tb = tb.tb_next
+    if last is None:
+        return []
+    names = [
+        n
+        for n, v in last.tb_frame.f_locals.items()
+        if not n.startswith("_")
+        and not isinstance(v, ModuleType)
+        and not inspect.isroutine(v)
+        and not inspect.isclass(v)
+    ]
+    if names:
+        lines.append(f"Variables in {last.tb_frame.f_code.co_name}() at line {last.tb_lineno}:")
+    for name in names[:MAX_VARIABLES]:
+        try:
+            summary = summarize(last.tb_frame.f_locals[name])
+        except Exception as problem:  # a value that cannot be shown
+            summary = [f"<cannot show: {problem}>"]
+        lines.append(f"  {name} = {summary[0]}")
+        lines += [f"      {s}" for s in summary[1:]]
+    if len(names) > MAX_VARIABLES:
+        lines.append(f"  … and {len(names) - MAX_VARIABLES} more")
+    return lines

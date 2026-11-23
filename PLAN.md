@@ -80,14 +80,14 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## F. Python block (spec 04)
 
-- [ ] 13. **Ports and code in step** (approach agreed 2026-11-23):
+- [x] 13. **Ports and code in step** (approach agreed 2026-11-23):
       - Ports stay the definition of the block. Adding, renaming or removing an input port
         rewrites the `def run(...)` line of the script (only that line).
       - When the script is saved, arguments of `run` that are not ports are offered as new
         input ports ("Add port `loads`?"); ports missing from the signature are flagged.
       - Output ports: returned keys that are not ports, and ports never returned, are
         reported after the run (they cannot be read reliably from the code beforehand).
-- [ ] 14. **Debugging:** `print()` already goes to the block log; make it usable:
+- [x] 14. **Debugging:** `print()` already goes to the block log; make it usable:
       - On an error, the log opens and shows the traceback cut to the user's script, plus
         the local variables of the failing line (tables as shape, columns and first rows).
       - A helper `show(obj, name)` (importable as `from apb import show`) that adds a table

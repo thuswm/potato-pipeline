@@ -15,6 +15,13 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
 
 ### Added
+- Python block: the `def run(...)` line follows the input ports (add, rename, remove);
+  `run()` arguments without a port can be added as ports with one click; returned values
+  that do not match the output ports are reported by name.
+- Python block debugging: when a script fails, the log shows the failing line of your
+  code and the variables there (tables with size, columns and first rows), and the
+  preview opens that log. `from apb import show; show(df, "name")` adds a table or value
+  as an extra preview tab, also when the script fails later.
 - *Write CSV* block: separator and decimal sign selectable (e.g. `;` and `,` for Excel
   with European settings), units in the header or in a second row.
 - The preview shows the table title, which is the default sheet name in *Write Excel*.

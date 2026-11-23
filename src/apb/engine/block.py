@@ -103,6 +103,8 @@ class RunContext:
     """The pipeline file, if the run started from one."""
     upstream_files: list[Path] = field(default_factory=list)
     """Files read by this block and all blocks upstream of it (for traceability)."""
+    shown: dict[str, Any] = field(default_factory=dict)
+    """Values a script passed to ``apb.show()``: extra preview tabs, also after an error."""
     connected_outputs: frozenset[str] | None = None
     """Output ports with at least one connector (``None`` = not known: treat all as used).
 

@@ -464,6 +464,59 @@ def test_python_block_shows_code_and_checks_the_script(page, workdir: Path):
     )
 
 
+def test_python_ports_and_run_stay_in_step(page, workdir: Path):
+    """Round 6: arguments become ports on request; a renamed port renames the argument."""
+    select(page, "Fastener margins")
+    script = workdir / "scripts" / "fastener_margins.py"
+    script.write_text(
+        script.read_text(encoding="utf-8").replace(
+            "safety_factor: float,", "safety_factor: float,\n    extra: pd.DataFrame,"
+        ),
+        encoding="utf-8",
+    )
+    page.get_by_role("button", name="Check", exact=True).click()
+    page.wait_for_timeout(500)
+    page.get_by_role("button", name="Add input port(s): extra").click()
+    page.wait_for_timeout(800)
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+    block = node(page, "Fastener margins")
+    assert block.locator(".apb-in", has_text="extra").count() == 1
+
+    page.get_by_text(re.compile(r"^Ports")).first.click()  # unfold the Ports section
+    page.wait_for_timeout(300)
+    names = page.locator('input[placeholder="name"]')
+    box = next(names.nth(i) for i in range(names.count()) if names.nth(i).input_value() == "extra")
+    box.fill("more")
+    box.blur()
+    page.wait_for_timeout(800)
+    text = script.read_text(encoding="utf-8")
+    assert "more: pd.DataFrame" in text and "extra:" not in text
+    assert page.locator(".q-notification", has_text="run() updated: renamed extra → more").count()
+
+
+def test_a_failing_script_shows_the_variables_and_shown_values(page, workdir: Path):
+    """Round 6: debugging a Python block without leaving the tool."""
+    script = workdir / "scripts" / "fastener_margins.py"
+    text = script.read_text(encoding="utf-8")
+    body_start = text.index('"""', text.index("def run(")) + 3
+    body_start = text.index('"""', body_start) + 3  # after the run() docstring
+    script.write_text(
+        text[:body_start]
+        + "\n    from apb import show\n    show(loads, 'loads in')\n    oops = 1 / 0\n"
+        + text[body_start:],
+        encoding="utf-8",
+    )
+    run_all(page)
+    select(page, "Fastener margins")
+    page.wait_for_timeout(400)
+    log = page.locator(".apb-block-log")
+    assert "Variables in run()" in log.inner_text()  # open without a click
+    assert "loads = DataFrame" in log.inner_text()
+    page.get_by_role("tab", name="show: loads in").click()
+    page.wait_for_timeout(300)
+    assert "EID" in page.locator(".q-tab-panels").first.inner_text()
+
+
 def add_python_block(page) -> None:
     page.locator(".q-drawer--left .q-expansion-item__content .q-item", has_text="Python").click()
     page.wait_for_timeout(600)

@@ -77,6 +77,8 @@ class BlockResult:
     duration: float = 0.0
     restored: bool = False
     finished: str = ""
+    shown: Mapping[str, Any] = field(default_factory=dict)
+    """Values shown with ``apb.show()`` in this run (not cached or stored)."""
 
 
 @dataclass
@@ -626,6 +628,7 @@ class Executor:
                 traceback=tb,
                 log=log,
                 duration=time.perf_counter() - start,
+                shown=dict(ctx.shown),
             )
         duration = time.perf_counter() - start
         finished = now_text()
@@ -644,6 +647,7 @@ class Executor:
             cache_key=key,
             duration=duration,
             finished=finished,
+            shown=dict(ctx.shown),
         )
 
     @staticmethod
