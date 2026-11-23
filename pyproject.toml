@@ -15,6 +15,7 @@ dependencies = [
     "pyarrow>=26.0.1",
     "pydantic>=2.14.3",
     "python-docx>=1.2.0",
+    "tomlkit>=0.15.2",
     "typer>=0.29.1",
 ]
 

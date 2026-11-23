@@ -36,10 +36,11 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## C. MSC Nastran analysis block (spec 09)
 
-- [ ] 6. **Nastran settings in user settings, override per block:** a *File > Settings*
-      dialog that edits the `[nastran]` section of `config.toml` (path, command arguments,
-      default run mode). The block shows the inherited value as placeholder ("from
-      settings: …") and only stores a value when the user overrides it.
+- [x] 6. **Nastran settings in user settings, override per block:** a *File > Settings*
+      dialog that edits the `[nastran]` section of `config.toml` (path, command arguments)
+      and `[gui]`. The block shows the inherited value as placeholder ("settings: …") and
+      only stores a value when the user overrides it. Default run mode left out: it
+      belongs to the pipeline (spec 06 §3.7).
 - [x] 7. **Clearer status and warnings:**
       - The warning triangle comes from a `WARNING` line in the block's log (here: a Nastran
         warning message in `local_loads.f06`), not from the missing Nastran path. The panel

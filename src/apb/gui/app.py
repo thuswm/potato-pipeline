@@ -44,6 +44,7 @@ from apb.gui.preview import open_with_system, show_result, show_value, stored_ti
 from apb.gui.python_panel import PythonPanel
 from apb.gui.report_editor import ReportPanel
 from apb.gui.runner import EVENT_STATES, RunController, describe_value, summary
+from apb.gui.user_settings import UserSettingsDialog
 from apb.units import Quantity, UnitSystem
 
 HEADER_HEIGHT = 52
@@ -209,6 +210,8 @@ class EditorPage:
                 ui.menu_item("Save as…", on_click=self.save_as)
                 ui.separator()
                 ui.menu_item("HDF5 viewer…", on_click=self.open_h5_viewer)
+                ui.separator()
+                ui.menu_item("Settings of this computer…", on_click=self.edit_user_settings)
                 ui.separator()
                 ui.menu_item("Quit", on_click=self.quit)
             with ui.button("Pipeline", icon="tune").props("flat color=white dense"), ui.menu():
@@ -1055,6 +1058,11 @@ class EditorPage:
         self._show_preview()
 
     # ---- pipeline settings -----------------------------------------------------------------
+
+    async def edit_user_settings(self) -> None:
+        """Dialog for the computer's settings in ``config.toml`` (GUI-36)."""
+        if await UserSettingsDialog().show():
+            self._show_panel()  # e.g. the Nastran status lines and inherited values
 
     async def edit_pipeline_settings(self) -> None:
         """Dialog for pipeline variables, default unit system and metadata (GUI-14)."""

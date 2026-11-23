@@ -89,14 +89,24 @@ window, not a tab in a browser you already have open: it uses its own browser pr
 the tool can tell when the window is closed. Closing the window or *File > Quit* ends the
 program. Without Chrome or Edge, or with `--window browser`, it opens a tab in the default
 browser instead; the program then ends 30 s after the last tab was closed. The console
-says which of the two was opened. The default can be set in the config file
-(`~/.config/apb/config.toml`, Windows `%APPDATA%\apb\config.toml`):
+says which of the two was opened.
+
+Settings that are the same for every pipeline on a computer — how MSC Nastran is started
+and how the GUI is shown — are set in *File > Settings of this computer…*. They are stored
+in `config.toml` (`~/.config/apb/config.toml`, Windows `%APPDATA%\apb\config.toml`),
+which can also be edited by hand:
 
 ```toml
+[nastran]
+path = "C:/MSC.Software/MSC_Nastran/2024.1/bin"   # folder with the nastran program
+options = ["mem=4gb"]                             # added to every run
+
 [gui]
 window = "browser"        # app (default), browser or none
 browser = "C:/Program Files/Google/Chrome/Application/chrome.exe"   # optional
 ```
+
+A value set in a Nastran block wins over the file.
 
 ## Development
 

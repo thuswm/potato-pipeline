@@ -9,8 +9,14 @@ from __future__ import annotations
 
 import os
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
+import tomlkit
+from tomlkit.items import Table
+
+from apb.fileutil import OutputFileError, atomic_output
 
 
 class ConfigError(Exception):
@@ -56,3 +62,54 @@ def read_section(name: str, path: Path | None = None) -> dict[str, Any]:
     if not isinstance(section, dict):
         raise ConfigError(f"[{name}] in the config file {target} must be a section")
     return section
+
+
+def write_section(name: str, values: Mapping[str, Any], path: Path | None = None) -> Path:
+    """Set the keys of one ``[section]`` of the config file and write it.
+
+    Other sections, other keys of the section and comments are kept (``tomlkit``). A value
+    that is ``None``, ``""`` or an empty list removes its key, so the built-in default
+    applies again; an empty section is removed. The file and its folder are created if
+    needed; the write is atomic.
+
+    Args:
+        name: Section name, e.g. ``"nastran"``.
+        values: Key -> value; only these keys are changed.
+        path: Config file (default: :func:`config_path`).
+
+    Returns:
+        The config file written.
+
+    Raises:
+        ConfigError: If the existing file cannot be read or written.
+    """
+    target = path or config_path()
+    try:
+        text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+    except OSError as exc:
+        raise ConfigError(f"Config file {target} cannot be read: {exc}") from exc
+    try:
+        doc = tomlkit.parse(text)
+    except tomlkit.exceptions.TOMLKitError as exc:
+        raise ConfigError(f"Config file {target} cannot be read: {exc}") from exc
+    section = doc.get(name)
+    if section is None:
+        section = tomlkit.table()
+        doc[name] = section
+    elif not isinstance(section, Table):
+        raise ConfigError(f"[{name}] in the config file {target} must be a section")
+    for key, value in values.items():
+        if value is None or value == "" or value == []:
+            section.pop(key, None)
+        else:
+            section[key] = value
+    if not section:
+        doc.pop(name, None)
+    try:
+        with atomic_output(target) as tmp:
+            tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
+    except (OSError, OutputFileError) as exc:
+        raise ConfigError(f"Config file {target} cannot be written: {exc}") from exc
+    return target

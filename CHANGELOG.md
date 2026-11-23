@@ -13,6 +13,9 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
 
 ### Added
+- *File > Settings of this computer…*: set the Nastran command, program folder and options
+  once per computer (and the window settings). A block's own value still wins; empty
+  block fields show the value they inherit. Comments in `config.toml` are kept.
 - The property panel lists the warnings of a block's last run, so the warning mark on the
   canvas can be explained.
 

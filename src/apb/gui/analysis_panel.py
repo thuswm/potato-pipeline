@@ -13,6 +13,7 @@ from typing import Any
 
 from nicegui import ui
 
+from apb.blocks.nastran import command as cmd
 from apb.blocks.nastran.analysis import NastranRun, NastranRunParams
 from apb.blocks.nastran.status import AnalysisStatus, analysis_status
 from apb.blocks.solvers.runmode import RunMode
@@ -38,6 +39,26 @@ def relation_is_bad(relation: str) -> bool:
         or "missing" in relation
         or relation.endswith("input changed since")
     )
+
+
+def inherited(path: Path | None = None) -> dict[str, str]:
+    """Return what applies when the block's command, path or options are empty (GUI-36).
+
+    The values come from the computer's settings (``[nastran]`` of the config file), else
+    the built-in default. They are shown in the empty fields, so the block shows what it
+    will use without storing it.
+    """
+    try:
+        defaults = cmd.load_defaults(path)
+    except cmd.CommandError:
+        defaults = cmd.Defaults()
+    return {
+        "command": f"settings: {defaults.command}"
+        if defaults.command
+        else f"default: {cmd.DEFAULT_COMMAND}",
+        "path": f"settings: {defaults.path}" if defaults.path else "default: found on PATH",
+        "options": f"settings: {', '.join(defaults.options)}" if defaults.options else "",
+    }
 
 
 class AnalysisPanel:
@@ -72,7 +93,9 @@ class AnalysisPanel:
         self.open_file = open_file
         self.h5_used = h5_used
         self._need_h5 = True
-        self.form = ParamForm(NastranRunParams, params, self._changed, pick_file)
+        self.form = ParamForm(
+            NastranRunParams, params, self._changed, pick_file, placeholders=inherited()
+        )
 
     def _changed(self, name: str, value: Any) -> None:
         self.on_change(name, value)

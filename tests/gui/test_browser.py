@@ -57,8 +57,9 @@ def launch_gui(workdir: Path, pipeline: str | None) -> ServerUrl:
         stdout=log.open("w"),
         stderr=subprocess.STDOUT,
         # Without PYTEST_CURRENT_TEST, so that NiceGUI runs as a normal server.
+        # Own config file: the tests never read or write the user's settings.
         env={k: v for k, v in os.environ.items() if not k.startswith("PYTEST")}
-        | {"PYTHONUTF8": "1"},
+        | {"PYTHONUTF8": "1", "APB_CONFIG": str(workdir.parent / "config.toml")},
     )
     url = ServerUrl(f"http://127.0.0.1:{port}/")
     url.proc = proc
@@ -1398,3 +1399,24 @@ def test_constants_editor_dialog_and_compact_list(page, workdir: Path):
     saved = json.loads((workdir / "test_case.apb.json").read_text(encoding="utf-8"))
     const = next(b for b in saved["blocks"] if b["id"] == "const")
     assert [r["name"] for r in const["params"]["constants"]][-1] == "K6"
+
+
+def test_settings_of_this_computer(page, workdir: Path):
+    """Round 6: Nastran settings once per computer; a block shows what it inherits."""
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Settings of this computer…", exact=True).click()
+    dialog = page.locator(".apb-user-settings")
+    dialog.get_by_label("Options").fill("mem=4gb, smp=4")
+    dialog.get_by_label("Folder with the Nastran program").fill("/opt/msc/bin")
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(500)
+    text = (workdir.parent / "config.toml").read_text(encoding="utf-8")
+    assert 'path = "/opt/msc/bin"' in text and 'options = ["mem=4gb", "smp=4"]' in text
+
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Settings of this computer…", exact=True).click()
+    dialog.get_by_label("Options").fill("mem 4gb")  # invalid: refused, nothing written
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(400)
+    assert page.locator(".q-notification", has_text="key=value").count() == 1
+    assert (workdir.parent / "config.toml").read_text(encoding="utf-8") == text

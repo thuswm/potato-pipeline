@@ -121,7 +121,8 @@ def describe(widget: Any, hint: str, placeholder: bool = True) -> None:
     Args:
         widget: A ``ui.input`` or ``ui.select`` (anything with an ``append`` slot).
         hint: Help text (nothing happens if empty).
-        placeholder: Also show the example of the text in the empty field.
+        placeholder: Also show the example of the text in the empty field (unless the
+            field already has a placeholder, e.g. an inherited value).
     """
     if not hint:
         return
@@ -130,7 +131,7 @@ def describe(widget: Any, hint: str, placeholder: bool = True) -> None:
             hint
         )
     example = example_of(hint) if placeholder else ""
-    if example:
+    if example and not widget.props.get("placeholder"):  # an inherited value wins
         widget.props(f"placeholder={json.dumps(example)}")
 
 
@@ -256,6 +257,8 @@ class ParamForm:
         items: Returns the names of the values connected to a ``multiple`` input, in
             connector order (for ``apb_per_item`` fields).
         open_file: Opens a file with its system program (the *Open* icon of written files).
+        placeholders: Parameter -> text shown in an empty text or list field, e.g. the
+            value of the computer's settings that applies when the field is empty.
     """
 
     def __init__(
@@ -271,12 +274,14 @@ class ParamForm:
         resolve_path: Callable[[str, bool], Path | None] | None = None,
         items: Callable[[str], list[str]] | None = None,
         open_file: Callable[[Path], None] | None = None,
+        placeholders: Mapping[str, str] | None = None,
     ) -> None:
         self.model = model
         self.values = values
         self.on_change = on_change
         self.pick_file = pick_file
         self.choices = choices
+        self.placeholders = dict(placeholders or {})
         self.replaced = dict(replaced or {})
         self.columns = columns
         self.resolve_path = resolve_path
@@ -375,7 +380,7 @@ class ParamForm:
         elif kind == "text" and widget == "code":
             self._code(label, hint, value, setter)
         elif kind == "text":
-            self._text(label, hint, value, setter)
+            self._text(label, hint, value, setter, self.placeholders.get(name, ""))
         elif kind == "number":
             self._number(label, hint, value, setter, detail, optional)
         elif kind == "bool":
@@ -403,7 +408,7 @@ class ParamForm:
             sel.on_value_change(lambda e: setter(list(e.value or [])))
             self._hint(sel, hint)
         elif kind == "list":
-            self._list(label, hint, value, setter, detail)
+            self._list(label, hint, value, setter, detail, self.placeholders.get(name, ""))
         elif kind == "mapping":
             self._mapping(label, hint, value, setter, detail)
         elif kind == "ports":
@@ -417,10 +422,12 @@ class ParamForm:
     def _hint(widget: Any, hint: str) -> None:
         describe(widget, hint)
 
-    def _text(self, label: str, hint: str, value: Any, setter: Setter) -> None:
+    def _text(
+        self, label: str, hint: str, value: Any, setter: Setter, placeholder: str = ""
+    ) -> None:
         box = (
-            ui.input(label, value="" if value is None else str(value))
-            .props("dense outlined")
+            ui.input(label, value="" if value is None else str(value), placeholder=placeholder)
+            .props("dense outlined stack-label" if placeholder else "dense outlined")
             .classes("w-full")
         )
         self._hint(box, hint)
@@ -661,9 +668,21 @@ class ParamForm:
         sel.on_value_change(lambda e: setter("" if e.value is None else str(e.value)))
         describe(sel, hint, placeholder=False)
 
-    def _list(self, label: str, hint: str, value: Any, setter: Setter, item: type) -> None:
+    def _list(
+        self,
+        label: str,
+        hint: str,
+        value: Any,
+        setter: Setter,
+        item: type,
+        placeholder: str = "",
+    ) -> None:
         text = ", ".join(str(v) for v in value) if isinstance(value, list) else (value or "")
-        box = ui.input(label, value=text).props("dense outlined").classes("w-full")
+        box = (
+            ui.input(label, value=text, placeholder=placeholder)
+            .props("dense outlined stack-label" if placeholder else "dense outlined")
+            .classes("w-full")
+        )
         self._hint(box, (hint + " — " if hint else "") + "comma-separated")
 
         def commit() -> None:

@@ -232,6 +232,31 @@ Windows, where Edge is always installed.
 A native window without any browser (option B, pywebview), packaging as an installer,
 hiding the console window (GUI-31), single-instance locking across users.
 
+### 3.7 Settings of this computer (GUI-36) — round 6
+
+Found in the Windows test: the Nastran program and command are mostly the same for every
+pipeline on a computer, so they should be set once, with a per-block override. The
+override already existed (block > `[nastran]` of `config.toml` > built-in default, spec 09
+§3.3); what was missing is a way to edit the file from the GUI and to see in the block what
+an empty field means.
+
+| ID | Requirement | Prio |
+|----|-------------|------|
+| GUI-36 | *File > Settings of this computer…* edits `config.toml`: **MSC Nastran** command, folder with the program, options (with a live "Nastran found / not found" line), and **Window** mode, Chrome/Edge program, idle time (spec 06 §3.6, taking effect at the next start). It shows where the file is; empty = built-in default (shown as placeholder). Invalid values (unknown placeholder, option not `key=value`, idle time not a positive number) are refused with a message and nothing is written. Saving keeps other keys, other sections and comments of the file (`tomlkit`). The Nastran block shows the inherited value in its empty *Command*, *Path* and *Options* fields ("settings: …" or "default: …"), without storing it in the pipeline | M |
+
+Design:
+- `apb/config.py`: `write_section(name, values)` — round-trip with `tomlkit` (new
+  dependency, the common TOML library that keeps comments and layout); empty values remove
+  their key, an empty section is removed; atomic write.
+- `apb/gui/user_settings.py`: `UserSettings` (the dialog's values as text),
+  `load_user_settings()`, `to_sections()` (checks, raises `SettingsError`),
+  `save_user_settings()`, `nastran_found()`, and the dialog.
+- `ParamForm` gets `placeholders` (parameter → text for an empty text or list field); a
+  placeholder set this way wins over the example taken from the help text.
+- **Not in the dialog: a default run mode.** The run mode belongs to the pipeline (it
+  decides whether results are recomputed), so a per-computer default would make the same
+  pipeline behave differently on two computers. It stays a block parameter.
+
 ## 4. Out of scope (v1)
 
 Multi-user editing, remote server deployment with authentication, minimap, block grouping,
