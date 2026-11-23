@@ -37,7 +37,7 @@ from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.constants_panel import ConstantsPanel
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
-from apb.gui.forms import ParamForm, short_path, suffix_hint
+from apb.gui.forms import ParamForm, short_path
 from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
 from apb.gui.preview import open_with_system, show_result, show_value, stored_time
 from apb.gui.python_panel import PythonPanel
@@ -503,10 +503,10 @@ class EditorPage:
             ui.notify(f"Saved {path.name}", type="positive")
             self._states_dirty = True
 
-    async def _pick_file(self, hint: str) -> str | None:
-        suffix = suffix_hint(hint)
+    async def _pick_file(self, types: Sequence[str], save: bool) -> str | None:
+        """Ask for a file of the given types (:data:`apb.gui.forms.PickFile`)."""
         path = await FileDialog(
-            title="Choose file", start=self.state.base_dir, suffix=suffix, save=suffix == ".py"
+            title="Choose file", start=self.state.base_dir, suffix=list(types), save=save
         )
         return self.state.relative_path(path) if path else None
 

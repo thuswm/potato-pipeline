@@ -8,7 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from apb.blocks.nastran import h5reader
-from apb.engine.block import Block, FilePath, RunContext
+from apb.engine.block import Block, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.units import UnitSystem
 
@@ -26,6 +26,7 @@ class _H5Params(BaseModel):
         default="",
         description="Nastran .h5 result file; empty if the file comes from a connected "
         "analysis block",
+        json_schema_extra=file_types(".h5"),
     )
     unit_system: UnitSystem | None = Field(default=None, description=_UNIT_HELP)
 

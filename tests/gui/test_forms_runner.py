@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 from typing import Literal
 
 import pytest
@@ -12,7 +13,7 @@ from apb.blocks.report.block import ReportMetadata, WordReportParams
 from apb.engine import default_registry
 from apb.engine.events import BlockState
 from apb.gui.editor import UNSET, EditorState
-from apb.gui.forms import classify, default_of, humanize, short_path, suffix_hint
+from apb.gui.forms import classify, default_of, humanize, short_path
 from apb.gui.runner import RunController, summary
 from apb.units import UnitSystem
 from tests.conftest import DATA_DIR
@@ -63,9 +64,33 @@ def test_defaults_and_helpers():
     assert default_of(f["modes"]) == ["max"]
     assert default_of(f["meta"])["title"] == ""
     assert humanize("default_unit_system") == "Default unit system"
-    assert suffix_hint("File Nastran .h5 result file") == ".h5"
-    assert suffix_hint("Script Python file defining run") == ".py"
-    assert suffix_hint("Base document Word file") == ".docx"
+
+
+def test_file_fields_declare_their_types():
+    """The file dialog lists the field's own types (round 6: not .h5 for a Nastran deck)."""
+    from apb.blocks.nastran.analysis import NastranRunParams
+    from apb.blocks.nastran.blocks import Hdf5ResultsParams
+    from apb.blocks.table.readers import ReadCsvParams
+
+    def types(model, name):
+        extra = model.model_fields[name].json_schema_extra
+        assert extra["apb_widget"] == "file"  # the FilePath mark is kept
+        return extra["apb_file_types"]
+
+    assert types(NastranRunParams, "input_file") == [".bdf", ".dat", ".nas", ".blk"]
+    assert types(Hdf5ResultsParams, "file") == [".h5"]
+    assert types(ReadCsvParams, "file") == [".csv", ".txt"]
+
+
+def test_file_dialog_helpers():
+    from apb.gui.filedialog import matches, path_parts
+
+    assert matches("MODAL.BDF", [".bdf", ".dat"]) and not matches("modal.h5", [".bdf"])
+    assert matches("anything.xyz", [])
+    assert matches("a.apb.json", [".apb.json"]) and not matches("a.json", [".apb.json"])
+    parts = path_parts(Path("/home/me/fem"))
+    assert [label for label, _ in parts] == ["/", "home", "me", "fem"]
+    assert parts[-2][1] == Path("/home/me")
 
 
 def test_set_param_prunes_connections_when_ports_change():

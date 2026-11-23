@@ -27,11 +27,11 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## B. File dialog (spec 06)
 
-- [ ] 4. **Several suffixes per file field:** the Nastran input field lists `.bdf .dat .nas
+- [x] 4. **Several suffixes per file field:** the Nastran input field lists `.bdf .dat .nas
       .blk` (today `.h5`, because the suffix is guessed from the word "nastran" in the
       label). The suffixes come from the block's parameter definition, not the label. Add a
       "show all files" switch.
-- [ ] 5. **Long paths readable:** the folder path is shown cut at the start (`…\project\fem`)
+- [x] 5. **Long paths readable:** the folder path is shown cut at the start (`…\project\fem`)
       so the end is always visible, full path as tooltip, and it can be edited/pasted.
 
 ## C. MSC Nastran analysis block (spec 09)

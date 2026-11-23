@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import string
+from collections.abc import Sequence
 from pathlib import Path
 
 from nicegui import ui
@@ -40,6 +41,25 @@ def make_folder(parent: Path, name: str) -> Path:
     return target
 
 
+def matches(name: str, suffixes: Sequence[str]) -> bool:
+    """Return ``True`` if a file name ends in one of the suffixes (case-insensitive).
+
+    An empty list of suffixes matches every name.
+    """
+    lower = name.lower()
+    return not suffixes or any(lower.endswith(s.lower()) for s in suffixes)
+
+
+def path_parts(folder: Path) -> list[tuple[str, Path]]:
+    """Return the breadcrumb of a folder: ``(label, path)`` from the root to the folder.
+
+    Example:
+        ``/home/me/fem`` -> ``[("/", /), ("home", /home), ("me", /home/me), ("fem", ...)]``
+    """
+    chain = [folder, *folder.parents][::-1]
+    return [(p.name or str(p), p) for p in chain]
+
+
 def _roots() -> list[Path]:
     """Drive letters on Windows, ``/`` elsewhere."""
     if os.name == "nt":
@@ -55,7 +75,7 @@ class FileDialog(ui.dialog):
         *,
         title: str,
         start: Path,
-        suffix: str = ".apb.json",
+        suffix: str | Sequence[str] = ".apb.json",
         save: bool = False,
         default_name: str = "",
     ) -> None:
@@ -64,12 +84,16 @@ class FileDialog(ui.dialog):
         Args:
             title: Dialog title.
             start: Folder (or file) to start in.
-            suffix: Only files with this suffix are listed.
+            suffix: Only files ending in this suffix, or one of these suffixes, are listed
+                (empty = all files); a switch shows all files anyway. In save mode the
+                first suffix is appended to a name that has none of them.
             save: Ask for a (new) file name instead of picking an existing file.
             default_name: Initial file name in save mode.
         """
         super().__init__()
-        self.suffix = suffix
+        self.suffixes = [suffix] if isinstance(suffix, str) else list(suffix)
+        self.suffixes = [s for s in self.suffixes if s]
+        self.show_all = False
         self.save_mode = save
         self.folder = start if start.is_dir() else start.parent
         if not self.folder.is_dir():
@@ -90,9 +114,20 @@ class FileDialog(ui.dialog):
                     ui.button(str(root)[:2], on_click=lambda r=root: self._go(r)).props(
                         "flat dense"
                     )
-                self.path_label = ui.label().classes("text-sm text-gray-600 truncate")
+            # The path as clickable parts; a long path is cut at the start, so the end
+            # (the folder shown) stays visible. Full path in the tooltip.
+            self.path_row = ui.element("div").classes("apb-path w-full text-sm text-gray-700")
+            self.path_row.style(
+                "display:flex;justify-content:flex-end;overflow:hidden;white-space:nowrap"
+            )
             self.listing = ui.scroll_area().classes("w-full h-72 border rounded")
+            if self.suffixes:
+                ui.switch(
+                    f"Show all files (not only {' '.join(self.suffixes)})",
+                    on_change=self._toggle_all,
+                ).props("dense").classes("text-sm")
             self.name = ui.input("File name", value=default_name).classes("w-full")
+            self.name.tooltip("A file name, or a full path; a folder path opens that folder")
             self.name.on("keydown.enter", self._ok)
             with ui.row().classes("w-full justify-end"):
                 ui.button("Cancel", on_click=lambda: self.submit(None)).props("flat")
@@ -103,6 +138,10 @@ class FileDialog(ui.dialog):
         if folder.is_dir():
             self.folder = folder
             self._refresh()
+
+    def _toggle_all(self, event: object) -> None:
+        self.show_all = bool(getattr(event, "value", False))
+        self._refresh()
 
     def _up(self) -> None:
         self._go(self.folder.parent)
@@ -126,7 +165,7 @@ class FileDialog(ui.dialog):
             ui.notify(str(exc), type="warning")
 
     def _refresh(self) -> None:
-        self.path_label.text = str(self.folder)
+        self._render_path()
         self.listing.clear()
         try:
             entries = sorted(self.folder.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
@@ -145,14 +184,33 @@ class FileDialog(ui.dialog):
                         ui.icon("folder", color="amber-7")
                         ui.label(entry.name)
                     shown += 1
-                elif entry.name.endswith(self.suffix):
+                elif self.show_all or matches(entry.name, self.suffixes):
                     item = ui.item(on_click=lambda e=entry: self._pick(e)).classes("w-full")
                     with item, ui.row().classes("items-center gap-2"):
                         ui.icon("description", color="blue-7")
                         ui.label(entry.name)
                     shown += 1
             if not shown:
-                ui.label(f"No folders or {self.suffix} files here").classes("text-gray-500 p-2")
+                kinds = " ".join(self.suffixes) if self.suffixes and not self.show_all else ""
+                ui.label(f"No folders or {kinds + ' ' if kinds else ''}files here").classes(
+                    "text-gray-500 p-2"
+                )
+
+    def _render_path(self) -> None:
+        """Show the folder as clickable parts (cut at the start when too long)."""
+        self.path_row.clear()
+        self.path_row.props(f'title="{self.folder}"')
+        with self.path_row:
+            parts = path_parts(self.folder)
+            for i, (label, target) in enumerate(parts):
+                if i:
+                    ui.label("/").classes("px-1 text-gray-400 shrink-0")
+                last = i == len(parts) - 1
+                part = ui.label(label).classes(
+                    "shrink-0 " + ("font-medium" if last else "cursor-pointer hover:underline")
+                )
+                if not last:
+                    part.on("click", lambda t=target: self._go(t))
 
     def _pick(self, entry: Path) -> None:
         self.name.value = entry.name
@@ -166,8 +224,13 @@ class FileDialog(ui.dialog):
             return
         path = Path(name).expanduser()
         path = path if path.is_absolute() else self.folder / path
-        if self.save_mode and not path.name.endswith(self.suffix):
-            path = path.with_name(path.name.removesuffix(".json") + self.suffix)
+        if path.is_dir():  # a pasted folder path opens the folder
+            self.name.value = ""
+            self._go(path)
+            return
+        if self.save_mode and self.suffixes and not matches(path.name, self.suffixes):
+            first = self.suffixes[0]
+            path = path.with_name(path.name.removesuffix(".json") + first)
         if not self.save_mode and not path.is_file():
             ui.notify(f"File not found: {path.name}", type="warning")
             return

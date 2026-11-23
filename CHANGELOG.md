@@ -13,6 +13,12 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
 
 ### Fixed
+- The file dialog of the Nastran analysis block listed `.h5` files instead of input decks.
+  Each file field now names its own file types (deck: `.bdf .dat .nas .blk`), and the
+  dialog has a *Show all files* switch.
+- Long folder paths in the file dialog hid their end; the path is now cut at the start,
+  its parts can be clicked, and a pasted folder path opens that folder.
+- The file field of *Write Excel* can name a new workbook in the dialog.
 - Closing the app window did not stop the program on Windows (Edge kept its process
   running); the command line was left hanging. The program now also stops 5 s after the
   last window closed and ends the left-over browser process.

@@ -30,7 +30,7 @@ from apb.blocks.python.scripting import (
     inline_filename,
     loaded_script,
 )
-from apb.engine.block import Block, Code, FilePath, RunContext
+from apb.engine.block import Block, Code, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.units import (
     ATTR_UNIT_SYSTEM,
@@ -48,7 +48,9 @@ class PythonParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     script: FilePath = Field(
-        default="", description="Python file defining run(...), relative to the pipeline"
+        default="",
+        description="Python file defining run(...), relative to the pipeline",
+        json_schema_extra=file_types(".py"),
     )
     inline_code: Code = Field(
         default="", description="Alternative to a script file: code defining run(...)"

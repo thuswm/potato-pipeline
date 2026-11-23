@@ -119,6 +119,19 @@ A browser cannot give a server full local paths. Since the server runs locally, 
 picker is a NiceGUI dialog browsing the local filesystem (server side). Paths are stored
 relative to the pipeline file when possible (ENG-13).
 
+**File types and long paths (GUI-33, GUI-34) — round 6.** Found in the Windows test: the
+Nastran input field listed only `.h5` files (the type was guessed from the word "nastran"
+in the field label), and a long folder path hid its end.
+
+| ID | Requirement | Prio |
+|----|-------------|------|
+| GUI-33 | A file parameter names its file types (`file_types(".bdf", ".dat", ".nas", ".blk")` in the block's parameter model, `apb_file_types`); the dialog lists folders and files of those types (case-insensitive) and has a switch *Show all files*. A parameter without types lists all files. In save mode the first type is appended to a name that has none of them. Save mode is used for files the block writes and for Python scripts (a new script gets a skeleton) | M |
+| GUI-34 | The folder is shown as clickable parts (`C: / work / project / fem`). A path too long for the dialog is cut **at the start**, so the folder shown is always readable; the full path is the tooltip. Typing or pasting a folder path in *File name* and pressing Enter opens that folder | M |
+
+Types per field: Nastran input deck `.bdf .dat .nas .blk`; Nastran results `.h5`; CSV
+`.csv .txt`; Excel input `.xlsx .xlsm`; Excel output `.xlsx`; Python script `.py`; Word
+base document `.docx .dotx`.
+
 ### 3.5 Review round 3: small fixes (GUI-17 … GUI-20)
 
 **New folder (GUI-17).** The file dialog gets a "New folder" button next to "Parent folder"

@@ -30,7 +30,14 @@ from apb.blocks.solvers.record import (
 )
 from apb.blocks.solvers.runmode import Action, Results, RunMode, decide
 from apb.config import config_path
-from apb.engine.block import Block, BlockCancelledError, FilePath, RunContext
+from apb.engine.block import (
+    NASTRAN_DECK_TYPES,
+    Block,
+    BlockCancelledError,
+    FilePath,
+    RunContext,
+    file_types,
+)
 from apb.engine.types import Port, PortType
 
 #: Files Nastran writes for a job that the block deletes before a run, so that a failing
@@ -48,7 +55,8 @@ class NastranRunParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input_file: FilePath = Field(
-        description="Nastran input deck (.bdf); the results are written next to it"
+        description="Nastran input deck (.bdf, .dat, ...); the results are written next to it",
+        json_schema_extra=file_types(*NASTRAN_DECK_TYPES),
     )
     run_mode: RunMode = Field(
         default=RunMode.IF_CHANGED,

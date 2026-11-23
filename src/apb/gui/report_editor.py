@@ -26,7 +26,7 @@ from apb.blocks.report.block import WordReportParams
 from apb.blocks.report.sections import FormatError, python_format
 from apb.engine.types import PortType
 from apb.gui.editor import EditError
-from apb.gui.forms import ParamForm
+from apb.gui.forms import ParamForm, PickFile
 from apb.units import get_units
 
 KIND_ICONS = {
@@ -89,7 +89,7 @@ class ReportPanel:
         params: dict[str, Any],
         *,
         on_change: Callable[[str, Any], None],
-        pick_file: Callable[[str], Any] | None,
+        pick_file: PickFile | None,
         resolve: Callable[[Any], Any],
         items: Callable[[], list[ed.ItemInfo]],
         rename_item: Callable[[ed.ItemInfo, str], dict[str, str]],

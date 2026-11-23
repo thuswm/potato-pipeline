@@ -919,6 +919,27 @@ def test_an_unsaved_pipeline_is_stored_at_the_first_save(page, workdir: Path):
 
 
 @pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_input_deck_dialog_lists_decks_and_shows_the_path_end(page):
+    """Round 6: the deck field listed only .h5 files; long paths hid their end."""
+    select(page, "Modal analysis")
+    page.get_by_role("button", name="Choose file").first.click()
+    page.wait_for_timeout(400)
+    dialog = page.locator(".q-dialog")
+    dialog.get_by_text("fem", exact=True).click()
+    page.wait_for_timeout(300)
+    listing = dialog.locator(".q-scrollarea").inner_text()
+    assert "modal.bdf" in listing and "modal.h5" not in listing
+    assert dialog.locator(".apb-path").get_attribute("title").endswith("fem")
+    assert dialog.locator(".apb-path").inner_text().strip().endswith("fem")
+    dialog.get_by_text("Show all files").click()
+    page.wait_for_timeout(300)
+    assert "modal.h5" in dialog.locator(".q-scrollarea").inner_text()
+    dialog.get_by_text("modal.bdf", exact=True).click()
+    page.wait_for_timeout(300)
+    assert page.get_by_label("Input file").first.input_value() == "fem/modal.bdf"
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
 def test_analysis_blocks_in_the_gui(page):
     notice = page.locator(".q-notification").first.inner_text()
     assert "Python blocks and commands that start programs" in notice

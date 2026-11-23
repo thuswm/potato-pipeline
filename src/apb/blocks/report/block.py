@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from apb.blocks.report.editing import check_sections, describe, item_info_from_value
 from apb.blocks.report.sections import Section
 from apb.blocks.report.writer import ReportBuilder, ReportError, default_base_document
-from apb.engine.block import Block, FilePath, RunContext
+from apb.engine.block import Block, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.fileutil import atomic_output
 
@@ -60,6 +60,7 @@ class WordReportParams(BaseModel):
         default="",
         description="Word file providing styles, page setup, header/footer; "
         "empty = built-in test base document",
+        json_schema_extra=file_types(".docx", ".dotx"),
     )
     metadata: ReportMetadata = Field(default_factory=ReportMetadata)
     sections: list[Section] = Field(default_factory=list, description="Report content, in order")

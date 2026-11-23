@@ -15,7 +15,7 @@ from nicegui import ui
 
 from apb.blocks.nastran.analysis import NastranRun, NastranRunParams
 from apb.blocks.nastran.status import AnalysisStatus, analysis_status
-from apb.gui.forms import ParamForm, short_path
+from apb.gui.forms import ParamForm, PickFile, short_path
 
 
 class AnalysisPanel:
@@ -35,7 +35,7 @@ class AnalysisPanel:
         params: dict[str, Any],
         *,
         on_change: Callable[[str, Any], None],
-        pick_file: Callable[[str], Any] | None,
+        pick_file: PickFile | None,
         resolve: Callable[[Any], Any],
         base_dir: Path,
         open_file: Callable[[Path], None],

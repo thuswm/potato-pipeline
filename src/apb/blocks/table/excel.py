@@ -17,7 +17,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import BaseModel, ConfigDict, Field
 
-from apb.engine.block import Block, OutputPath, RunContext
+from apb.engine.block import Block, OutputPath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.fileutil import OutputFileError, atomic_output
 from apb.units import get_units, header_with_unit
@@ -166,7 +166,10 @@ class WriteExcelParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    file: OutputPath = Field(description="Workbook to write (.xlsx), relative to the output folder")
+    file: OutputPath = Field(
+        description="Workbook to write (.xlsx), relative to the output folder",
+        json_schema_extra=file_types(".xlsx"),
+    )
     sheet_names: list[str] = Field(
         default_factory=list,
         description="Sheet name per connected table, in connection order; empty = table title",

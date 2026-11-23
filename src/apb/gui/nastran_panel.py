@@ -21,7 +21,7 @@ from apb.blocks.nastran.blocks import Hdf5ResultsParams
 from apb.blocks.nastran.h5reader import NastranH5Error, ResultDetail, ResultInfo
 from apb.engine.variables import VariableError
 from apb.gui import h5viewer
-from apb.gui.forms import ParamForm, connected_line, describe, short_path
+from apb.gui.forms import ParamForm, PickFile, connected_line, describe, short_path
 from apb.units import UnitSystem
 
 #: Dataset rows read for the preview from the file.
@@ -102,7 +102,7 @@ class Hdf5ResultsPanel:
         params: dict[str, Any],
         *,
         on_change: Callable[[str, Any], None],
-        pick_file: Callable[[str], Any] | None,
+        pick_file: PickFile | None,
         resolve: Callable[[Any], Any],
         base_dir: Path,
         default_units: UnitSystem,

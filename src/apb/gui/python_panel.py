@@ -26,7 +26,7 @@ from apb.blocks.python.scripting import (
 from apb.blocks.python.templates import create_script, template_titles
 from apb.engine.variables import VariableError
 from apb.gui.filedialog import FileDialog
-from apb.gui.forms import ParamForm, short_path
+from apb.gui.forms import ParamForm, PickFile, short_path
 
 #: Parameters whose change makes the script section outdated.
 _WATCHED = {"script", "inline_code", "inputs", "outputs"}
@@ -63,7 +63,7 @@ class PythonPanel:
         params: dict[str, Any],
         *,
         on_change: Callable[[str, Any], None],
-        pick_file: Callable[[str], Any] | None,
+        pick_file: PickFile | None,
         resolve: Callable[[Any], Any],
         base_dir: Path,
         relative_path: Callable[[Path], str],

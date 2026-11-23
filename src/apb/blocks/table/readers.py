@@ -10,7 +10,7 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 from apb.blocks.table.common import TableError
-from apb.engine.block import Block, FilePath, RunContext
+from apb.engine.block import Block, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 
 CATEGORY = "Input/Files"
@@ -76,6 +76,11 @@ def read_excel_range(path: Path, sheet: str, cell_range: str) -> pd.DataFrame:
 class ReadExcelParams(_FileParams):
     """Parameters of :class:`ReadExcel`."""
 
+    file: FilePath = Field(
+        description="Workbook to read, relative to the pipeline",
+        json_schema_extra=file_types(".xlsx", ".xlsm"),
+    )
+
     sheet: str = Field(
         default="",
         description="Sheet name; empty = first sheet",
@@ -117,6 +122,11 @@ class ReadExcel(_FileBlock[ReadExcelParams]):
 
 class ReadCsvParams(_FileParams):
     """Parameters of :class:`ReadCsv`."""
+
+    file: FilePath = Field(
+        description="File to read, relative to the pipeline",
+        json_schema_extra=file_types(".csv", ".txt"),
+    )
 
     delimiter: str = Field(
         title="Column separator", default=",", description="Column separator, e.g. , ; or \\t"

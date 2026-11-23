@@ -229,6 +229,12 @@ def classify(annotation: Any) -> tuple[str, Any, bool]:
     return "json", None, False
 
 
+#: Asks the user for a file: ``(file types, save mode)`` -> stored path or ``None``. The
+#: file types come from the field's ``apb_file_types`` (empty = all files); save mode
+#: allows a name that does not exist yet (files the block writes, Python scripts).
+PickFile = Callable[[Sequence[str], bool], Any]
+
+
 class ParamForm:
     """Builds the widgets for one parameter model.
 
@@ -236,7 +242,7 @@ class ParamForm:
         model: The block's ``Params`` class.
         values: Stored parameters of the block.
         on_change: Called with ``(name, value)``; value ``UNSET`` removes the parameter.
-        pick_file: Async callback asking the user for a file; returns a stored path or None.
+        pick_file: Async callback asking the user for a file (:data:`PickFile`).
         choices: Returns the values a list parameter can take (e.g. the subcases in the
             file), or ``None``; a parameter with choices gets a multi-select (PNL-11).
         replaced: Parameter -> ``(block, value, tooltip)`` for parameters delivered by a
@@ -257,7 +263,7 @@ class ParamForm:
         model: type[BaseModel],
         values: dict[str, Any],
         on_change: Callable[[str, Any], None],
-        pick_file: Callable[[str], Any] | None = None,
+        pick_file: PickFile | None = None,
         *,
         choices: Callable[[str], list[Any] | None] | None = None,
         replaced: Mapping[str, tuple[str, str, str]] | None = None,
@@ -363,7 +369,9 @@ class ParamForm:
         if kind == "text" and widget == "unit":
             self._unit(label, hint, value, setter, other=bool(extra.get("apb_other")))
         elif kind == "text" and widget == "file":
-            self._file(label, hint, value, setter, written=bool(extra.get("apb_output")))
+            raw_types = extra.get("apb_file_types")
+            types = [str(t) for t in raw_types] if isinstance(raw_types, list) else []
+            self._file(label, hint, value, setter, types, written=bool(extra.get("apb_output")))
         elif kind == "text" and widget == "code":
             self._code(label, hint, value, setter)
         elif kind == "text":
@@ -420,7 +428,13 @@ class ParamForm:
         box.on("keydown.enter", lambda: setter(box.value))
 
     def _file(
-        self, label: str, hint: str, value: Any, setter: Setter, written: bool = False
+        self,
+        label: str,
+        hint: str,
+        value: Any,
+        setter: Setter,
+        types: Sequence[str] = (),
+        written: bool = False,
     ) -> None:
         with ui.row().classes("w-full no-wrap items-start gap-1"):
             box = (
@@ -433,14 +447,15 @@ class ParamForm:
             async def browse() -> None:
                 if self.pick_file is None:
                     return
-                chosen = await self.pick_file(f"{label} {hint}")
+                # A Python script may be a new file (a skeleton is written for it, PY-05b).
+                chosen = await self.pick_file(types, written or ".py" in types)
                 if chosen:
                     box.value = chosen
                     setter(chosen)
 
-            ui.button(icon="folder_open", on_click=browse).props("flat dense").tooltip(
-                "Choose file"
-            )
+            ui.button(icon="folder_open", on_click=browse).props(
+                'flat dense aria-label="Choose file"'
+            ).tooltip("Choose file")
         line = ui.row().classes("w-full items-center no-wrap gap-1 -mt-1 apb-file-state")
 
         def show() -> None:
@@ -811,21 +826,3 @@ class ParamForm:
         editor.on("blur", commit)
         if hint:
             editor.tooltip(hint)
-
-
-def suffix_hint(label: str) -> str:
-    """Guess the file type for the file dialog from the field label (``.h5`` for Nastran)."""
-    lower = label.lower()
-    for word, suffix in (
-        ("nastran", ".h5"),
-        (".h5", ".h5"),
-        ("excel", ".xlsx"),
-        ("csv", ".csv"),
-        ("python", ".py"),
-        ("script", ".py"),
-        ("word", ".docx"),
-        ("base document", ".docx"),
-    ):
-        if word in lower:
-            return suffix
-    return ""

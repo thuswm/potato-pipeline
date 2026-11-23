@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.config import JsonDict, JsonValue
 
 from apb.engine.types import Port
 from apb.units import UnitSystem
@@ -37,6 +38,27 @@ FilePath = Annotated[str, Field(json_schema_extra={"apb_widget": "file"})]
 #: String parameter holding the path of a file the block writes (GUI: file picker and a
 #: "written" line with an *Open* icon).
 OutputPath = Annotated[str, Field(json_schema_extra={"apb_widget": "file", "apb_output": True})]
+
+
+#: Nastran input deck suffixes (spec 09).
+NASTRAN_DECK_TYPES = (".bdf", ".dat", ".nas", ".blk")
+
+
+def file_types(*suffixes: str) -> JsonDict:
+    """Return the ``json_schema_extra`` naming the file types of a file parameter.
+
+    The GUI's file dialog lists only files ending in one of them (it has an "all files"
+    switch) and, in save mode, appends the first one to a name without any of them.
+
+    Args:
+        suffixes: File name endings, e.g. ``".bdf"`` or ``".apb.json"``.
+
+    Example:
+        ``deck: FilePath = Field(description="...", json_schema_extra=file_types(".bdf"))``
+    """
+    types: list[JsonValue] = list(suffixes)
+    return {"apb_file_types": types}
+
 
 #: String parameter holding code; the GUI shows a code editor for it.
 Code = Annotated[str, Field(json_schema_extra={"apb_widget": "code"})]
