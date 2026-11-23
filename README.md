@@ -14,8 +14,8 @@ in Chrome or Edge, or in a Firefox tab.
 
 ### With pip (no uv needed)
 
-1. Install Python 3.12 or later. On Windows use the installer from
-   [python.org](https://www.python.org/downloads/). It also installs the `py` launcher.
+1. Install Python 3.12 or later, e.g. from [python.org](https://www.python.org/downloads/).
+   Check with `python --version`.
 2. Get the code: on GitHub, *Code > Download ZIP*, and unpack it. You can also use
    `git clone https://github.com/thuswm/potato-pipeline.git`. The download includes the
    examples.
@@ -24,10 +24,13 @@ in Chrome or Edge, or in a Firefox tab.
    Windows (PowerShell or cmd):
 
    ```bat
-   py -m venv .venv
+   python -m venv .venv
    .venv\Scripts\activate
    python -m pip install .
    ```
+
+   If `python` is not found but the `py` launcher is installed (it comes with the
+   python.org installer), use `py -m venv .venv` for the first line.
 
    If PowerShell refuses to run `activate`, use cmd instead, or allow local scripts once:
    `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
@@ -81,9 +84,12 @@ apb h5view examples/fem/modal.h5            # look through an HDF5 result file
 
 ## Configuration
 
-The GUI opens in a Chrome or Edge app window (no tabs or address bar); closing the window or
-*File > Quit* ends the program. Without Chrome or Edge, or with `--window browser`, it opens
-a tab in the default browser instead. The default can be set in the config file
+The GUI opens in a Chrome or Edge app window (no tabs or address bar). It is a separate
+window, not a tab in a browser you already have open: it uses its own browser profile, so
+the tool can tell when the window is closed. Closing the window or *File > Quit* ends the
+program. Without Chrome or Edge, or with `--window browser`, it opens a tab in the default
+browser instead; the program then ends 30 s after the last tab was closed. The console
+says which of the two was opened. The default can be set in the config file
 (`~/.config/apb/config.toml`, Windows `%APPDATA%\apb\config.toml`):
 
 ```toml

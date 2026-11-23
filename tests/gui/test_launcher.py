@@ -39,6 +39,21 @@ def test_window_settings_default_config_and_command_line(tmp_path: Path):
     assert launcher.window_settings("app", config).mode is WindowMode.APP  # command line wins
 
 
+def test_idle_time_depends_on_the_mode():
+    assert WindowSettings(WindowMode.APP).idle == launcher.DEFAULT_APP_IDLE_SECONDS
+    assert WindowSettings(WindowMode.BROWSER).idle == launcher.DEFAULT_IDLE_SECONDS
+    assert WindowSettings(WindowMode.APP, idle_seconds=12).idle == 12
+
+
+def test_opened_message_names_the_browser_and_profile():
+    url = "http://127.0.0.1:8765/"
+    edge = Path("C:/Program Files/Microsoft/Edge/Application/msedge.exe")
+    text = launcher.opened_message(edge, Path("C:/cfg/browser-profile"), [url])
+    assert "separate Edge app window" in text and url in text and "browser-profile" in text
+    assert "--window browser" in text
+    assert "default browser" in launcher.opened_message(None, None, [url])
+
+
 def test_window_settings_errors(tmp_path: Path):
     config = tmp_path / "config.toml"
     with pytest.raises(ConfigError, match="Unknown window mode 'tab'"):
@@ -319,6 +334,21 @@ def _page(url: str):
 
 
 @posix_only
+def test_closed_window_of_a_lingering_browser_stops_the_server(gui_factory):
+    """Edge on Windows may keep its process after the window closed (round 6 finding)."""
+    gui = gui_factory(3600, idle=0.5)  # the browser process never ends on its own
+    assert gui.wait_for(lambda: bool(gui.log()))
+    manager, browser, page = _page(gui.url)  # stands in for the app window's page
+    page.close()
+    browser.close()
+    manager.stop()
+    assert gui.wait_for(lambda: gui.proc.poll() is not None, timeout=15), gui.output.read_text()
+    out = gui.output.read_text()
+    assert "no window open any more" in out and "separate Chrome app window" in out
+    assert gui.log()[-1] == ["terminated"]  # the lingering browser was ended too
+
+
+@posix_only
 def test_quit_closes_the_app_window(gui_factory):
     gui = gui_factory(3600)
     assert gui.wait_for(lambda: bool(gui.log()))
@@ -344,7 +374,7 @@ def test_handover_then_idle_shutdown(gui_factory):
     browser.close()
     manager.stop()
     assert gui.wait_for(lambda: gui.proc.poll() is not None, timeout=15), gui.output.read_text()
-    assert "no page open any more" in gui.output.read_text()
+    assert "no window open any more" in gui.output.read_text()
 
 
 @posix_only

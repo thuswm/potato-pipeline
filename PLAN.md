@@ -12,15 +12,15 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## A. Start-up, window and shutdown (spec 06 §3.6, README)
 
-- [ ] 1. **README, Windows without uv:** use `python -m venv .venv` (the `py` launcher only
+- [x] 1. **README, Windows without uv:** use `python -m venv .venv` (the `py` launcher only
       comes with the python.org installer). Mention `py` as an alternative.
-- [ ] 2. **Closing the window must stop the server** (Windows/Edge). Today the server only
+- [x] 2. **Closing the window must stop the server** (Windows/Edge). Today the server only
       stops when the watched Edge process ends; on Windows Edge can hand the window to
       another process (or keep running in the background), so the end is never seen and the
       command line hangs. Fix: in app mode the idle monitor also applies (no page connected
       for N s → stop), whether or not the process is watched. Test with a fake process that
       never ends.
-- [ ] 3. **Say what was opened:** on start, print one line to the console, e.g.
+- [x] 3. **Say what was opened:** on start, print one line to the console, e.g.
       `Opened an Edge app window (C:\...\msedge.exe, own profile) at http://127.0.0.1:8765`,
       and document in the README why it is a separate window (own profile, so closing it
       can stop the tool) and how to get a tab in the normal browser (`--window browser`).

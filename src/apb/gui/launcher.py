@@ -30,6 +30,10 @@ from apb.config import ConfigError, config_dir, read_section
 #: Seconds without any connected page before the server stops (browser mode, GUI-28).
 DEFAULT_IDLE_SECONDS = 30.0
 
+#: The same for the app window (GUI-27): a closed window should end the tool quickly; a
+#: reload reconnects within a second.
+DEFAULT_APP_IDLE_SECONDS = 5.0
+
 #: A browser process that ends this quickly handed the window to a browser process that was
 #: already running with the same profile; its end does not mean "window closed".
 HANDOVER_SECONDS = 3.0
@@ -56,12 +60,23 @@ class WindowSettings:
     Attributes:
         mode: Window mode.
         browser: Configured Chrome/Edge executable (``""`` = search).
-        idle_seconds: Idle time before the server stops in browser mode.
+        idle_seconds: Seconds without any connected page before the server stops (app and
+            browser mode); ``None`` = the mode's default (:func:`default_idle_seconds`).
     """
 
     mode: WindowMode = WindowMode.APP
     browser: str = ""
-    idle_seconds: float = DEFAULT_IDLE_SECONDS
+    idle_seconds: float | None = None
+
+    @property
+    def idle(self) -> float:
+        """Idle time in effect: the configured one, else the mode's default."""
+        return default_idle_seconds(self.mode) if self.idle_seconds is None else self.idle_seconds
+
+
+def default_idle_seconds(mode: WindowMode) -> float:
+    """Return the default idle time of a window mode (GUI-27, GUI-28)."""
+    return DEFAULT_APP_IDLE_SECONDS if mode is WindowMode.APP else DEFAULT_IDLE_SECONDS
 
 
 def window_settings(cli_mode: str | None = None, path: Path | None = None) -> WindowSettings:
@@ -83,8 +98,9 @@ def window_settings(cli_mode: str | None = None, path: Path | None = None) -> Wi
             f"Unknown window mode {raw_mode!r}; use one of: "
             + ", ".join(m.value for m in WindowMode)
         ) from exc
+    raw_idle = section.get("idle_shutdown_seconds")
     try:
-        idle = float(section.get("idle_shutdown_seconds", DEFAULT_IDLE_SECONDS))
+        idle = None if raw_idle is None else float(raw_idle)
     except (TypeError, ValueError) as exc:
         raise ConfigError("[gui] idle_shutdown_seconds must be a number") from exc
     return WindowSettings(mode, str(section.get("browser", "")), idle)
@@ -315,6 +331,30 @@ class IdleMonitor:
     def _check(self, generation: int) -> None:
         if self.connected == 0 and generation == self._generation:
             self.on_idle()
+
+
+def opened_message(browser: Path | None, profile: Path | None, urls: Sequence[str]) -> str:
+    """Return the console line that says how the pages were shown (GUI-32).
+
+    Args:
+        browser: Chrome/Edge executable of the app window (``None`` = default browser).
+        profile: Profile folder of the app window.
+        urls: The opened pages.
+    """
+    where = ", ".join(urls)
+    if browser is None:
+        return (
+            f"Potato Pipeline: opened {where} in the default browser. The tool stops when no "
+            "page has been open for a while, or with File > Quit."
+        )
+    lower = browser.name.lower()
+    name = "Edge" if "edge" in lower else "Chromium" if "chromium" in lower else "Chrome"
+    return (
+        f"Potato Pipeline: opened {where} in a separate {name} app window "
+        f"({browser}, own profile {profile}).\n"
+        "Closing that window or File > Quit stops the tool. For a tab in your normal browser "
+        "instead, start with --window browser."
+    )
 
 
 def open_in_browser(url: str) -> None:

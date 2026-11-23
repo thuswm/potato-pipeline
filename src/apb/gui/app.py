@@ -109,11 +109,9 @@ class _Session:
 
     Attributes:
         window: The app window process, if the server started one.
-        watched: The app window can be watched (its close stops the server).
     """
 
     window: launcher.AppWindow | None = None
-    watched: bool = False
 
 
 _SESSION = _Session()
@@ -1315,16 +1313,15 @@ def _stop_server(reason: str) -> None:
         print(f"Potato Pipeline: {reason}; stopping the server.", flush=True)
         for page in list(_PAGES):
             page.runner.stop()
+        if _SESSION.window is not None:
+            # A browser that kept running in the background after its window closed (Edge
+            # on Windows) is ended too (GUI-27).
+            _SESSION.window.close(timeout=1.0)
         app.shutdown()
 
     loop = core.loop
     if loop is not None:
         loop.call_soon_threadsafe(stop)
-
-
-def _handover() -> None:
-    """The app window went to a browser that was already running: it cannot be watched."""
-    _SESSION.watched = False
 
 
 def _start_windows(window: launcher.WindowSettings, port: int, paths: Sequence[str]) -> None:
@@ -1346,22 +1343,22 @@ def _start_windows(window: launcher.WindowSettings, port: int, paths: Sequence[s
         if not launcher.wait_for_port(port):
             return
         if browser is not None:
+            profile = launcher.profile_dir()
             _SESSION.window = launcher.AppWindow(
-                browser,
-                launcher.profile_dir(),
-                on_closed=lambda: _stop_server("the window was closed"),
-                on_handover=_handover,
+                browser, profile, on_closed=lambda: _stop_server("the window was closed")
             )
-            _SESSION.watched = True
             for url in urls:
                 _SESSION.window.open(url)
+            print(launcher.opened_message(browser, profile, urls), flush=True)
         else:
             for url in urls:
                 launcher.open_in_browser(url)
+            print(launcher.opened_message(None, None, urls), flush=True)
 
+    # Also in app mode: the browser process may outlive its window (GUI-27).
     monitor = launcher.IdleMonitor(
-        window.idle_seconds,
-        lambda: None if _SESSION.watched else _stop_server("no page open any more"),
+        window.idle,
+        lambda: _stop_server("no window open any more"),
         lambda delay, callback: asyncio.get_running_loop().call_later(delay, callback),
     )
     app.on_connect(monitor.connect)

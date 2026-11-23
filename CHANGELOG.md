@@ -7,6 +7,16 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 
 ## [Unreleased]
 
+### Changed
+- On start, the console says how the GUI was opened (which browser, separate app window
+  with its own profile) and how to get a normal browser tab instead.
+- README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
+
+### Fixed
+- Closing the app window did not stop the program on Windows (Edge kept its process
+  running); the command line was left hanging. The program now also stops 5 s after the
+  last window closed and ends the left-over browser process.
+
 ## [0.1.2] - 2026-11-22
 
 ### Changed

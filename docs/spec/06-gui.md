@@ -169,10 +169,11 @@ Windows, where Edge is always installed.
 |----|-------------|------|
 | GUI-25 | `apb gui` opens the editor in an **app window** of Chrome or Edge (`--app=<url>`): its own window without tabs, address bar or bookmarks, with the tool's title and icon. It uses its own browser profile folder, so it is a separate browser process that never touches the user's normal browser windows | M |
 | GUI-26 | **File > Quit** (after the existing checks, GUI-19) ends the server **and closes the app window** | M |
-| GUI-27 | **Closing the app window** (window ×) ends the server. The existing unsaved-changes warning of the browser (GUI-12) appears first; nothing is saved automatically. A running pipeline is stopped | M |
+| GUI-27 | **Closing the app window** (window ×) ends the server. The existing unsaved-changes warning of the browser (GUI-12) appears first; nothing is saved automatically. A running pipeline is stopped. This must also work when the browser process outlives its window (Edge on Windows, round 6): the server then stops 5 s after the last page disconnected and ends the browser process | M |
 | GUI-28 | **Fallback**: when neither Chrome nor Edge (nor Chromium) is found, or when chosen, the default browser opens a tab as today (Firefox has no app mode). Quit then shows "Closed" in the tab as today. In this mode the server also stops when no tab has been connected for 30 s (after at least one was), so a forgotten server does not keep running | M |
 | GUI-29 | The window mode is chosen with `apb gui --window app\|browser\|none` (`none` = start only the server, the same as `--no-browser`) and as a computer default in the config file: `[gui] window = "browser"`, `[gui] browser = "<path to chrome.exe or msedge.exe>"`. Command line > config file > `app` | M |
 | GUI-30 | The HDF5 viewer (`apb h5view`, spec 10) opens its file(s) in app windows the same way; extra windows of the same run join the same browser process | S |
+| GUI-32 | On start the console says how the pages were shown: which browser (path), that it is a separate app window with its own profile, that closing it or File > Quit stops the tool, and how to get a normal tab instead (`--window browser`) — round 6 | M |
 | GUI-31 | Desktop shortcut / start menu entry, and hiding the console window on Windows (`pythonw`) | L |
 
 #### 3.6.1 Design
@@ -198,12 +199,15 @@ Windows, where Edge is always installed.
   the existing server is reused: only a new window is opened (as `apb h5view` does). A
   pipeline given on the command line is then not opened; a message says to use File > Open
   there or `--port` for a second server.
-- **Not verified on Windows yet:** Chrome and Edge keep the started process alive while the
-  window is open when they use their own profile folder; this is tested on Linux with a fake
-  browser and should be checked once on a Windows PC with Edge (open point).
-- **Fallback timer (GUI-28):** connected pages are counted (NiceGUI connect/disconnect);
-  30 s after the last page disconnected, and only if one had connected, the server stops.
-  Reloading a page reconnects within a second and does not trigger it.
+- **Windows finding (round 6, 2026-11-23):** on Windows 11 with Edge, closing the window
+  did not stop the server: the watched process did not end (Edge can keep running in the
+  background, or hand the window to another process after a few seconds). The end of the
+  process is therefore only the fast path; the page timer below applies in app mode too.
+- **Page timer (GUI-27, GUI-28):** connected pages are counted (NiceGUI connect/disconnect).
+  When no page has been connected for the idle time, and only if one had connected, the
+  server stops and, in app mode, ends the browser process. Idle time: 5 s in app mode,
+  30 s in browser mode; `[gui] idle_shutdown_seconds` sets it for both. Reloading a page
+  reconnects within a second and does not trigger it. Mode `none` never stops on its own.
 - **No change to the pipeline file format**; tests keep using `--no-browser` (mode
   `none`), which never stops on its own.
 - The config file reading moves from `blocks/nastran/command.py` to a small shared module
