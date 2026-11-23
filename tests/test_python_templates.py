@@ -86,6 +86,7 @@ def test_table_calculation_values_and_units(tmp_path):
     assert pd.isna(out["MS"].iloc[1])  # zero load: no margin
     assert out.attrs["units"]["MS"] == "-"
     assert out.attrs["units"]["SHEAR"] == "N"
+    assert out.attrs["title"] == "Margins of safety (SHEAR)"  # default sheet name
 
 
 def test_table_summary_and_plot(tmp_path):

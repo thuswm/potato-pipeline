@@ -78,6 +78,12 @@ def _cell(value: Any) -> Any:
 def show_value(name: str, value: Any) -> None:
     """Render one output value in the current context."""
     if isinstance(value, pd.DataFrame):
+        title = str(value.attrs.get("title") or "")
+        if title:
+            # The default sheet name in Excel and the table name in reports (spec 03 §3.13).
+            ui.label(title).classes("text-sm font-medium text-slate-700 apb-table-title").tooltip(
+                'Table title (df.attrs["title"]): the default sheet name in Write Excel'
+            )
         ui.label(
             f"{len(value)} rows x {len(value.columns)} columns"
             + (f" (first {PREVIEW_ROWS} shown)" if len(value) > PREVIEW_ROWS else "")

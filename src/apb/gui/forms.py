@@ -282,6 +282,9 @@ class ParamForm:
         self.pick_file = pick_file
         self.choices = choices
         self.placeholders = dict(placeholders or {})
+        #: Parameter -> widgets to redraw after it changed (e.g. the rename table follows
+        #: the selected columns).
+        self._dependents: dict[str, list[Callable[[], None]]] = {}
         self.replaced = dict(replaced or {})
         self.columns = columns
         self.resolve_path = resolve_path
@@ -333,6 +336,8 @@ class ParamForm:
     def _setter(self, name: str) -> Setter:
         def set_value(value: Any) -> None:
             self.on_change(name, value)
+            for redraw in self._dependents.get(name, []):
+                redraw()
 
         return set_value
 
@@ -363,6 +368,11 @@ class ParamForm:
                 self._per_item(label, hint, value, setter, names)
                 return
         port = extra.get("apb_columns")
+        if isinstance(port, str) and kind == "mapping" and self.columns is not None:
+            known = self.columns(port)
+            if known is not None and isinstance(value, dict | None):
+                self._rename(label, hint, value or {}, setter, known)
+                return
         if isinstance(port, str) and kind in {"text", "list"}:
             known = self.columns(port) if self.columns else None
             variable = isinstance(value, str) and bool(_VARIABLE.match(value.strip()))
@@ -701,6 +711,70 @@ class ParamForm:
 
         box.on("blur", commit)
         box.on("keydown.enter", commit)
+
+    def _rename(
+        self, label: str, hint: str, value: dict[str, str], setter: Setter, known: list[str]
+    ) -> None:
+        """A rename table: one row per column, the new name in a box (empty = unchanged).
+
+        Entries for columns the table does not have (any more) are kept and listed below
+        in red, so nothing is lost silently.
+        """
+        current = {str(k): str(v) for k, v in value.items()}
+        with ui.row().classes("items-center gap-1 mt-1"):
+            ui.label(label).classes("text-xs text-slate-600")
+            if hint:
+                ui.icon("info_outline", size="xs").classes(
+                    "text-slate-400 cursor-help apb-info"
+                ).tooltip(hint)
+        holder = ui.column().classes("w-full gap-1")
+
+        def shown() -> list[str]:
+            """The kept columns if a selection is set (renaming a dropped one is useless)."""
+            chosen = self.values.get("columns")
+            if isinstance(chosen, list) and chosen:
+                return [c for c in chosen if c in known]
+            return known
+
+        def commit(column: str, box: ui.input) -> None:
+            new = (box.value or "").strip()
+            if new and new != column:
+                current[column] = new
+            else:
+                current.pop(column, None)
+            setter(dict(current))
+
+        def drop(column: str) -> None:
+            current.pop(column, None)
+            setter(dict(current))
+            render()
+
+        def render() -> None:
+            holder.clear()
+            columns = shown()
+            with holder:
+                grid = ui.grid(columns="auto 1fr").classes(
+                    "w-full gap-x-2 gap-y-1 items-center apb-rename"
+                )
+                with grid:
+                    for column in columns:
+                        ui.label(column).classes("text-xs font-mono text-slate-700 apb-rename-old")
+                        box = ui.input(
+                            value=current.get(column, ""), placeholder="(unchanged)"
+                        ).props(f'dense outlined aria-label="New name for {column}"')
+                        box.on("blur", lambda _e, c=column, b=box: commit(c, b))
+                        box.on("keydown.enter", lambda _e, c=column, b=box: commit(c, b))
+                for column in [k for k in current if k not in columns]:
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label(f"{column} → {current[column]}: not a kept column").classes(
+                            "text-xs text-red-700"
+                        )
+                        ui.button(icon="close", on_click=lambda c=column: drop(c)).props(
+                            "flat dense size=sm"
+                        )
+
+        render()
+        self._dependents.setdefault("columns", []).append(render)
 
     def _mapping(self, label: str, hint: str, value: Any, setter: Setter, key_type: type) -> None:
         rows: list[list[str]] = [[str(k), str(v)] for k, v in (value or {}).items()]

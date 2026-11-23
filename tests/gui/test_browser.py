@@ -684,7 +684,7 @@ def test_report_editor_rename_item_updates_references(page, workdir: Path):
     plot.fill("margin_plot")
     plot.press("Enter")
     page.wait_for_selector("text=reference(s) in the sections will be changed")
-    page.get_by_role("button", name="Rename").click()
+    page.get_by_role("button", name="Rename", exact=True).click()
     page.wait_for_timeout(800)
     assert [i.input_value() for i in page.locator(".apb-item-name input").all()][2] == "margin_plot"
     tab(page, "Sections")
@@ -1312,6 +1312,32 @@ def test_table_blocks_offer_the_upstream_columns_after_a_run(page, workdir: Path
     saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
     block = next(b for b in saved["blocks"] if b.get("label") == "Critical fastener")
     assert block["params"]["columns"] == ["TENSION", "SHEAR", "EID"]
+
+
+def test_rename_table_lists_the_columns(page, workdir: Path):
+    """Round 6: renaming columns was hard to find; the panel now lists every column."""
+    run_all(page)
+    select(page, "Drop GRID")
+    assert "Select / rename columns" in page.locator(".apb-block-type").inner_text()
+    # The table title (default sheet name) is shown above the preview (round 6).
+    assert page.locator(".apb-table-title").first.inner_text().strip() != ""
+    olds = page.locator(".apb-rename-old").all_inner_texts()
+    assert olds == ["EID", "SUBCASE", "TENSION", "SHEAR"]  # the kept columns, not GRID
+    box = page.get_by_label("New name for SHEAR")
+    box.fill("SHEAR_FORCE")
+    box.press("Enter")
+    page.wait_for_timeout(300)
+    # Dropping SUBCASE from the kept columns removes it from the rename table at once.
+    page.locator(".apb-column-choice").first.locator(".q-chip", has_text="SUBCASE").locator(
+        ".q-chip__icon--remove"
+    ).click()
+    page.wait_for_timeout(400)
+    assert "SUBCASE" not in page.locator(".apb-rename-old").all_inner_texts()
+    save_file(page)
+    saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
+    block = next(b for b in saved["blocks"] if b.get("label") == "Drop GRID")
+    assert block["params"]["rename"] == {"SHEAR": "SHEAR_FORCE"}
+    assert "SUBCASE" not in block["params"]["columns"]
 
 
 # ---- spec 11 step 4.9: file lines, Excel, fastener and constants panels -------------------

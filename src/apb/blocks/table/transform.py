@@ -47,7 +47,11 @@ class SelectParams(_Params):
         description="Columns to keep; empty = all",
         json_schema_extra={"apb_columns": "table"},
     )
-    rename: dict[str, str] = Field(default_factory=dict, description="Old name -> new name")
+    rename: dict[str, str] = Field(
+        default_factory=dict,
+        description="New column names (old name -> new name); units move with the column",
+        json_schema_extra={"apb_columns": "table"},
+    )
 
 
 class Select(Block[SelectParams]):
@@ -55,8 +59,8 @@ class Select(Block[SelectParams]):
 
     type_id = "table.select"
     category = CATEGORY
-    title = "Select columns"
-    description = "Keep a subset of the columns (in the given order) and rename columns."
+    title = "Select / rename columns"
+    description = "Keep a subset of the columns (in the given order) and/or give columns new names."
     inputs = _TABLE_IN
     outputs = _TABLE_OUT
     Params = SelectParams

@@ -66,13 +66,14 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## E. Table blocks (spec 03)
 
-- [ ] 10. **Write CSV** block (`table.write_csv`): one file per connected table, units as a
+- [x] 10. **Write CSV** block (`table.write_csv`): one table per file (one block per file,
+      spec 03 §3.12), units as a
       second header row or in the header (same option as Write Excel), separator and
       decimal sign selectable (Excel in Swedish locale expects `;` and `,`).
-- [ ] 11. **Renaming columns:** already possible with the *Select* block (`rename`), but
+- [x] 11. **Renaming columns:** already possible with the *Select* block (`rename`), but
       hard to find. Rename it *Select / rename columns* and give the panel a rename table.
       (The data processing tool in round 7 will also cover it.)
-- [ ] 12. **Sheet / table names:** document that the default name is the table's title,
+- [x] 12. **Sheet / table names:** document that the default name is the table's title,
       carried in `DataFrame.attrs["title"]` and set by the source block (e.g. the HDF5
       result name, the CSV file name). Show the title in the table preview so it is
       visible, and let the Python block set it (`df.attrs["title"] = ...`, in the template).

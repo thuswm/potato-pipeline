@@ -21,7 +21,8 @@ blocks. All table blocks take and return `pandas.DataFrame`s.
 | `table.read_excel` | Read Excel | – → `table` | `file`, `sheet`, `header_row`, `range` (optional, e.g. `A1:F200`) |
 | `table.read_csv` | Read CSV | – → `table` | `file`, `delimiter`, `decimal` (`.`/`,`), `skip_rows`, `encoding` |
 | `table.write_excel` | Write Excel | `tables` (multiple) → `file` (Text) | `file`, `sheet_names`, `units_in_header` (see §3.3) |
-| `table.select` | Select columns | `table` → `table` | `columns`, `rename` (mapping) |
+| `table.write_csv` | Write CSV | `table` → `file` (Text) | `file`, `separator`, `decimal`, `units`, `encoding` (see §3.12) |
+| `table.select` | Select / rename columns | `table` → `table` | `columns`, `rename` (rename table, §3.13) |
 | `table.filter` | Filter rows | `table` → `table` | `expression` (pandas query syntax, e.g. `SUBCASE in [1,2] and EID > 1000`) |
 | `table.sort` | Sort | `table` → `table` | `by`, `ascending` |
 | `table.envelope` | Envelope | `table` → `table` | `group_by` (empty = whole table), `columns`, `mode` (`max`, `min`, `abs_max` – sign kept), `governing_columns` (columns of the governing row reported as `<value>_<column>`, default `SUBCASE`; e.g. add `EID` to see which element governs), `keep_row` (full governing row, one value column) |
@@ -94,6 +95,13 @@ This is the main Excel task today and gets first-class support:
 - Always runs (ENG-17), so a deleted or edited workbook is rewritten on the next run.
 - Two-level headers (side-by-side load case table): top level written once as a merged cell
   with unit, load case names below, header rows frozen.
+
+- **Sheet name = table title (round 6, answer to the Windows test).** The title is not a
+  column: it travels with the table in `DataFrame.attrs["title"]`. The block that makes a
+  table sets it (HDF5 result → its display name, e.g. "CBUSH forces"; CSV/Excel reader →
+  file or sheet name; the f06 blocks → "Modal effective mass fractions"; the requirement
+  check → "Requirement check"). Table blocks keep it (`carry_units`). A Python block can
+  set it with `df.attrs["title"] = "..."`. The preview shows it above the table (§3.14).
 
 ### 3.4 Requirement check (`check.requirement`)
 
@@ -244,6 +252,43 @@ items; the report gets a "Constants used" table.
 
 Implementation: `apb.blocks.table.constants` (block and params model),
 `gui/constants_panel.py` (editor), `engine/graph.py` (collection and clash check).
+
+### 3.12 Write CSV (`table.write_csv`) — round 6
+
+- **One table, one file.** CSV has no sheets, so the block has one table input; one block
+  per file. (The plan proposed one file per connected table; a single input is clearer and
+  needs no file naming rule.)
+- `separator`: `,` (default), `;` or tab; `decimal`: `.` (default) or `,`. They must
+  differ. Excel with Swedish or most other European regional settings opens `;` + `,`
+  directly.
+- `units` (advanced): `header` (default, `S [MPa]`), `row` (a second header row with the
+  units) or `none`.
+- `encoding` (advanced): `utf-8-sig` (default: UTF-8 with byte order mark, so Excel shows
+  `°C` and `µm` correctly), `utf-8`, `cp1252`.
+- Two-level headers are joined into one (`TENSION_LC1`). Line ending `\r\n` on every
+  platform. No index column.
+- Relative paths are relative to the output folder; written via a temporary file (a file
+  open in Excel gives "close it and run again"); always runs, like Write Excel.
+
+### 3.13 Renaming columns — round 6
+
+Found in the Windows test: renaming table headers was wanted; the *Select* block could
+already do it, but the rename field was an empty key/value list that was hard to find.
+
+- The block is called **Select / rename columns** (type id unchanged).
+- Once the input table is known (upstream has run), *Rename* is a table: one row per kept
+  column (the selected columns, else all), the old name and a box for the new name; empty =
+  unchanged. Changing the selected columns updates the rename table at once. Entries for
+  columns that are not kept are listed in red with a remove button. Before the upstream has
+  run the key/value list is shown as before.
+- Units move with the renamed column (as before). The data processing tool (round 7) will
+  cover renaming too.
+
+### 3.14 Table title in the preview — round 6
+
+The preview shows the table title (`attrs["title"]`) above the row count, with a tooltip
+saying that it is the default sheet name. The *Table calculation* Python template sets a
+title, as an example.
 
 ## 4. Out of scope (v1)
 

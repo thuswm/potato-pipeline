@@ -93,6 +93,8 @@ TEMPLATES: dict[str, ScriptTemplate] = {
     @result@["MS"] = @allowable@ / (safety_factor * load) - 1.0
     # Units travel in df.attrs["units"]; the margin has none.
     @result@.attrs.setdefault("units", {})["MS"] = "-"
+    # The title is the default sheet name in Write Excel.
+    @result@.attrs["title"] = f"Margins of safety ({column})"
     unit = @table@.attrs.get("units", {}).get(column, "")
     print(f"MS from {column} [{unit}] with allowable {@allowable@:g}, factor {safety_factor}")
 """,
