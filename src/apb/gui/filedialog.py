@@ -199,7 +199,9 @@ class FileDialog(ui.dialog):
     def _render_path(self) -> None:
         """Show the folder as clickable parts (cut at the start when too long)."""
         self.path_row.clear()
-        self.path_row.props(f'title="{self.folder}"')
+        # Set directly: a props string is parsed like Python, and the backslashes of a
+        # Windows path (C:\Users) break that parsing.
+        self.path_row.props["title"] = str(self.folder)
         with self.path_row:
             parts = path_parts(self.folder)
             for i, (label, target) in enumerate(parts):

@@ -295,7 +295,7 @@ class H5ViewerPage:
         if node.kind == "group":
             parents.append(full)
         self.tree.expand(parents)
-        self.tree.props(f'selected="{full}"')
+        self.tree.props["selected"] = full
         self.copy_button.enable()
         if node.kind == "group":
             self.export_button.disable()

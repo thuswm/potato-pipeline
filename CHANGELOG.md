@@ -43,6 +43,8 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 - The file dialog of the Nastran analysis block listed `.h5` files instead of input decks.
   Each file field now names its own file types (deck: `.bdf .dat .nas .blk`), and the
   dialog has a *Show all files* switch.
+- (Found by CI, never released) The file dialog did not open on Windows: a path with
+  backslashes was put into an element property string and broke its parsing.
 - Long folder paths in the file dialog hid their end; the path is now cut at the start,
   its parts can be clicked, and a pasted folder path opens that folder.
 - The file field of *Write Excel* can name a new workbook in the dialog.

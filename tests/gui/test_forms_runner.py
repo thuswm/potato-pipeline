@@ -88,8 +88,9 @@ def test_file_dialog_helpers():
     assert matches("MODAL.BDF", [".bdf", ".dat"]) and not matches("modal.h5", [".bdf"])
     assert matches("anything.xyz", [])
     assert matches("a.apb.json", [".apb.json"]) and not matches("a.json", [".apb.json"])
-    parts = path_parts(Path("/home/me/fem"))
-    assert [label for label, _ in parts] == ["/", "home", "me", "fem"]
+    folder = Path("/home/me/fem")
+    parts = path_parts(folder)
+    assert [label for label, _ in parts] == [folder.anchor, "home", "me", "fem"]  # "/" or "\\"
     assert parts[-2][1] == Path("/home/me")
 
 

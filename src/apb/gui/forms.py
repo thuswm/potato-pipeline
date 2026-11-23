@@ -761,7 +761,8 @@ class ParamForm:
                         ui.label(column).classes("text-xs font-mono text-slate-700 apb-rename-old")
                         box = ui.input(
                             value=current.get(column, ""), placeholder="(unchanged)"
-                        ).props(f'dense outlined aria-label="New name for {column}"')
+                        ).props("dense outlined")
+                        box.props["aria-label"] = f"New name for {column}"  # any characters
                         box.on("blur", lambda _e, c=column, b=box: commit(c, b))
                         box.on("keydown.enter", lambda _e, c=column, b=box: commit(c, b))
                 for column in [k for k in current if k not in columns]:
