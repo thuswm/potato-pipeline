@@ -13,6 +13,9 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
 
 ### Added
+- Blocks *Nastran f06: modal effective mass fraction* (translational and rotational tables
+  in one table) and *Nastran f06: grid point weight (mass, C.G.)*. They read the `.f06`,
+  so no `.h5` is needed, and give the same columns as the HDF5 results.
 - *File > Settings of this computer…*: set the Nastran command, program folder and options
   once per computer (and the window settings). A block's own value still wins; empty
   block fields show the value they inherit. Comments in `config.toml` are kept.

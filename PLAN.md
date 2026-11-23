@@ -54,14 +54,15 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## D. Results from the `.f06` (spec 02, new section)
 
-- [ ] 9. **f06 table reader** (shared parser in `blocks/nastran/f06.py`, tested on
-      `examples/fem/modal.f06` and `global_loads.f06`):
+- [x] 9. **f06 table reader** (parser `blocks/nastran/f06tables.py`, blocks
+      `f06blocks.py`, tested on `examples/fem/modal.f06` and `global_loads.f06` against the
+      `.h5`):
       - Block *Nastran f06: modal effective mass fraction*: the translation and rotation
-        tables combined into one table `MODE, FREQUENCY, T1, T2, T3, R1, R2, R3` (plus the
-        sum rows as a separate option).
-      - Block *Nastran f06: grid point weight generator*: mass and C.G. per direction,
-        same columns as the HDF5 masses block (`DIRECTION, MASS, X_CG, Y_CG, Z_CG`), so the
-        two are interchangeable downstream.
+        tables combined into one table `MODE, FREQUENCY, T1_FRAC … R3_FRAC` (option: the
+        running sums `T1_SUM … R3_SUM`), as the HDF5 result `MODAL_MASS_FRACTION`.
+      - Block *Nastran f06: grid point weight (mass, C.G.)*: mass and C.G. per direction,
+        same columns as the HDF5 result `GRID_WEIGHT` (`DIRECTION, MASS, X_CG, Y_CG,
+        Z_CG`), so the two are interchangeable downstream.
 
 ## E. Table blocks (spec 03)
 

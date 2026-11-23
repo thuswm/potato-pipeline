@@ -13,6 +13,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
     from apb.blocks.loads.fastener import BLOCKS as FASTENER
     from apb.blocks.nastran.analysis import BLOCKS as ANALYSIS
     from apb.blocks.nastran.blocks import BLOCKS as NASTRAN
+    from apb.blocks.nastran.f06blocks import BLOCKS as F06
     from apb.blocks.python.block import BLOCKS as PYTHON
     from apb.blocks.report.block import BLOCKS as REPORT
     from apb.blocks.table.constants import BLOCKS as CONSTANTS
@@ -25,6 +26,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
     return [
         *ANALYSIS,
         *NASTRAN,
+        *F06,
         *READERS,
         *CONSTANTS,
         *VALUES,

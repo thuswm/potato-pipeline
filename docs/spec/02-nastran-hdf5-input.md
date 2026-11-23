@@ -36,6 +36,8 @@ pyNastran is deliberately **not** used.
 | NAS-21 | **Several load cases in one table:** one analysis with several subcases gives one table holding every selected subcase, one row per entity (× location) × subcase, so a downstream block sees all load cases at once (§3.10) | M |
 | NAS-22 | **Load case names from the file:** the subcase names in the case control (`SUBTITLE`, `LABEL`, `TITLE`) are added as a `LABEL` column, the column the Load case names block makes (§3.10) | M |
 | NAS-23 | The subcase choices in the panel show each subcase with its name (`2 — Pull-off`) | S |
+| NAS-25 | **Modal effective mass fraction from the `.f06`:** the translational and rotational tables are read into one table with the columns of the HDF5 result `MODAL/MODAL_MASS_FRACTION` (§3.11) — round 6 | M |
+| NAS-26 | **Mass and C.G. from the `.f06`:** the grid point weight generator output as the table of `NODAL/GRID_WEIGHT` (§3.11) — round 6 | M |
 | NAS-24 | An example pipeline checks CBUSH margins over all load cases and reports the governing load case per element (§3.10) | M |
 
 ## 3. Design
@@ -326,6 +328,40 @@ The existing `cbush_margins.py` already works per `SUBCASE`. It is changed to pa
 **Out of scope here:** stacking several `.h5` files, one per load case, into one table
 (later, if needed). Load case combinations computed in the pipeline (e.g. 1.2 × LC1 +
 LC2): this is done by the Compute block or in Python today.
+
+### 3.11 Tables from the `.f06` (NAS-25, NAS-26) — round 6
+
+Found in the Windows test: a modal analysis is often run without HDF5 output, and the
+analyst reads the effective mass and the mass/C.G. from the `.f06`. Two blocks read those
+tables (module `blocks/nastran/f06tables.py`, parser; `f06blocks.py`, blocks):
+
+| Block | Table | Same as |
+|-------|-------|---------|
+| *Nastran f06: modal effective mass fraction* (`nastran.f06_mass_fraction`) | `MODE, FREQUENCY, T1_FRAC, T2_FRAC, T3_FRAC, R1_FRAC, R2_FRAC, R3_FRAC`; option *Running sums* adds `T1_SUM … R3_SUM` | `MODAL/MODAL_MASS_FRACTION` |
+| *Nastran f06: grid point weight (mass, C.G.)* (`nastran.f06_grid_weight`) | `DIRECTION, MASS, X_CG, Y_CG, Z_CG` (rows X, Y, Z); reference point in `attrs` | `NODAL/GRID_WEIGHT` |
+
+- **Input:** the `.f06` from the *f06* output of an analysis block (input port `file`,
+  shown as "File from block …"), or a typed path (file type `.f06`). With the analysis
+  block's HDF5 output unconnected no `.h5` is needed (spec 09 §3.8.1).
+- **Same columns and units as the HDF5 result**, so the two can replace each other
+  downstream. The HDF5 table also has `SUBCASE`; the f06 table has not.
+- **Parsing:** a table is found by its title (`MODAL EFFECTIVE MASS FRACTION` + `(FOR
+  TRANSLATIONAL / ROTATIONAL DEGREES OF FREEDOM)`; `G R I D   P O I N T   W E I G H T
+  G E N E R A T O R`), headings are skipped, and the rows that follow are read; a table that
+  continues on the next page (title repeated) is read as one. Translational and rotational
+  rows are joined on the mode number.
+- **Errors say what to request:** no mass fraction table → "request it with MEFFMASS";
+  no grid point weight output → "PARAM,GRDPNT"; one of the two mass fraction tables
+  missing, or a mode twice (several subcases), is an error.
+- **Several grid point weight outputs** (e.g. per superelement): the first is used and the
+  log says how many there are.
+- The values are taken as printed (the grid point weight generator prints in the units of
+  the model's mass input, see `PARAM,WTMASS`).
+- Tested against `examples/fem/modal.f06` and `global_loads.f06`, compared with the same
+  results in the `.h5`.
+
+**Not in this step:** several subcases in one modal f06, the inertia matrices of the grid
+point weight output, other f06 tables.
 
 ## 4. Out of scope (v1)
 

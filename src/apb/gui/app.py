@@ -826,7 +826,7 @@ class EditorPage:
                 return sheet_list(workbook)
 
             return replaced, sheets
-        if "file" not in fields or not cls.type_id.startswith("nastran.hdf5"):
+        if "file" not in fields or not cls.type_id.startswith(("nastran.hdf5", "nastran.f06")):
             return replaced, None
         link = self._connected_file(block_id)
         path: Path | None = None
