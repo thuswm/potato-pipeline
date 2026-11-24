@@ -106,7 +106,10 @@ warning when a pipeline containing Python blocks is opened for the first time.
 A standard block is just a Python class (spec 01 §3.1) in a package registered via the
 `apb.blocks` entry point. The documented path is: prototype in a Python block → move the code
 into a `Block` subclass with a Pydantic `Params` model → it appears in the library for
-everyone who installs the package.
+everyone who installs the package. Round 6 (re-test question "how do I add a block to the
+library?"): the steps and a complete example are in the README, *Adding your own blocks*
+(the example is checked to run). Saving a Python block to a user/team library from the
+GUI is a round 7 proposal (PLAN, *Moved out*).
 
 ### 3.5 Review round 3: code view and templates (PY-11 … PY-15)
 

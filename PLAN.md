@@ -127,7 +127,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       stored inside the .apb.json. Use a script file for anything longer (editor,
       version control)." Answer to the test note: it is the PY-08 option, the code is
       saved in the pipeline file itself.
-- [ ] 20. **How to add a block to the library — documented, not built yet** (README,
+- [x] 20. **How to add a block to the library — documented, not built yet** (README,
       spec 04 §3.4): a short "Adding your own blocks" section: prototype in a Python
       block → copy into a `Block` subclass in a package with an `apb.blocks` entry point →
       it appears in the library. A user block library from the GUI ("Save as library

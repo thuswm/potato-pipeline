@@ -108,6 +108,64 @@ browser = "C:/Program Files/Google/Chrome/Application/chrome.exe"   # optional
 
 A value set in a Nastran block wins over the file.
 
+## Adding your own blocks
+
+A block in the library is a small Python class. The usual way to make one:
+
+1. **Try it out in a Python block.** Write the calculation as `run(...)` in a script and
+   connect it in a pipeline until the result is right.
+2. **Move it into a block class** in a package of your own (`my_blocks/__init__.py`). The
+   parameters become a Pydantic model, so the GUI builds the property panel from them:
+
+   ```python
+   from typing import Any
+
+   from pydantic import BaseModel, Field
+
+   from apb.engine.block import Block, RunContext
+   from apb.engine.types import Port, PortType
+
+
+   class MarginParams(BaseModel):
+       column: str = Field(description="Column holding the load")
+       allowable: float = Field(description="Allowable load, same unit as the column")
+       safety_factor: float = Field(default=1.5, description="Safety factor")
+
+
+   class Margin(Block[MarginParams]):
+       """Margin of safety per row: MS = allowable / (SF * load) - 1."""
+
+       type_id = "my_blocks.margin"          # unique, never change it once used
+       category = "My blocks"                # group in the library
+       title = "Margin of safety"
+       description = "Adds a column MS = allowable / (SF * load) - 1."
+       inputs = (Port("table", PortType.TABLE, label="Loads"),)
+       outputs = (Port("table", PortType.TABLE, label="With margins"),)
+       Params = MarginParams
+
+       def run(self, params: MarginParams, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
+           table = inputs["table"].copy()
+           table["MS"] = params.allowable / (params.safety_factor * table[params.column]) - 1
+           ctx.log(f"Lowest margin: {table['MS'].min():.3f}")   # goes to the block log
+           return {"table": table}
+
+
+   BLOCKS = (Margin,)
+   ```
+
+3. **Register it** with an entry point in the package's `pyproject.toml` and install the
+   package into the same environment as the tool (`pip install -e .`):
+
+   ```toml
+   [project.entry-points."apb.blocks"]
+   my_blocks = "my_blocks:BLOCKS"
+   ```
+
+   After a restart the block is in the library, for everyone who installs the package.
+
+The standard blocks in `src/apb/blocks/` are built the same way and are good examples.
+Saving a Python block to a personal or team library straight from the GUI is planned.
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/).

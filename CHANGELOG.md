@@ -14,6 +14,7 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   table with one row per kept column.
 - On start, the console says how the GUI was opened (which browser, separate app window
   with its own profile) and how to get a normal browser tab instead.
+- README: *Adding your own blocks* — from a Python block to a block in the library.
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
 
 ### Added
