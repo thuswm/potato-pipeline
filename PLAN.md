@@ -138,6 +138,21 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 - [ ] 21. Release 0.2.0: changelog, version, tag, push to `main`, delete `test/round-6`,
       and a **GitHub release** (`gh release create v0.2.0`, notes from the changelog). CI
       on `test/round-6` first, then a short re-test on Windows by the user.
+      CI on `test/round-6`: green 2026-11-24 (run 45430513168, Windows + Linux, 3.12 + 3.13).
+      **Windows re-test of steps 15–20** (user):
+      - 15: connect the *f06* output of a modal analysis (or type `modal.f06`) to *Nastran
+        eigenvalues* → same table as from the `.h5`. Give an HDF5 block an `.f06` → a
+        plain message naming the block to use.
+      - 16: on the touchpad, two-finger scroll pans the canvas, pinch zooms at the pointer;
+        mouse wheel pans, Ctrl + wheel zooms; dragging the empty canvas still pans.
+      - 17: *File > Open recent* (click to open the list) shows pipelines opened/saved,
+        newest first; a moved/deleted file is greyed out; *Clear list* empties it.
+      - 18: in a Python block's script, remove an argument from `run()` and add a key to
+        the returned `{...}`, then *Check* → *Remove input port(s)* / *Add … to run()* and
+        *Add output port(s)* / *Remove output port(s)*. Change a port in the panel → the
+        notice says the `.py` is saved and the pipeline must be saved too.
+      - 19: *Advanced* shows *Code in the pipeline file* with its help text.
+      - 20: README section *Adding your own blocks* reads clearly.
 
 ## Moved out
 
