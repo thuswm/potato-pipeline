@@ -55,7 +55,10 @@ class PythonParams(BaseModel):
         json_schema_extra=file_types(".py"),
     )
     inline_code: Code = Field(
-        default="", description="Alternative to a script file: code defining run(...)"
+        default="",
+        title="Code in the pipeline file",
+        description="Instead of a .py file: short code defining run(...), stored inside the "
+        ".apb.json. Use a script file for anything longer (editor, version control)",
     )
     inputs: list[PortSpec] = Field(default_factory=list, description="Input ports")
     outputs: list[PortSpec] = Field(default_factory=list, description="Output ports")
@@ -63,7 +66,7 @@ class PythonParams(BaseModel):
     @model_validator(mode="after")
     def _check(self) -> PythonParams:
         if bool(self.script) == bool(self.inline_code.strip()):
-            raise ValueError("set either 'script' or 'inline_code' (exactly one)")
+            raise ValueError("set either a script file or code in the pipeline file (exactly one)")
         for side, ports in (("input", self.inputs), ("output", self.outputs)):
             names = [p.name for p in ports]
             dupes = sorted({n for n in names if names.count(n) > 1})

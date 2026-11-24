@@ -233,7 +233,9 @@ class PythonPanel:
             if path is not None:
                 ui.label(f"File not found: {path}").classes("text-xs text-red-700 apb-script-error")
             elif inline:
-                ui.label("This block uses the inline code below.").classes("text-xs text-slate-500")
+                ui.label(
+                    "This block uses code stored in the pipeline file (below), not a .py file."
+                ).classes("text-xs text-slate-500")
                 return
             else:
                 ui.label("The block has no script yet. Start with:").classes(

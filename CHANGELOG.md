@@ -8,6 +8,8 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 ## [Unreleased]
 
 ### Changed
+- Python block: *Inline code* is now called *Code in the pipeline file*, with a help text
+  saying what it is (code stored in the `.apb.json` instead of a `.py` file).
 - *Select columns* is now *Select / rename columns*; once the input is known, renaming is a
   table with one row per kept column.
 - On start, the console says how the GUI was opened (which browser, separate app window

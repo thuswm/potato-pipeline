@@ -119,7 +119,10 @@ everyone who installs the package.
    "New folder" (spec 06 GUI-17). Creates the file, stores the path in the block and shows
    it in the code view. If the chosen name already exists it is **refused** with the
    message "*name* already exists — use *Use existing file…* to link it", not replaced.
-3. **Inline code** — the existing option for short snippets (PY-08), unchanged.
+3. **Inline code** — the existing option for short snippets (PY-08), unchanged. Round 6
+   re-test: the panel calls it **Code in the pipeline file** (under *Advanced*), with the
+   help "Instead of a .py file: short code defining run(...), stored inside the .apb.json.
+   Use a script file for anything longer (editor, version control)".
 
 **Built-in templates** (`apb.blocks.python.templates`; each is one `.py` text with
 placeholders for the port names, so the result is ordinary Python):

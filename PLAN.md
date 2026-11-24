@@ -122,7 +122,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       - Port edits that rewrite a **script file** say so: "run() in calc.py updated (saved);
         save the pipeline to keep the ports". (The file cannot wait for the pipeline save:
         the user may edit it in an external editor.)
-- [ ] 19. **Inline code explained** (spec 04, panel): under *Advanced* the field is renamed
+- [x] 19. **Inline code explained** (spec 04, panel): under *Advanced* the field is renamed
       *Code in the pipeline file* with the help text "Instead of a .py file: short code
       stored inside the .apb.json. Use a script file for anything longer (editor,
       version control)." Answer to the test note: it is the PY-08 option, the code is
