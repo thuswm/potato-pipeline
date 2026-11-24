@@ -25,7 +25,12 @@ from apb.blocks.python.scripting import (
     ports_to_params,
     read_script,
 )
-from apb.blocks.python.signature import ports_from_signature, rewrite_run_signature
+from apb.blocks.python.signature import (
+    output_differences,
+    ports_from_signature,
+    ports_missing_from_run,
+    rewrite_run_signature,
+)
 from apb.blocks.python.templates import create_script, template_titles
 from apb.engine.variables import VariableError
 from apb.gui.filedialog import FileDialog
@@ -128,9 +133,14 @@ class PythonPanel:
             except OSError as exc:
                 ui.notify(f"run() not updated: {exc.strerror or exc}", type="warning")
                 return
+            # The file is saved now; the ports only with the pipeline (spec 04 §3.9.1).
+            message = (
+                f"run() in {path.name} updated and saved: {change.summary()}. "
+                "Save the pipeline to keep the ports."
+            )
         else:
             self.on_change("inline_code", change.source)
-        message = f"run() updated: {change.summary()}"
+            message = f"run() updated: {change.summary()}"
         if change.renamed:
             message += ". Only the run() line is changed: rename the name in the code too."
         ui.notify(message, type="info", multi_line=True)
@@ -141,6 +151,27 @@ class PythonPanel:
         """Add input ports for ``run()`` arguments that have none (PY-17)."""
         self.on_change("inputs", ports_to_params([*self._inputs(), *proposed]))
         ui.notify("Added input port(s): " + ", ".join(p.name for p in proposed), type="info")
+        self.rebuild()
+
+    def _remove_inputs(self, names: list[str]) -> None:
+        """Remove input ports that ``run()`` does not take (PY-21); ``run()`` is unchanged."""
+        kept = [p for p in self._inputs() if p.name not in names]
+        self.on_change("inputs", ports_to_params(kept))
+        ui.notify("Removed input port(s): " + ", ".join(names), type="info")
+        self.rebuild()
+
+    def _add_outputs(self, names: list[str]) -> None:
+        """Add output ports for keys ``run()`` returns (PY-22), type Any."""
+        added = [PortSpec(name=n) for n in names]
+        self.on_change("outputs", ports_to_params([*self._outputs(), *added]))
+        ui.notify("Added output port(s): " + ", ".join(names), type="info")
+        self.rebuild()
+
+    def _remove_outputs(self, names: list[str]) -> None:
+        """Remove output ports that ``run()`` does not return (PY-22)."""
+        kept = [p for p in self._outputs() if p.name not in names]
+        self.on_change("outputs", ports_to_params(kept))
+        ui.notify("Removed output port(s): " + ", ".join(names), type="info")
         self.rebuild()
 
     def _update_run(self) -> None:
@@ -225,7 +256,7 @@ class PythonPanel:
             return
         info = f"{short_path(path.parent, self.base_dir) or '.'} · changed {modified_text(path)}"
         ui.label(info).classes("text-[10px] text-slate-500 apb-script-info").tooltip(str(path))
-        check = check_script_source(source, self._inputs(), path.name)
+        check = check_script_source(source, self._inputs(), path.name, self._outputs())
         with ui.row().classes("w-full items-start no-wrap gap-1 apb-script-check"):
             if check.ok:
                 ui.icon("check_circle", color="green-7", size="xs").classes("mt-0.5")
@@ -254,25 +285,60 @@ class PythonPanel:
             ).tooltip("Open in editor: the program your system uses for .py files")
 
     def _fix_buttons(self, source: str) -> None:
-        """Offer the fixes for a ``run()`` that does not match the ports (PY-16, PY-17)."""
+        """Offer the fixes, in both directions, for ports that do not match the code.
+
+        The ports stay the definition of the block; each fix is one click (PY-16, PY-17,
+        PY-21, PY-22, spec 04 §3.9.1).
+        """
         proposed = ports_from_signature(source, self._inputs())
-        check = check_script_source(source, self._inputs())
-        lacks_ports_in_run = any("has no argument" in p for p in check.problems)
+        missing = [p.name for p in ports_missing_from_run(source, self._inputs())]
+        outputs = output_differences(source, self._outputs())
+        new_outputs = [n for n in outputs.new if n.isidentifier()]
+
+        def fix(label: str, icon: str, action: Callable[[], None], tip: str) -> None:
+            ui.button(label, icon=icon, on_click=action).props(
+                "dense outline no-caps size=sm"
+            ).tooltip(tip)
+
         with ui.row().classes("gap-1 apb-script-fix"):
             if proposed:
-                names = ", ".join(p.name for p in proposed)
-                ui.button(
-                    f"Add input port(s): {names}",
-                    icon="add",
-                    on_click=lambda: self._add_ports(proposed),
-                ).props("dense outline no-caps size=sm").tooltip(
+                fix(
+                    "Add input port(s): " + ", ".join(p.name for p in proposed),
+                    "add",
+                    lambda: self._add_ports(proposed),
                     "Add an input port for each run() argument that has none "
-                    "(type from the annotation)"
+                    "(type from the annotation)",
                 )
-            if lacks_ports_in_run:
-                ui.button("Add the ports to run()", icon="edit", on_click=self._update_run).props(
-                    "dense outline no-caps size=sm"
-                ).tooltip("Rewrite only the def run(...) line so it takes every input port")
+            if missing:
+                names = ", ".join(missing)
+                fix(
+                    f"Remove input port(s): {names}",
+                    "remove",
+                    lambda: self._remove_inputs(missing),
+                    "The code is right: remove the ports run() does not take "
+                    "(their connectors go too)",
+                )
+                fix(
+                    f"Add {names} to run()",
+                    "edit",
+                    self._update_run,
+                    "The ports are right: rewrite only the def run(...) line so it takes them",
+                )
+            if new_outputs:
+                fix(
+                    "Add output port(s): " + ", ".join(new_outputs),
+                    "add",
+                    lambda: self._add_outputs(new_outputs),
+                    "Add an output port for each key run() returns that has none (type Any; "
+                    "change it under Ports)",
+                )
+            if outputs.unused:
+                fix(
+                    "Remove output port(s): " + ", ".join(outputs.unused),
+                    "remove",
+                    lambda: self._remove_outputs(outputs.unused),
+                    "Remove the output ports that run() does not return (their connectors go too)",
+                )
 
     def _open(self, path: Path) -> None:
         try:

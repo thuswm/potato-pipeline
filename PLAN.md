@@ -109,7 +109,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 - [x] 17. **Recent files** (spec 06): *File > Open recent* with the last 10 pipelines
       (missing files greyed out, "Clear list"). There is no start screen, so only the menu. Stored per computer
       in `recent.json` next to `config.toml`, not in the pipeline.
-- [ ] 18. **Python block: ports and code agree in both directions** (spec 04 §3.9). The
+- [x] 18. **Python block: ports and code agree in both directions** (spec 04 §3.9). The
       test showed the gap: removing a port rewrote `run()` on disk at once, the pipeline was
       not saved, and after reopening the only fix offered was to put the argument *back*.
       - The **ports stay the master** of the block (decided in step 13), but every mismatch

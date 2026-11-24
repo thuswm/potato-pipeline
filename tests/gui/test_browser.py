@@ -540,7 +540,43 @@ def test_python_ports_and_run_stay_in_step(page, workdir: Path):
     page.wait_for_timeout(800)
     text = script.read_text(encoding="utf-8")
     assert "more: pd.DataFrame" in text and "extra:" not in text
-    assert page.locator(".q-notification", has_text="run() updated: renamed extra → more").count()
+    notice = "run() in fastener_margins.py updated and saved: renamed extra → more"
+    assert page.locator(".q-notification", has_text=notice).count()
+    assert page.locator(".q-notification", has_text="Save the pipeline to keep the ports").count()
+
+
+def test_python_ports_follow_the_code_both_ways(page, workdir: Path):
+    """Re-test 2026-11-24: an argument removed from run() and a new returned key.
+
+    The block offers to remove the port (not only to put the argument back) and to add an
+    output port for the new key; an output no longer returned can be removed.
+    """
+    select(page, "Fastener margins")
+    script = workdir / "scripts" / "fastener_margins.py"
+    text = script.read_text(encoding="utf-8")
+    text = text.replace("    safety_factor: float,\n", "").replace(
+        '"plot": fig}', '"count": len(margins)}'
+    )
+    text = text.replace("margins = ", "safety_factor = 1.5\n    margins = ", 1)
+    script.write_text(text, encoding="utf-8")
+    page.get_by_role("button", name="Check", exact=True).click()
+    page.wait_for_timeout(500)
+    problems = page.locator(".apb-script-check").inner_text()
+    assert "no argument 'safety_factor'" in problems
+    assert "returns 'count'" in problems and "'plot' is not in the dict" in problems
+    expect(page.get_by_role("button", name="Add safety_factor to run()")).to_be_visible()
+    page.get_by_role("button", name="Remove input port(s): safety_factor").click()
+    page.wait_for_timeout(800)
+    page.get_by_role("button", name="Add output port(s): count").click()
+    page.wait_for_timeout(800)
+    page.get_by_role("button", name="Remove output port(s): plot").click()
+    page.wait_for_timeout(800)
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+    block = node(page, "Fastener margins")
+    assert block.locator(".apb-in", has_text="safety_factor").count() == 0
+    assert block.locator(".apb-out", has_text="count").count() == 1
+    assert block.locator(".apb-out", has_text="plot").count() == 0
+    assert script.read_text(encoding="utf-8") == text  # the code was not touched
 
 
 def test_a_failing_script_shows_the_variables_and_shown_values(page, workdir: Path):

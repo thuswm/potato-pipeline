@@ -33,11 +33,18 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   block fields show the value they inherit. Comments in `config.toml` are kept.
 - The property panel lists the warnings of a block's last run, so the warning mark on the
   canvas can be explained.
+- Python block: when the ports and the code differ, the panel offers the fix both ways:
+  *Remove input port(s)* next to *Add … to run()*, and, when `run()` returns a dict
+  literal, *Add output port(s)* / *Remove output port(s)* from its keys (checked without
+  running the script). The ports stay the definition of the block.
 - *File > Open recent*: the last 10 pipelines opened or saved on this computer.
 - *Nastran eigenvalues* also reads the `.f06` (REAL EIGENVALUES table), with the same
   columns and units as from the `.h5`.
 
 ### Fixed
+- Python block: a port change that rewrites `run()` in the script file now says that the
+  file is already saved and the pipeline must be saved to keep the ports (before, the two
+  could get out of step without notice).
 - The canvas could not be panned with a laptop touchpad. Scrolling (two fingers, or the
   mouse wheel) now pans the canvas; pinch or Ctrl + wheel zooms around the pointer.
 - A Nastran block given the wrong kind of file (an `.f06` to an HDF5 block or the other

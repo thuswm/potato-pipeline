@@ -240,19 +240,75 @@ class ScriptCheck:
         return not self.problems
 
 
+def _run_returns(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.Return]:
+    """Return the ``return`` statements of ``func`` itself (not of nested functions)."""
+    found: list[ast.Return] = []
+    todo: list[ast.AST] = list(func.body)
+    while todo:
+        node = todo.pop(0)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
+            continue
+        if isinstance(node, ast.Return):
+            found.append(node)
+        todo.extend(ast.iter_child_nodes(node))
+    return found
+
+
+def returned_keys(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str] | None:
+    """Return the keys of the dict ``run()`` returns, if they can be read from the code.
+
+    The keys are known only when every ``return`` of the function returns a dict literal
+    whose keys are all plain strings (no ``**other``) (spec 04 §3.9.1, PY-22).
+
+    Args:
+        func: The parsed ``run`` function.
+
+    Returns:
+        The keys in order of appearance (union over all returns), or ``None`` if unknown.
+    """
+    returns = _run_returns(func)
+    if not returns:
+        return None
+    keys: list[str] = []
+    for node in returns:
+        if not isinstance(node.value, ast.Dict):
+            return None
+        for key in node.value.keys:
+            if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+                return None
+            if key.value not in keys:
+                keys.append(key.value)
+    return keys
+
+
+def find_run(tree: ast.Module) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    """Return the top-level ``run`` function of a parsed script (the last one), if any."""
+    funcs = [
+        n
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) and n.name == ENTRY_FUNCTION
+    ]
+    return funcs[-1] if funcs else None
+
+
 def check_script_source(
-    source: str, inputs: Sequence[PortSpec], name: str = "script"
+    source: str,
+    inputs: Sequence[PortSpec],
+    name: str = "script",
+    outputs: Sequence[PortSpec] | None = None,
 ) -> ScriptCheck:
-    """Check a script against the declared input ports **without running it** (PY-14).
+    """Check a script against the declared ports **without running it** (PY-14, PY-22).
 
     Looks for syntax errors, a top-level ``run`` function, and arguments of ``run`` that do
-    not match the declared inputs (same rules as :func:`check_signature`). Which keys the
-    returned dict has is not checked.
+    not match the declared inputs (same rules as :func:`check_signature`). If ``outputs``
+    is given and the returned keys can be read from the code (:func:`returned_keys`), they
+    are compared with the output ports too.
 
     Args:
         source: Script text.
         inputs: Declared input ports.
         name: File name used in messages.
+        outputs: Declared output ports; ``None`` = do not check the outputs.
 
     Returns:
         The problems found.
@@ -262,14 +318,10 @@ def check_script_source(
     except SyntaxError as exc:
         line = f", line {exc.lineno}" if exc.lineno else ""
         return ScriptCheck((f"Syntax error in {name}{line}: {exc.msg}",))
-    funcs = [
-        n
-        for n in tree.body
-        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) and n.name == ENTRY_FUNCTION
-    ]
-    if not funcs:
+    func = find_run(tree)
+    if func is None:
         return ScriptCheck((f"{name} defines no {ENTRY_FUNCTION}() function",))
-    args = funcs[-1].args
+    args = func.args
     positional = [*args.posonlyargs, *args.args]
     required = {a.arg for a in positional[: len(positional) - len(args.defaults)]}
     required |= {a.arg for a, d in zip(args.kwonlyargs, args.kw_defaults, strict=True) if d is None}
@@ -282,6 +334,17 @@ def check_script_source(
     problems += [
         f"run() argument '{arg}' has no matching input port" for arg in sorted(required - declared)
     ]
+    keys = returned_keys(func) if outputs is not None else None
+    if outputs is not None and keys is not None:
+        names = [p.name for p in outputs]
+        problems += [
+            f"run() returns '{k}', which is not an output port" for k in keys if k not in names
+        ]
+        problems += [
+            f"The output port '{n}' is not in the dict run() returns"
+            for n in names
+            if n not in keys
+        ]
     return ScriptCheck(tuple(problems))
 
 

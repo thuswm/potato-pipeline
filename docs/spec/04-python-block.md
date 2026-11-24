@@ -31,6 +31,8 @@ proves useful can later be promoted into a standard block (see §3.4).
 | PY-18 | After a run, returned keys that are not output ports and output ports that were not returned are reported by name, with what to do (§3.9) | M |
 | PY-19 | **When a script fails** the block log says where (the lines of the user's code in the traceback) and lists the variables at the failing line, tables as size, columns and first rows; the preview shows that log open, right under the error (§3.10) | M |
 | PY-20 | `from apb import show`; `show(value, name)` adds the value as a tab *show: name* to the block's preview, also when the script fails later (§3.10) | M |
+| PY-21 | **Fixes in both directions (round 6 re-test):** a port without a `run()` argument offers *Remove input port(s)* as well as *Add … to run()*; the ports stay the definition of the block (§3.9.1) | M |
+| PY-22 | **Output ports from the code:** when every `return` of `run()` is a dict literal with fixed keys, the keys are compared with the output ports without running the script, and *Add output port(s)* / *Remove output port(s)* are offered (§3.9.1) | M |
 | PY-15 | Templates of the user (a folder of `.py` files offered next to the built-in ones) | L |
 
 ## 3. Design
@@ -218,6 +220,36 @@ automatically for the `def` line only.
   "run() returned 'x', which is not an output port: add an output port 'x' (Ports) or leave
   it out of the returned dict" and "the output port 'y' is missing from the dict run()
   returned".
+
+### 3.9.1 Re-test findings: fixes both ways, outputs from `return` (PY-21, PY-22)
+
+Found in the Windows re-test (2026-11-24): (1) adding a key to the returned dict did not
+give an output port; (2) a port was removed in the panel, which rewrote `run()` in the
+script file at once, but the pipeline was not saved; after reopening, the block had the
+old port again and the only fix offered was to put the argument back into `run()`. The
+question "what is the master?" was answered: **the ports** (decided 2026-11-23,
+confirmed 2026-11-24), but the panel must offer the fix in both directions:
+
+| Mismatch found by the check | Fixes offered |
+|---|---|
+| `run()` argument without default and without port | *Add input port(s): a* (as before) |
+| Input port without `run()` argument (no `**kwargs`) | *Remove input port(s): b* · *Add b to run()* |
+| Key returned by `run()` that is not an output port | *Add output port(s): x* (type Any) |
+| Output port not among the returned keys | *Remove output port(s): y* |
+
+- **Returned keys** (`scripting.returned_keys`; the panel uses `signature.output_differences`
+  and `signature.ports_missing_from_run`): the `return` statements of `run()` itself
+  (not of nested functions) are read with `ast`. Only when every one returns a dict literal
+  whose keys are all plain strings (no `**other`) are the keys known: the union of them,
+  in order. Anything else (a variable, `dict(...)`, a comprehension) → unknown: no output
+  check before the run, the after-run report (PY-18) stays.
+- The static check (`check_script_source`) reports the output mismatches with the input
+  ones, so the panel shows one list of problems.
+- Removing a port also removes its connectors (as any port change, spec 06 §3.2.2).
+- **Port edits that rewrite a script file** say so: "run() in calc.py updated and saved:
+  … Save the pipeline to keep the ports." The file cannot wait for the pipeline save, since
+  it may be open in an external editor. With inline code the change is part of the pipeline
+  and is saved with it.
 
 ### 3.10 Debugging a script (PY-19, PY-20) — round 6
 

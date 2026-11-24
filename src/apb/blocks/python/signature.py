@@ -11,7 +11,9 @@ The ports are the definition of the block. When the input ports change, only the
 * ``*args`` / ``**kwargs`` and the return annotation are kept.
 
 The other way round, :func:`ports_from_signature` proposes input ports for ``run()``
-arguments that have none (the user confirms in the panel).
+arguments that have none, :func:`ports_missing_from_run` names the ports ``run()`` does not
+take, and :func:`output_differences` compares the returned keys with the output ports (the
+user confirms each fix in the panel, spec 04 §3.9.1).
 """
 
 from __future__ import annotations
@@ -22,7 +24,13 @@ import tokenize
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from apb.blocks.python.scripting import ENTRY_FUNCTION, PortSpec, ScriptError, port_hint
+from apb.blocks.python.scripting import (
+    ENTRY_FUNCTION,
+    PortSpec,
+    ScriptError,
+    port_hint,
+    returned_keys,
+)
 from apb.engine.types import PortType
 
 #: Longest ``def run(...)`` line before the arguments are put one per line.
@@ -236,3 +244,51 @@ def ports_from_signature(source: str, inputs: Sequence[PortSpec]) -> list[PortSp
         for a in required
         if a.arg not in declared
     ]
+
+
+def ports_missing_from_run(source: str, inputs: Sequence[PortSpec]) -> list[PortSpec]:
+    """Return the input ports that ``run()`` has no argument for (PY-21).
+
+    A ``run()`` with ``**kwargs`` takes every port. Empty if the script cannot be parsed.
+    """
+    try:
+        func = _find_run(source)
+    except ScriptError:
+        return []
+    args = func.args
+    if args.kwarg is not None:
+        return []
+    accepted = {a.arg for a in [*args.posonlyargs, *args.args, *args.kwonlyargs]}
+    return [p for p in inputs if p.name not in accepted]
+
+
+@dataclass(frozen=True)
+class OutputDifferences:
+    """Returned keys compared with the output ports (PY-22).
+
+    Attributes:
+        new: Keys ``run()`` returns that are not output ports.
+        unused: Output ports that ``run()`` does not return.
+    """
+
+    new: list[str] = field(default_factory=list)
+    unused: list[str] = field(default_factory=list)
+
+
+def output_differences(source: str, outputs: Sequence[PortSpec]) -> OutputDifferences:
+    """Compare the keys ``run()`` returns with the output ports, without running it.
+
+    Returns:
+        The differences; empty when they match or when the keys cannot be read from the
+        code (see :func:`apb.blocks.python.scripting.returned_keys`).
+    """
+    try:
+        keys = returned_keys(_find_run(source))
+    except ScriptError:
+        return OutputDifferences()
+    if keys is None:
+        return OutputDifferences()
+    names = [p.name for p in outputs]
+    return OutputDifferences(
+        new=[k for k in keys if k not in names], unused=[n for n in names if n not in keys]
+    )
