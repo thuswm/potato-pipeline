@@ -33,6 +33,7 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   block fields show the value they inherit. Comments in `config.toml` are kept.
 - The property panel lists the warnings of a block's last run, so the warning mark on the
   canvas can be explained.
+- *File > Open recent*: the last 10 pipelines opened or saved on this computer.
 - *Nastran eigenvalues* also reads the `.f06` (REAL EIGENVALUES table), with the same
   columns and units as from the `.h5`.
 

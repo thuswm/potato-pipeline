@@ -181,6 +181,32 @@ def test_add_connect_reject_delete_save(page, workdir: Path):
     assert len(saved["blocks"]) == 16 and len(saved["connections"]) == 24
 
 
+def test_open_recent_lists_opened_and_saved_pipelines(page, workdir: Path):
+    """File > Open recent (spec 06 GUI-38): newest first, missing files disabled, clear."""
+    page.get_by_role("button", name="File", exact=True).click()
+    page.get_by_text("Save as…", exact=True).click()
+    dialog = page.locator(".q-dialog")
+    dialog.get_by_label("File name").fill("copy.apb.json")
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_timeout(800)
+    (workdir / "fastener_loads.apb.json").rename(workdir / "gone.apb.json")
+
+    def recent_items() -> list[str]:
+        page.get_by_role("button", name="File", exact=True).click()
+        page.locator(".apb-recent").click()
+        page.wait_for_timeout(400)
+        return page.locator(".apb-recent-file").all_inner_texts()
+
+    assert recent_items() == ["copy.apb.json", "fastener_loads.apb.json"]
+    missing = page.locator(".apb-recent-file", has_text="fastener_loads")
+    assert "disabled" in (missing.get_attribute("class") or "")
+    page.get_by_text("Clear list", exact=True).click()
+    page.wait_for_timeout(300)
+    page.keyboard.press("Escape")
+    assert recent_items() == []
+    expect(page.get_by_text("No recent pipelines")).to_be_visible()
+
+
 def test_move_block_is_saved(page, workdir: Path):
     block = node(page, "Load case names").locator(".apb-head")
     box = block.bounding_box()

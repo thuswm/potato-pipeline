@@ -32,7 +32,7 @@ from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
 from apb.engine.store import StoreError, format_size
 from apb.engine.variables import VariableError, resolve
-from apb.gui import h5viewer, launcher
+from apb.gui import h5viewer, launcher, recent
 from apb.gui.analysis_panel import AnalysisPanel
 from apb.gui.canvas import NodeCanvas, Payload, add_canvas_css
 from apb.gui.constants_panel import ConstantsPanel
@@ -202,9 +202,20 @@ class EditorPage:
         with ui.header(elevated=True).classes("items-center gap-2 py-1 px-3 bg-slate-800"):
             ui.icon("account_tree", size="sm")
             ui.label("Potato Pipeline").classes("font-medium")
-            with ui.button("File", icon="folder").props("flat color=white dense"), ui.menu():
+            with (
+                ui.button("File", icon="folder").props("flat color=white dense"),
+                ui.menu() as menu,
+            ):
                 ui.menu_item("New", on_click=self.new)
                 ui.menu_item("Open…", on_click=self.open)
+                with ui.menu_item("Open recent", auto_close=False).classes("apb-recent"):
+                    with ui.item_section().props("side"):
+                        ui.icon("keyboard_arrow_right")
+                    self.recent_menu = ui.menu().props(
+                        'anchor="top end" self="top start" auto-close'
+                    )
+                menu.on("before-show", self._fill_recent)
+                self._fill_recent()
                 ui.separator()
                 ui.menu_item("Save", on_click=self.save)
                 ui.menu_item("Save as…", on_click=self.save_as)
@@ -1232,6 +1243,37 @@ class EditorPage:
         if path:
             self._open_path(path)
 
+    def _fill_recent(self) -> None:
+        """(Re)build *File > Open recent* from ``recent.json`` (spec 06 §3.8, GUI-38)."""
+        self.recent_menu.clear()
+        files = recent.recent_files()
+        with self.recent_menu:
+            if not files:
+                ui.menu_item("No recent pipelines").props("disable")
+                return
+            for file in files:
+                item = ui.menu_item(file.name, on_click=lambda f=file: self.open_recent(f)).classes(
+                    "apb-recent-file"
+                )
+                item.tooltip(str(file.parent))
+                if not file.is_file():
+                    item.props("disable").tooltip(f"Not found: {file}")
+            ui.separator()
+            ui.menu_item("Clear list", on_click=self._clear_recent)
+
+    def _clear_recent(self) -> None:
+        recent.clear_recent()
+        self._fill_recent()
+
+    async def open_recent(self, path: Path) -> None:
+        """File > Open recent: open a pipeline from the list (after the discard check)."""
+        if not path.is_file():
+            ui.notify(f"Not found: {path}", type="warning")
+            self._fill_recent()
+            return
+        if await self._discard_ok():
+            self._open_path(path)
+
     async def open_h5_viewer(self) -> None:
         """File > HDF5 viewer: pick an ``.h5`` file and open it in a new tab (spec 10 §3.2)."""
         path = await FileDialog(title="Open in HDF5 viewer", start=self._last_folder, suffix=".h5")
@@ -1246,6 +1288,7 @@ class EditorPage:
             ui.notify(str(exc), type="negative", position="top", multi_line=True)
             return
         self._last_folder = path.parent
+        recent.add_recent(path)
         self.runner.attach_store(self.state.path)
         unknown = sorted(
             {b.type_id for b in self.state.pipeline.blocks if b.type_id not in self.state.registry}
@@ -1326,6 +1369,7 @@ class EditorPage:
             ui.notify(str(exc), type="negative", position="top")
             return
         self._last_folder = written.parent
+        recent.add_recent(written)
         self._states_dirty = True
         ui.notify(f"Saved {written.name}", type="positive", position="bottom-right")
         self._store_after_save(written)

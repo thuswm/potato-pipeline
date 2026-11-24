@@ -106,8 +106,8 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       directions), pinch (Ctrl + wheel) zooms around the pointer, as in Figma/Miro.
       Drag on the empty canvas keeps panning. A plain mouse wheel then scrolls the view
       vertically (Shift + wheel horizontally); zoom stays on Ctrl + wheel and the +/- buttons.
-- [ ] 17. **Recent files** (spec 06): *File > Open recent* with the last 10 pipelines
-      (missing files greyed out, "Clear list"), also on the start screen. Stored per computer
+- [x] 17. **Recent files** (spec 06): *File > Open recent* with the last 10 pipelines
+      (missing files greyed out, "Clear list"). There is no start screen, so only the menu. Stored per computer
       in `recent.json` next to `config.toml`, not in the pipeline.
 - [ ] 18. **Python block: ports and code agree in both directions** (spec 04 §3.9). The
       test showed the gap: removing a port rewrote `run()` on disk at once, the pipeline was
