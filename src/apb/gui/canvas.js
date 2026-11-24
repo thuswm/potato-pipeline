@@ -25,7 +25,11 @@ export default {
     editor.curvature = 0.35;
     editor.zoom_min = 0.3;
     editor.zoom_max = 2.0;
+    // Wheel: scroll pans, Ctrl + wheel / pinch zooms around the pointer (spec 06 GUI-37).
+    // Drawflow's own handler (zoom on Ctrl + wheel only) is switched off before start().
+    editor.zoom_enter = () => {};
     editor.start();
+    this.$el.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     this.editor = editor;
     this.byBlock = {}; // block id -> {nid, spec}
     this.byNode = {}; // Drawflow node id (string) -> spec
@@ -145,6 +149,34 @@ export default {
 
     refresh_connections() {
       Object.values(this.byBlock).forEach((e) => this.editor.updateConnectionNodes(`node-${e.nid}`));
+    },
+
+    onWheel(e) {
+      e.preventDefault();
+      const ed = this.editor;
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.$el.clientHeight : 1;
+      let dx = e.deltaX * unit;
+      let dy = e.deltaY * unit;
+      if (e.ctrlKey) {
+        // Pinch (sent as Ctrl + wheel) or Ctrl + mouse wheel: zoom, keeping the point
+        // under the pointer fixed. screen = c + (p - c) * zoom + translate.
+        const capped = Math.max(-40, Math.min(40, dy));
+        const zoom = Math.max(ed.zoom_min, Math.min(ed.zoom_max, ed.zoom * Math.exp(-capped * 0.005)));
+        if (zoom === ed.zoom) return;
+        const rect = this.$el.getBoundingClientRect();
+        const sx = e.clientX - rect.left - rect.width / 2;
+        const sy = e.clientY - rect.top - rect.height / 2;
+        ed.canvas_x = sx - (sx - ed.canvas_x) * (zoom / ed.zoom);
+        ed.canvas_y = sy - (sy - ed.canvas_y) * (zoom / ed.zoom);
+        ed.zoom = zoom;
+        ed.zoom_last_value = zoom;
+        ed.dispatch("zoom", zoom);
+      } else {
+        if (e.shiftKey && dx === 0) [dx, dy] = [dy, 0]; // Shift + mouse wheel: sideways
+        ed.canvas_x -= dx;
+        ed.canvas_y -= dy;
+      }
+      this.applyTransform();
     },
 
     applyTransform() {

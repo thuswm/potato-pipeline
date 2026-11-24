@@ -73,7 +73,7 @@ A browser-based, Simulink-like editor to build, configure, run and inspect pipel
   with a message shown to the user; the canvas undoes a refused connector.
 - The initial pipeline is sent with the page (no flicker); connector paths are redrawn
   after layout; **View > Fit to window** (also automatic after opening), zoom in/out
-  (also Ctrl + mouse wheel), reset view.
+  (also Ctrl + mouse wheel or pinch; scrolling pans, §3.8), reset view.
 - Delete: select a block or connector and press Delete (only while the canvas has the
   keyboard focus, so typing in the side panels is safe), or use "Delete block" in the panel.
 - The tab title and header show the file name with `*` for unsaved changes; the browser
@@ -256,6 +256,31 @@ Design:
 - **Not in the dialog: a default run mode.** The run mode belongs to the pipeline (it
   decides whether results are recomputed), so a per-computer default would make the same
   pipeline behave differently on two computers. It stays a block parameter.
+
+### 3.8 Windows re-test: touchpad and recent files (GUI-37, GUI-38) — round 6
+
+Found in the re-test of 2026-11-24: on a laptop touchpad the canvas could not be panned
+(two-finger scroll did nothing), and there was no list of recently opened pipelines.
+
+| ID | Requirement | Prio |
+|----|-------------|------|
+| GUI-37 | **Canvas navigation with a touchpad or a mouse:** scrolling (two fingers on a touchpad, mouse wheel) pans the canvas in both directions (Shift + wheel = sideways for a mouse); pinch (which browsers send as Ctrl + wheel) and Ctrl + mouse wheel zoom around the pointer; dragging the empty canvas still pans; the zoom limits stay 0.3 … 2 | M |
+| GUI-38 | **File > Open recent:** the last 10 pipelines opened or saved, newest first, with the folder as tooltip; files that no longer exist are shown greyed out and cannot be chosen; *Clear list* empties it. The list belongs to the computer (`recent.json` next to `config.toml`), not to the pipeline. New/discard rules as for *Open* (GUI-12) | M |
+
+Design:
+- **GUI-37** (`canvas.js` only): Drawflow's own wheel handler (zoom on Ctrl + wheel only) is
+  switched off and replaced by one `wheel` listener on the canvas: without Ctrl it moves
+  `canvas_x/canvas_y` by the wheel deltas (lines and pages converted to pixels); with Ctrl
+  it scales by `exp(-deltaY · 0.005)` (deltas capped, so a mouse notch is about ±20 % and a
+  pinch is smooth), keeping the canvas point under the pointer fixed. The listener is not
+  passive, so the page itself never scrolls or zooms over the canvas. Before this change a
+  plain mouse wheel did nothing on the canvas, so no habit is broken.
+- **GUI-38** (`gui/recent.py`): `recent_files()`, `add_recent(path)` (moves an existing
+  entry to the top, keeps 10), `clear_recent()`. Paths are stored absolute and resolved; a
+  missing or broken `recent.json` counts as an empty list and is rewritten on the next
+  change (atomic write). A pipeline is added after it was opened or saved successfully.
+  The *Open recent* submenu is rebuilt each time the File menu opens, so tabs see each
+  other's changes. There is no start screen; the menu is the only place.
 
 ## 4. Out of scope (v1)
 

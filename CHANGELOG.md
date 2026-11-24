@@ -37,6 +37,8 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   columns and units as from the `.h5`.
 
 ### Fixed
+- The canvas could not be panned with a laptop touchpad. Scrolling (two fingers, or the
+  mouse wheel) now pans the canvas; pinch or Ctrl + wheel zooms around the pointer.
 - A Nastran block given the wrong kind of file (an `.f06` to an HDF5 block or the other
   way round) failed with an unclear HDF5 error; it now says so and names the block to use.
 - The Nastran analysis block failed when no `.h5` was written, also when only the `.f06`

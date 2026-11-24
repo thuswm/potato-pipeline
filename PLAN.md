@@ -102,7 +102,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       `modal.h5`). The file field accepts both suffixes. All Nastran reader blocks give a
       plain message for a file of the wrong kind ("x.f06 is an .f06 file; this block reads
       .h5 — use *…*") instead of the h5py error.
-- [ ] 16. **Panning with a touchpad** (spec 06): two-finger scroll pans the canvas (in both
+- [x] 16. **Panning with a touchpad** (spec 06): two-finger scroll pans the canvas (in both
       directions), pinch (Ctrl + wheel) zooms around the pointer, as in Figma/Miro.
       Drag on the empty canvas keeps panning. A plain mouse wheel then scrolls the view
       vertically (Shift + wheel horizontally); zoom stays on Ctrl + wheel and the +/- buttons.

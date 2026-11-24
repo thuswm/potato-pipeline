@@ -197,6 +197,29 @@ def test_move_block_is_saved(page, workdir: Path):
     assert names["position"][1] > 300
 
 
+def test_scroll_pans_and_pinch_zooms_around_the_pointer(page):
+    """Touchpad (spec 06 GUI-37): scroll pans, pinch (Ctrl + wheel) zooms at the pointer."""
+    head = node(page, "Load case names").locator(".apb-head")
+    before = head.bounding_box()
+    page.mouse.move(before["x"] + 5, before["y"] + 5)
+    page.mouse.wheel(30, 50)  # two-finger scroll: right and down
+    page.wait_for_timeout(200)
+    moved = head.bounding_box()
+    assert moved["x"] == pytest.approx(before["x"] - 30, abs=1)
+    assert moved["y"] == pytest.approx(before["y"] - 50, abs=1)
+    # Pinch out at the block's top-left corner: the block grows, the corner stays put.
+    page.mouse.move(moved["x"], moved["y"])
+    page.keyboard.down("Control")
+    page.mouse.wheel(0, -40)
+    page.keyboard.up("Control")
+    page.wait_for_timeout(200)
+    zoomed = head.bounding_box()
+    assert zoomed["width"] > moved["width"] * 1.15
+    assert zoomed["x"] == pytest.approx(moved["x"], abs=2)
+    assert zoomed["y"] == pytest.approx(moved["y"], abs=2)
+    assert page.evaluate("window.scrollY") == 0  # the page itself did not scroll
+
+
 def select(pg, label: str) -> None:
     node(pg, label).locator(".apb-head").click()
     pg.wait_for_timeout(400)
