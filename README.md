@@ -135,8 +135,8 @@ A block in the library is a small Python class. The usual way to make one:
    class Margin(Block[MarginParams]):
        """Margin of safety per row: MS = allowable / (SF * load) - 1."""
 
-       type_id = "my_blocks.margin"          # unique, never change it once used
-       category = "My blocks"                # group in the library
+       type_id = "my_blocks.margin"  # unique, never change it once used
+       category = "My blocks"  # group in the library
        title = "Margin of safety"
        description = "Adds a column MS = allowable / (SF * load) - 1."
        inputs = (Port("table", PortType.TABLE, label="Loads"),)
@@ -146,7 +146,7 @@ A block in the library is a small Python class. The usual way to make one:
        def run(self, params: MarginParams, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
            table = inputs["table"].copy()
            table["MS"] = params.allowable / (params.safety_factor * table[params.column]) - 1
-           ctx.log(f"Lowest margin: {table['MS'].min():.3f}")   # goes to the block log
+           ctx.log(f"Lowest margin: {table['MS'].min():.3f}")  # goes to the block log
            return {"table": table}
 
 
