@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar
 
+import h5py
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,6 +19,31 @@ from apb.blocks.nastran.mapping import RESULT_MAPPINGS
 from apb.engine.block import Block, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.units import UnitSystem, set_units, unit_label
+
+
+def finish_f06_table(table: pd.DataFrame, result: str, system: UnitSystem, path: Path) -> None:
+    """Attach the units of the HDF5 result ``result`` and the source file to an f06 table.
+
+    Args:
+        table: Table read from the ``.f06``; changed in place.
+        result: ``RESULT_MAPPINGS`` key of the HDF5 result with the same columns.
+        system: Unit system of the model.
+        path: The ``.f06`` file.
+    """
+    kinds = RESULT_MAPPINGS[result].kinds
+    units = {col: unit_label(kind, system) for col, kind in kinds.items() if col in table}
+    set_units(table, system, units)
+    table.attrs["source_file"] = str(path)
+
+
+def refuse_hdf5(path: Path) -> None:
+    """Raise a plain error if an f06 block was given an HDF5 file (spec 02 §3.12)."""
+    if h5py.is_hdf5(path):
+        raise ValueError(
+            f"{path.name} is an HDF5 file; this block reads the .f06. For the .h5 use the "
+            "'Nastran HDF5 results' or 'Nastran eigenvalues' block"
+        )
+
 
 CATEGORY = "Input/Nastran"
 
@@ -59,15 +85,12 @@ class _F06Block[P: F06Params](Block[P]):
         path = ctx.resolve_path(str(name))
         if not path.is_file():
             raise FileNotFoundError(f".f06 file not found: {path}")
+        refuse_hdf5(path)
         return path, read_text(path)
 
     def _finish(self, table: pd.DataFrame, params: P, path: Path, ctx: RunContext) -> pd.DataFrame:
         """Attach units (as the HDF5 result of the same data) and the source file."""
-        system = ctx.unit_system(params.unit_system)
-        kinds = RESULT_MAPPINGS[self.same_as].kinds
-        units = {col: unit_label(kind, system) for col, kind in kinds.items() if col in table}
-        set_units(table, system, units)
-        table.attrs["source_file"] = str(path)
+        finish_f06_table(table, self.same_as, ctx.unit_system(params.unit_system), path)
         return table
 
 

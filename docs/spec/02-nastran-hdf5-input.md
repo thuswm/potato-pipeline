@@ -38,6 +38,8 @@ pyNastran is deliberately **not** used.
 | NAS-23 | The subcase choices in the panel show each subcase with its name (`2 — Pull-off`) | S |
 | NAS-25 | **Modal effective mass fraction from the `.f06`:** the translational and rotational tables are read into one table with the columns of the HDF5 result `MODAL/MODAL_MASS_FRACTION` (§3.11) — round 6 | M |
 | NAS-26 | **Mass and C.G. from the `.f06`:** the grid point weight generator output as the table of `NODAL/GRID_WEIGHT` (§3.11) — round 6 | M |
+| NAS-27 | **Eigenvalues from `.h5` or `.f06`, one block:** *Nastran eigenvalues* reads the file by its suffix, with the same columns and units either way (§3.12) — round 6 | M |
+| NAS-28 | A Nastran reader block given a file of the wrong kind (an `.f06` to an HDF5 block, an `.h5` to an f06 block) says so in plain words and names the block to use (§3.12) | M |
 | NAS-24 | An example pipeline checks CBUSH margins over all load cases and reports the governing load case per element (§3.10) | M |
 
 ## 3. Design
@@ -362,6 +364,26 @@ tables (module `blocks/nastran/f06tables.py`, parser; `f06blocks.py`, blocks):
 
 **Not in this step:** several subcases in one modal f06, the inertia matrices of the grid
 point weight output, other f06 tables.
+
+### 3.12 Eigenvalues from either file, wrong file kinds (NAS-27, NAS-28) — round 6
+
+Found in the Windows re-test (2026-11-24): an `.f06` connected to *Nastran eigenvalues*
+failed with an HDF5 error that did not say what was wrong. The eigenvalue table is small
+and printed in every modal `.f06`, so one block reads both files (no second block):
+
+- **By the suffix of the file** (typed or from the connector): `.f06` → the
+  `R E A L   E I G E N V A L U E S` table; anything else → the HDF5 result
+  `SUMMARY/EIGENVALUE` as before. The file field lists `.h5` and `.f06`.
+- **Same columns and units:** `MODE, EIGENVALUE, ORDER, OMEGA, FREQ, MASS, STIFF` (f06
+  headings EXTRACTION ORDER, RADIANS, CYCLES, GENERALIZED MASS / STIFFNESS). The HDF5-only
+  flags `RESFLG`, `FLDFLG` are left out of the f06 table; values as printed (7 digits).
+- A table over several pages is read as one; a mode twice (several subcases) is an error
+  as in §3.11; no table → "no REAL EIGENVALUES table (not a normal modes run?)".
+- **Wrong file kind (NAS-28):** before reading, the HDF5 blocks check that the file is
+  HDF5 (`h5py.is_hdf5`); if not: "*x.f06* is not an HDF5 file; this block reads the `.h5`.
+  For an `.f06` use *Nastran eigenvalues* or the *Nastran f06: …* blocks". The f06 blocks
+  refuse an HDF5 file the same way, naming the HDF5 blocks.
+- Block `type_id` (`nastran.hdf5_eigenvalues`) is unchanged so saved pipelines still open.
 
 ## 4. Out of scope (v1)
 

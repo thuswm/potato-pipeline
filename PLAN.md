@@ -1,6 +1,7 @@
 # PLAN — round 6 (2026-11-23)
 
-Status: **decisions taken 2026-11-23, waiting for go**. Completed plans are archived in `docs/plans/`.
+Status: steps 1–14 done; steps 15–20 (Windows re-test, 2026-11-24) **approved 2026-11-24**
+(ports stay the master, step 18). In progress. Completed plans are archived in `docs/plans/`.
 
 Release at the end of the round: **0.2.0** (spec 12).
 
@@ -93,10 +94,50 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       - A helper `show(obj, name)` (importable as `from apb import show`) that adds a table
         or value as an extra tab in the block's preview, also when the run fails later.
 
-## G. Release
+## G. Findings from the Windows re-test of `test/round-6` (2026-11-24, proposal)
 
-- [ ] 15. Release 0.2.0: changelog, version, tag, push. CI on a test branch first (steps 2,
-      4 and 5 touch Windows-specific behaviour), then a short re-test on Windows by the user.
+- [x] 15. **Eigenvalues from `.h5` or `.f06`, one block** (spec 02): *Nastran eigenvalues*
+      reads the file by its suffix: `.h5` as today, `.f06` from the `R E A L   E I G E N V A
+      L U E S` table, same columns and units either way (tested on `modal.f06` against
+      `modal.h5`). The file field accepts both suffixes. All Nastran reader blocks give a
+      plain message for a file of the wrong kind ("x.f06 is an .f06 file; this block reads
+      .h5 — use *…*") instead of the h5py error.
+- [ ] 16. **Panning with a touchpad** (spec 06): two-finger scroll pans the canvas (in both
+      directions), pinch (Ctrl + wheel) zooms around the pointer, as in Figma/Miro.
+      Drag on the empty canvas keeps panning. A plain mouse wheel then scrolls the view
+      vertically (Shift + wheel horizontally); zoom stays on Ctrl + wheel and the +/- buttons.
+- [ ] 17. **Recent files** (spec 06): *File > Open recent* with the last 10 pipelines
+      (missing files greyed out, "Clear list"), also on the start screen. Stored per computer
+      in `recent.json` next to `config.toml`, not in the pipeline.
+- [ ] 18. **Python block: ports and code agree in both directions** (spec 04 §3.9). The
+      test showed the gap: removing a port rewrote `run()` on disk at once, the pipeline was
+      not saved, and after reopening the only fix offered was to put the argument *back*.
+      - The **ports stay the master** of the block (decided in step 13), but every mismatch
+        offers a fix in both directions: *Add port* / *Remove port* (ports follow the
+        code) or *Update run()* (code follows the ports).
+      - **Output ports from the code:** when `run()` returns a dict literal
+        (`return {"margins": ..., "summary": ...}`), its keys are read without running the
+        script and offered as *Add output port(s)* / *Remove output port(s)*. Other return
+        styles keep the after-run report (PY-18).
+      - Port edits that rewrite a **script file** say so: "run() in calc.py updated (saved);
+        save the pipeline to keep the ports". (The file cannot wait for the pipeline save:
+        the user may edit it in an external editor.)
+- [ ] 19. **Inline code explained** (spec 04, panel): under *Advanced* the field is renamed
+      *Code in the pipeline file* with the help text "Instead of a .py file: short code
+      stored inside the .apb.json. Use a script file for anything longer (editor,
+      version control)." Answer to the test note: it is the PY-08 option, the code is
+      saved in the pipeline file itself.
+- [ ] 20. **How to add a block to the library — documented, not built yet** (README,
+      spec 04 §3.4): a short "Adding your own blocks" section: prototype in a Python
+      block → copy into a `Block` subclass in a package with an `apb.blocks` entry point →
+      it appears in the library. A user block library from the GUI ("Save as library
+      block", see *Moved out*) gets its own spec in round 7.
+
+## H. Release
+
+- [ ] 21. Release 0.2.0: changelog, version, tag, push to `main`, delete `test/round-6`,
+      and a **GitHub release** (`gh release create v0.2.0`, notes from the changelog). CI
+      on `test/round-6` first, then a short re-test on Windows by the user.
 
 ## Moved out
 
@@ -106,5 +147,10 @@ Each step starts with its spec change (first proposal, user reviews), then code 
   before the data processing tool.
 - **Canvas multi-select** → round 7. Agreed: Ctrl+click and box select with Shift+drag
   (plain drag keeps panning), move/delete together, panel shows "N blocks selected".
+- **User block library** (from the 2026-11-24 test) → round 7, spec first. Proposal:
+  *Save as library block…* on a Python block stores its script, ports, title and
+  description in a user block folder (per computer, or a shared team folder set in
+  *Settings*); the blocks appear in the library under *User*. Related: macro blocks
+  (spec 01 §4) for saved sub-pipelines.
 - **Round 5 part B** (load case names from the file, several subcases in one run, CBUSH
   margin example pipeline; spec 02 §3.10) → backlog (decided 2026-11-23).

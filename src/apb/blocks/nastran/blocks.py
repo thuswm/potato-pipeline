@@ -1,13 +1,19 @@
-"""Pipeline blocks reading MSC Nastran HDF5 files (spec 02 §3.3, §3.6)."""
+"""Pipeline blocks reading MSC Nastran HDF5 files (spec 02 §3.3, §3.6).
+
+*Nastran eigenvalues* also reads the ``.f06`` (spec 02 §3.12).
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Literal
 
+import h5py
 from pydantic import BaseModel, ConfigDict, Field
 
-from apb.blocks.nastran import h5reader
+from apb.blocks.nastran import f06tables, h5reader
+from apb.blocks.nastran.f06 import read_text
+from apb.blocks.nastran.f06blocks import finish_f06_table
 from apb.engine.block import Block, FilePath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.units import UnitSystem
@@ -46,14 +52,30 @@ class _H5Block[P: _H5Params](Block[P]):
         return [ctx.resolve_path(params.file)] if params.file else []
 
     @staticmethod
-    def _path(params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> Path:
-        """Return the result file: from the connector if there is one, else the parameter."""
+    def _path(
+        params: _H5Params, inputs: dict[str, Any], ctx: RunContext, check: bool = True
+    ) -> Path:
+        """Return the result file: from the connector if there is one, else the parameter.
+
+        Args:
+            params: Block parameters.
+            inputs: Block inputs (``file`` from a connected block).
+            ctx: Run context.
+            check: Refuse an existing file that is not HDF5, with a plain message
+                (spec 02 §3.12).
+        """
         name = inputs.get("file") or params.file
         if not name:
             raise ValueError(
                 "No result file: type the path of the .h5 file or connect an analysis block"
             )
-        return ctx.resolve_path(str(name))
+        path = ctx.resolve_path(str(name))
+        if check and path.is_file() and not h5py.is_hdf5(path):
+            raise ValueError(
+                f"{path.name} is not an HDF5 file; this block reads the .h5. For an .f06 use "
+                "'Nastran eigenvalues' or the 'Nastran f06: ...' blocks"
+            )
+        return path
 
     @staticmethod
     def _log_source(ctx: RunContext, path: Path, rows: int) -> None:
@@ -103,19 +125,44 @@ class Hdf5Results(_H5Block[Hdf5ResultsParams]):
         return {"table": table}
 
 
-class Hdf5Eigenvalues(_H5Block[_H5Params]):
-    """Read the eigenvalue summary of a normal modes analysis."""
+class EigenvalueParams(_H5Params):
+    """Parameters of :class:`Hdf5Eigenvalues`: the file may be an ``.h5`` or an ``.f06``."""
+
+    file: FilePath = Field(
+        default="",
+        description="Nastran .h5 or .f06 file; empty if the file comes from a connected "
+        "analysis block",
+        json_schema_extra=file_types(".h5", ".f06"),
+    )
+
+
+class Hdf5Eigenvalues(_H5Block[EigenvalueParams]):
+    """Read the eigenvalue summary of a normal modes analysis from the ``.h5`` or ``.f06``."""
 
     type_id = "nastran.hdf5_eigenvalues"
     title = "Nastran eigenvalues"
-    description = "Mode number, eigenvalue, frequency [Hz], generalised mass and stiffness."
+    description = (
+        "Mode number, eigenvalue, frequency [Hz], generalised mass and stiffness, from the "
+        ".h5 or the .f06 (REAL EIGENVALUES table)."
+    )
     outputs = (Port("table", PortType.TABLE, label="Table"),)
-    Params = _H5Params
+    Params = EigenvalueParams
 
-    def run(self, params: _H5Params, inputs: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
-        """Read the eigenvalue table."""
+    def run(
+        self, params: EigenvalueParams, inputs: dict[str, Any], ctx: RunContext
+    ) -> dict[str, Any]:
+        """Read the eigenvalue table; the file suffix chooses the reader (spec 02 §3.12)."""
+        path = self._path(params, inputs, ctx, check=False)
+        system = ctx.unit_system(params.unit_system)
+        if path.suffix.lower() == ".f06":
+            if not path.is_file():
+                raise FileNotFoundError(f".f06 file not found: {path}")
+            table = f06tables.read_eigenvalues(read_text(path))
+            finish_f06_table(table, "SUMMARY/EIGENVALUE", system, path)
+            ctx.log(f"Read {len(table)} modes from {path.name}")
+            return {"table": table}
         path = self._path(params, inputs, ctx)
-        table = h5reader.read_eigenvalues(path, ctx.unit_system(params.unit_system))
+        table = h5reader.read_eigenvalues(path, system)
         self._log_source(ctx, path, len(table))
         return {"table": table}
 

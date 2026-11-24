@@ -1,7 +1,7 @@
 """Tables printed in an MSC Nastran ``.f06`` (spec 02 §3.11). Pure functions.
 
 Some results are only, or more conveniently, in the ``.f06``: a modal run is often made
-without HDF5 output. Two tables are read, with the same column names as the HDF5 results
+without HDF5 output. Three tables are read, with the same column names as the HDF5 results
 (spec 02), so the f06 and HDF5 blocks can replace each other downstream:
 
 * **Modal effective mass fraction** — the translational (T1, T2, T3) and the rotational
@@ -9,6 +9,8 @@ without HDF5 output. Two tables are read, with the same column names as the HDF5
   (and ``T1_SUM ... R3_SUM``, the running sums), as ``MODAL/MODAL_MASS_FRACTION``.
 * **Grid point weight generator** — mass and centre of gravity per mass direction,
   ``DIRECTION, MASS, X_CG, Y_CG, Z_CG``, as ``NODAL/GRID_WEIGHT``.
+* **Real eigenvalues** — ``MODE, EIGENVALUE, ORDER, OMEGA, FREQ, MASS, STIFF``, as
+  ``SUMMARY/EIGENVALUE`` (spec 02 §3.12).
 
 A table that is printed over several pages is read as one. The values are as printed.
 """
@@ -32,6 +34,12 @@ _GPWG = re.compile(r"G R I D\s+P O I N T\s+W E I G H T\s+G E N E R A T O R")
 _REFERENCE = re.compile(r"REFERENCE POINT\s*=\s*(\d+)")
 _CG_HEADER = re.compile(r"MASS AXIS SYSTEM \(S\)\s+MASS")
 _CG_ROW = re.compile(rf"^\s*([XYZ])\s+({_NUM})\s+({_NUM})\s+({_NUM})\s+({_NUM})\s*$")
+
+_EIGENVALUES = re.compile(r"R E A L\s+E I G E N V A L U E S")
+_EIGEN_ROW = re.compile(rf"^\s*(\d+)\s+(\d+)((?:\s+{_NUM}){{5}})\s*$")
+
+#: Columns of the eigenvalue table, as the HDF5 result ``SUMMARY/EIGENVALUE``.
+EIGENVALUE_COLUMNS = ("MODE", "EIGENVALUE", "ORDER", "OMEGA", "FREQ", "MASS", "STIFF")
 
 #: Lines between a table title and its first data row that are skipped at most.
 _HEADER_LINES = 12
@@ -180,3 +188,46 @@ def read_grid_weight(text: str) -> tuple[pd.DataFrame, int]:
     if reference is not None:
         table.attrs["reference_point"] = reference
     return table, len(starts)
+
+
+def read_eigenvalues(text: str) -> pd.DataFrame:
+    """Read the real eigenvalue table of an ``.f06`` (spec 02 §3.12).
+
+    Args:
+        text: Content of the ``.f06``.
+
+    Returns:
+        ``MODE, EIGENVALUE, ORDER, OMEGA, FREQ, MASS, STIFF``, one row per mode, sorted by
+        mode; the columns of the HDF5 result ``SUMMARY/EIGENVALUE`` without its flags.
+
+    Raises:
+        F06TableError: If there is no eigenvalue table or a mode appears twice (several
+            subcases).
+    """
+    lines = text.splitlines()
+    rows: dict[int, dict[str, float | int]] = {}
+    for i, line in enumerate(lines):
+        if not _EIGENVALUES.search(line):
+            continue
+        for match in _rows_after(lines, i, _EIGEN_ROW):
+            mode = int(match.group(1))
+            if mode in rows:
+                raise F06TableError(
+                    f"Mode {mode} appears twice in the real eigenvalue tables "
+                    "(several subcases?); this is not supported yet"
+                )
+            eigen, omega, freq, mass, stiff = (_float(v) for v in match.group(3).split())
+            rows[mode] = {
+                "MODE": mode,
+                "EIGENVALUE": eigen,
+                "ORDER": int(match.group(2)),
+                "OMEGA": omega,
+                "FREQ": freq,
+                "MASS": mass,
+                "STIFF": stiff,
+            }
+    if not rows:
+        raise F06TableError("No REAL EIGENVALUES table in the .f06 (not a normal modes run?)")
+    table = pd.DataFrame([rows[m] for m in sorted(rows)], columns=list(EIGENVALUE_COLUMNS))
+    table.attrs["title"] = "Eigenvalues"
+    return table

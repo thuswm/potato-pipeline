@@ -33,8 +33,12 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   block fields show the value they inherit. Comments in `config.toml` are kept.
 - The property panel lists the warnings of a block's last run, so the warning mark on the
   canvas can be explained.
+- *Nastran eigenvalues* also reads the `.f06` (REAL EIGENVALUES table), with the same
+  columns and units as from the `.h5`.
 
 ### Fixed
+- A Nastran block given the wrong kind of file (an `.f06` to an HDF5 block or the other
+  way round) failed with an unclear HDF5 error; it now says so and names the block to use.
 - The Nastran analysis block failed when no `.h5` was written, also when only the `.f06`
   was used. The `.h5` (and the HDF5 request in the deck) is now only required when the
   block's HDF5 output is connected.
