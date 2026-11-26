@@ -172,6 +172,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       and a **GitHub release** (`gh release create v0.2.0`, notes from the changelog). CI
       on `test/round-6` first, then a short re-test on Windows by the user.
       CI on `test/round-6`: green 2026-11-24 (run 45430513168, Windows + Linux, 3.12 + 3.13).
+      CI after steps 21–23: green 2026-11-26 (run 45876847449).
       **Windows re-test of steps 15–20** (user):
       - 15: connect the *f06* output of a modal analysis (or type `modal.f06`) to *Nastran
         eigenvalues* → same table as from the `.h5`. Give an HDF5 block an `.f06` → a
