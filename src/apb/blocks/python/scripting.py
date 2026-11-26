@@ -240,25 +240,89 @@ class ScriptCheck:
         return not self.problems
 
 
-def _run_returns(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.Return]:
-    """Return the ``return`` statements of ``func`` itself (not of nested functions)."""
-    found: list[ast.Return] = []
+def _own_nodes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.AST]:
+    """Return all nodes of ``func`` itself, in order (not those of nested functions)."""
+    found: list[ast.AST] = []
     todo: list[ast.AST] = list(func.body)
     while todo:
         node = todo.pop(0)
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
             continue
-        if isinstance(node, ast.Return):
-            found.append(node)
+        found.append(node)
         todo.extend(ast.iter_child_nodes(node))
     return found
+
+
+def _run_returns(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.Return]:
+    """Return the ``return`` statements of ``func`` itself (not of nested functions)."""
+    return [n for n in _own_nodes(func) if isinstance(n, ast.Return)]
+
+
+def _literal_keys(node: ast.Dict) -> list[str] | None:
+    """Return the keys of a dict literal if all are plain strings (no ``**other``)."""
+    keys: list[str] = []
+    for key in node.keys:
+        if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+            return None
+        keys.append(key.value)
+    return keys
+
+
+def _named_dict_keys(func: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[str] | None:
+    """Return the keys of the dict a name in ``run()`` holds, if they can be read.
+
+    Known only when ``run()`` assigns the name exactly once, as a statement of its own body,
+    to a dict literal with plain string keys; ``name["key"] = ...`` with plain string keys
+    adds keys. Any other use that may change the name or the dict makes them unknown
+    (spec 04 §3.9.1, 2026-11-26).
+    """
+    keys: list[str] | None = None
+    assigned = 0
+    for stmt in func.body:
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Name)
+            and stmt.targets[0].id == name
+            and isinstance(stmt.value, ast.Dict)
+        ):
+            keys = _literal_keys(stmt.value)
+    if keys is None:
+        return None
+    for node in _own_nodes(func):
+        if isinstance(node, ast.Name) and node.id == name and isinstance(node.ctx, ast.Store):
+            assigned += 1
+        elif isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Store | ast.Del):
+            if isinstance(node.value, ast.Name) and node.value.id == name:
+                if isinstance(node.ctx, ast.Del):
+                    return None
+                key = node.slice
+                if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+                    return None
+                if key.value not in keys:
+                    keys.append(key.value)
+        elif (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == name
+            and node.attr in {"update", "pop", "popitem", "clear", "setdefault", "__setitem__"}
+        ):
+            return None
+        elif isinstance(node, ast.AugAssign | ast.Global | ast.Nonlocal):
+            target = getattr(node, "target", None)
+            names = getattr(node, "names", [])
+            if (isinstance(target, ast.Name) and target.id == name) or name in names:
+                return None
+    return keys if assigned == 1 else None
 
 
 def returned_keys(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str] | None:
     """Return the keys of the dict ``run()`` returns, if they can be read from the code.
 
     The keys are known only when every ``return`` of the function returns a dict literal
-    whose keys are all plain strings (no ``**other``) (spec 04 §3.9.1, PY-22).
+    whose keys are all plain strings (no ``**other``), or a name that ``run()`` assigns
+    once to such a literal (``result = {...}`` … ``return result``, see
+    :func:`_named_dict_keys`) (spec 04 §3.9.1, PY-22).
 
     Args:
         func: The parsed ``run`` function.
@@ -271,13 +335,15 @@ def returned_keys(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str] | N
         return None
     keys: list[str] = []
     for node in returns:
-        if not isinstance(node.value, ast.Dict):
+        if isinstance(node.value, ast.Dict):
+            found = _literal_keys(node.value)
+        elif isinstance(node.value, ast.Name):
+            found = _named_dict_keys(func, node.value.id)
+        else:
             return None
-        for key in node.value.keys:
-            if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
-                return None
-            if key.value not in keys:
-                keys.append(key.value)
+        if found is None:
+            return None
+        keys += [k for k in found if k not in keys]
     return keys
 
 

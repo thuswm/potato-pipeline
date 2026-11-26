@@ -16,6 +16,11 @@ a minor release may break pipeline files; such changes are listed under **Breaki
   with its own profile) and how to get a normal browser tab instead.
 - README: *Adding your own blocks* — from a Python block to a block in the library.
 - README: Windows set-up uses `python -m venv` (the `py` launcher is not always installed).
+- Mass is written in **kg** by *Word report* tables, *Write Excel* and *Write CSV*
+  (`t → kg`, `t·mm² → kg·mm²`), switch *Mass in kg* (on by default). Inside the pipeline
+  a model in mm keeps the tonne, so computations stay consistent; the preview explains `t`.
+- Word report table: *Formats* is now *Number format per column*, with a help line, the
+  format that applies when empty, and a live example of the column's first value.
 
 ### Added
 - Python block: the `def run(...)` line follows the input ports (add, rename, remove);
@@ -43,8 +48,13 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 - *File > Open recent*: the last 10 pipelines opened or saved on this computer.
 - *Nastran eigenvalues* also reads the `.f06` (REAL EIGENVALUES table), with the same
   columns and units as from the `.h5`.
+- Python block: output ports are also read from `result = {...}` … `return result`
+  (keys added with `result["x"] = ...` included). When the keys cannot be read, the panel
+  says that the outputs are checked after the run.
 
 ### Fixed
+- Code typed into *Code in the pipeline file* (and JSON fields) in the property panel was
+  not stored. Such code now also gets the port check and the fix buttons.
 - Python block: a port change that rewrites `run()` in the script file now says that the
   file is already saved and the pipeline must be saved to keep the ports (before, the two
   could get out of step without notice).

@@ -512,7 +512,8 @@ class ParamForm:
             editor = ui.codemirror(value or "", language="Python").classes(
                 "w-full h-48 border rounded"
             )
-            editor.on("blur", lambda: setter(editor.value))
+            # "focusout" bubbles from the inner editor; CodeMirror has no "blur" event.
+            editor.on("focusout", lambda: setter(editor.value))
             if hint:
                 editor.tooltip(hint)
 
@@ -917,6 +918,6 @@ class ParamForm:
             status.text = ""
             setter(parsed)
 
-        editor.on("blur", commit)
+        editor.on("focusout", commit)  # bubbles from the inner editor (no "blur" event)
         if hint:
             editor.tooltip(hint)

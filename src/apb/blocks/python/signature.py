@@ -292,3 +292,19 @@ def output_differences(source: str, outputs: Sequence[PortSpec]) -> OutputDiffer
     return OutputDifferences(
         new=[k for k in keys if k not in names], unused=[n for n in names if n not in keys]
     )
+
+
+#: Note shown when the output ports cannot be checked before the run (spec 04 §3.9.1).
+OUTPUTS_AFTER_RUN = "Output ports are checked after the run: run() does not return a {...} literal."
+
+
+def outputs_readable(source: str) -> bool:
+    """Return whether the keys ``run()`` returns can be read from the code.
+
+    ``True`` for a script that cannot be parsed or has no ``run()``: the check reports
+    those itself, so no extra note is needed.
+    """
+    try:
+        return returned_keys(_find_run(source)) is not None
+    except ScriptError:
+        return True

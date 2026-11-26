@@ -579,6 +579,51 @@ def test_python_ports_follow_the_code_both_ways(page, workdir: Path):
     assert script.read_text(encoding="utf-8") == text  # the code was not touched
 
 
+def test_python_output_ports_from_a_named_dict_and_after_run_note(page, workdir: Path):
+    """Second re-test 2026-11-26: ``result = {...}`` ... ``return result`` (spec 04 §3.9.1)."""
+    select(page, "Fastener margins")
+    script = workdir / "scripts" / "fastener_margins.py"
+    text = script.read_text(encoding="utf-8")
+    old = '    return {"margins": margins, "min_ms": min_ms, "plot": fig}\n'
+    assert old in text
+    named = (
+        '    result = {"margins": margins, "min_ms": min_ms, "plot": fig}\n'
+        '    result["count"] = len(margins)\n'
+        "    return result\n"
+    )
+    script.write_text(text.replace(old, named), encoding="utf-8")
+    page.get_by_role("button", name="Check", exact=True).click()
+    page.wait_for_timeout(500)
+    page.get_by_role("button", name="Add output port(s): count").click()
+    page.wait_for_timeout(800)
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+    assert node(page, "Fastener margins").locator(".apb-out", has_text="count").count() == 1
+    # Keys that cannot be read: said, instead of offering nothing silently.
+    script.write_text(text.replace(old, "    return dict(margins=margins)\n"), encoding="utf-8")
+    page.get_by_role("button", name="Check", exact=True).click()
+    page.wait_for_timeout(500)
+    assert "checked after the run" in page.locator(".apb-script-outputs").inner_text()
+
+
+def test_code_in_the_pipeline_file_is_checked_too(page, workdir: Path):
+    """Second re-test 2026-11-26: inline code gets the check line and the fixes."""
+    add_python_block(page)
+    page.get_by_text("Advanced", exact=True).last.click()
+    page.wait_for_timeout(300)
+    page.get_by_label("Code in the pipeline file").click()  # unfold the (empty) editor
+    page.wait_for_timeout(300)
+    page.locator(".cm-content").last.click()
+    page.keyboard.insert_text('def run(x):\n    return {"y": x}\n')  # no auto-close
+    page.get_by_text("The block has no script yet").click()  # blur: stored
+    page.wait_for_timeout(800)
+    assert "no matching input port" in page.locator(".apb-script-check").inner_text()
+    page.get_by_role("button", name="Add input port(s): x").click()
+    page.wait_for_timeout(800)
+    page.get_by_role("button", name="Add output port(s): y").click()
+    page.wait_for_timeout(800)
+    assert "run() matches the ports" in page.locator(".apb-script-check").inner_text()
+
+
 def test_a_failing_script_shows_the_variables_and_shown_values(page, workdir: Path):
     """Round 6: debugging a Python block without leaving the tool."""
     script = workdir / "scripts" / "fastener_margins.py"

@@ -32,7 +32,7 @@ proves useful can later be promoted into a standard block (see §3.4).
 | PY-19 | **When a script fails** the block log says where (the lines of the user's code in the traceback) and lists the variables at the failing line, tables as size, columns and first rows; the preview shows that log open, right under the error (§3.10) | M |
 | PY-20 | `from apb import show`; `show(value, name)` adds the value as a tab *show: name* to the block's preview, also when the script fails later (§3.10) | M |
 | PY-21 | **Fixes in both directions (round 6 re-test):** a port without a `run()` argument offers *Remove input port(s)* as well as *Add … to run()*; the ports stay the definition of the block (§3.9.1) | M |
-| PY-22 | **Output ports from the code:** when every `return` of `run()` is a dict literal with fixed keys, the keys are compared with the output ports without running the script, and *Add output port(s)* / *Remove output port(s)* are offered (§3.9.1) | M |
+| PY-22 | **Output ports from the code:** when every `return` of `run()` is a dict literal with fixed keys (or a name assigned one, §3.9.1), the keys are compared with the output ports without running the script, and *Add output port(s)* / *Remove output port(s)* are offered (§3.9.1) | M |
 | PY-15 | Templates of the user (a folder of `.py` files offered next to the built-in ones) | L |
 
 ## 3. Design
@@ -256,6 +256,24 @@ confirmed 2026-11-24), but the panel must offer the fix in both directions:
   … Save the pipeline to keep the ports." The file cannot wait for the pipeline save, since
   it may be open in an external editor. With inline code the change is part of the pipeline
   and is saved with it.
+
+**Second re-test (2026-11-26): "able to update the block from the code from the input side,
+not the output".** Two gaps:
+
+- **`return result`** is common (`result = {"table": out}` … `return result`). The keys are
+  also read when a `return` returns a plain name that `run()` itself assigns exactly once,
+  as a statement of its own body, to a dict literal with plain string keys; keys added by
+  `result["x"] = ...` (plain string key, anywhere in `run()` outside nested functions) are
+  included. Any other assignment to the name (`result = other`, `result.update(...)`,
+  `result[key] = ...` with a variable key, augmented assignment) → unknown, as before.
+- **Unknown keys are said:** when the keys cannot be read, the check line adds the grey
+  note "Output ports are checked after the run: run() does not return a {...} literal."
+  (also when the input side matches), so the user knows why no output fix is offered.
+- **Code in the pipeline file** (inline code) gets the same check line and fix buttons as
+  a script file (shown above the code field); before, it got none.
+- **Bug found meanwhile:** the code field (CodeMirror) stored its text on `blur`, which
+  CodeMirror never emits, so typed inline code was lost. It is stored on `focusout` now
+  (same for the JSON fields of the panel).
 
 ### 3.10 Debugging a script (PY-19, PY-20) — round 6
 

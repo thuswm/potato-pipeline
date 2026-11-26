@@ -152,7 +152,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       `t → kg` (×1000) and `t·mm² → kg·mm²` (×1000) by default, with a switch
       *Mass in kg* (on) per block. The table preview keeps `t` with the tooltip
       "tonne = 1000 kg (consistent with mm, N, s)".
-- [ ] 23. **Python block, output side of step 18** (spec 04 §3.9.1). The test could fix
+- [x] 23. **Python block, output side of step 18** (spec 04 §3.9.1). The test could fix
       the inputs from the code but not the outputs. Two gaps found:
       - Output ports are only read from the code when `run()` ends in `return {...}`; with
         `result = {...}` … `return result` nothing was offered and nothing said why. Also
@@ -162,6 +162,9 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       - *Code in the pipeline file* (inline code) got no check and no fix buttons at
         all; give it the same check line and fixes as a script file.
       - Re-test instructions written step by step (below), so it is clear what to test.
+      - Found while testing: code typed into *Code in the pipeline file* (and the JSON
+        fields) was **never stored**: NiceGUI's CodeMirror has no `blur` event. Now
+        stored on `focusout`. Probably why the inline route could not be tested at all.
 
 ## I. Release
 

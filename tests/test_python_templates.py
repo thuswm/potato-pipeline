@@ -319,7 +319,12 @@ def test_returned_dict_keys_are_compared_with_the_output_ports():
 @pytest.mark.parametrize(
     "body",
     [
-        "    result = {'a': 1}\n    return result\n",  # a variable
+        "    result = make()\n    return result\n",  # a variable, not a dict literal
+        "    result = {'a': 1}\n    result = {'b': 2}\n    return result\n",  # assigned twice
+        "    result = {'a': 1}\n    result.update(b=2)\n    return result\n",
+        "    result = {'a': 1}\n    result[name] = 2\n    return result\n",
+        "    result = {'a': 1}\n    del result['a']\n    return result\n",
+        "    if x:\n        result = {'a': 1}\n    return result\n",  # not in run()'s body
         "    return dict(a=1)\n",
         "    return {**base, 'a': 1}\n",
         "    return {name: 1}\n",  # key not a plain string
@@ -333,6 +338,37 @@ def test_returned_keys_unknown_means_no_output_check(body: str):
     src = "def run(x, base=None, name='', out=None):\n" + body
     assert output_differences(src, ports(("y", TABLE))) == output_differences("", [])
     assert check_script_source(src, ports(("x", TABLE)), outputs=ports(("y", TABLE))).ok
+
+
+@pytest.mark.parametrize(
+    ("body", "keys"),
+    [
+        ("    result = {'table': x}\n    return result\n", ["table"]),
+        (
+            "    result = {'table': x}\n"
+            "    if x is not None:\n"
+            "        result['extra'] = 1\n"
+            "    return result\n",
+            ["table", "extra"],
+        ),
+        (
+            "    out = {'a': 1}\n    if x:\n        return {'b': 2}\n    return out\n",
+            ["a", "b"],
+        ),
+    ],
+)
+def test_returned_keys_through_a_named_dict(body: str, keys: list[str]):
+    """``result = {...}`` ... ``return result`` (spec 04 §3.9.1, second re-test)."""
+    import ast
+
+    from apb.blocks.python.scripting import find_run, returned_keys
+    from apb.blocks.python.signature import output_differences
+
+    src = "def run(x):\n" + body
+    func = find_run(ast.parse(src))
+    assert func is not None and returned_keys(func) == keys
+    diff = output_differences(src, ports(("table", TABLE)))
+    assert diff.new == [k for k in keys if k != "table"]
 
 
 def test_ports_missing_from_run():

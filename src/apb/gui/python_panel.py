@@ -26,7 +26,9 @@ from apb.blocks.python.scripting import (
     read_script,
 )
 from apb.blocks.python.signature import (
+    OUTPUTS_AFTER_RUN,
     output_differences,
+    outputs_readable,
     ports_from_signature,
     ports_missing_from_run,
     rewrite_run_signature,
@@ -236,6 +238,8 @@ class PythonPanel:
                 ui.label(
                     "This block uses code stored in the pipeline file (below), not a .py file."
                 ).classes("text-xs text-slate-500")
+                # Same check and fixes as a script file (spec 04 §3.9.1, 2026-11-26).
+                self._check_line(str(self.params.get("inline_code") or ""), "the code")
                 return
             else:
                 ui.label("The block has no script yet. Start with:").classes(
@@ -258,21 +262,7 @@ class PythonPanel:
             return
         info = f"{short_path(path.parent, self.base_dir) or '.'} · changed {modified_text(path)}"
         ui.label(info).classes("text-[10px] text-slate-500 apb-script-info").tooltip(str(path))
-        check = check_script_source(source, self._inputs(), path.name, self._outputs())
-        with ui.row().classes("w-full items-start no-wrap gap-1 apb-script-check"):
-            if check.ok:
-                ui.icon("check_circle", color="green-7", size="xs").classes("mt-0.5")
-                ui.label("run() matches the ports").classes("text-xs text-green-800 grow")
-            else:
-                ui.icon("error_outline", color="red-7", size="xs").classes("mt-0.5")
-                ui.label("\n".join(check.problems)).classes(
-                    "text-xs text-red-700 grow whitespace-pre-wrap"
-                )
-            ui.button(icon="refresh", on_click=self._render_script).props(
-                'flat dense round size=sm aria-label="Check"'
-            ).tooltip("Check: read the file again and check it (the script is not run)")
-        if not check.ok:
-            self._fix_buttons(source)
+        self._check_line(source, path.name)
         code = ui.code(source, language="python").classes(
             "w-full max-h-40 overflow-hidden text-xs border rounded cursor-pointer apb-script-code"
         )
@@ -285,6 +275,33 @@ class PythonPanel:
             ui.button(icon="open_in_new", on_click=lambda: self._open(path)).props(
                 'dense flat round aria-label="Open in editor"'
             ).tooltip("Open in editor: the program your system uses for .py files")
+
+    def _check_line(self, source: str, name: str) -> None:
+        """Show the static check of the code against the ports, and the fixes (PY-14, PY-22).
+
+        Used for a script file and for code in the pipeline file alike (spec 04 §3.9.1).
+
+        Args:
+            source: The code.
+            name: How the code is named in messages (file name, or "the code").
+        """
+        check = check_script_source(source, self._inputs(), name, self._outputs())
+        with ui.row().classes("w-full items-start no-wrap gap-1 apb-script-check"):
+            if check.ok:
+                ui.icon("check_circle", color="green-7", size="xs").classes("mt-0.5")
+                ui.label("run() matches the ports").classes("text-xs text-green-800 grow")
+            else:
+                ui.icon("error_outline", color="red-7", size="xs").classes("mt-0.5")
+                ui.label("\n".join(check.problems)).classes(
+                    "text-xs text-red-700 grow whitespace-pre-wrap"
+                )
+            ui.button(icon="refresh", on_click=self._render_script).props(
+                'flat dense round size=sm aria-label="Check"'
+            ).tooltip("Check: read the code again and check it (the script is not run)")
+        if self._outputs() and not outputs_readable(source):
+            ui.label(OUTPUTS_AFTER_RUN).classes("text-[10px] text-slate-500 apb-script-outputs")
+        if not check.ok:
+            self._fix_buttons(source)
 
     def _fix_buttons(self, source: str) -> None:
         """Offer the fixes, in both directions, for ports that do not match the code.
