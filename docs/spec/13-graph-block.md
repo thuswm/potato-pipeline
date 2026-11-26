@@ -1,6 +1,6 @@
 # 13 — Graph Block
 
-Status: **first proposal** (2026-11-26), for round 7.
+Status: **reviewed 2026-11-26** (house style only, 300 dpi), for round 7.
 
 ## 1. Purpose
 
@@ -64,7 +64,7 @@ spec 14). Library: **matplotlib** (already a dependency, renders headless with `
 | `bar_labels` | `off`, `value`, format (e.g. `0.00`, same forms as spec 05) | bar, barh | `off` |
 | `highlight_below` | number or empty | bar, barh | empty |
 | `width_cm`, `height_cm` | number | all | 16 × 9 |
-| `dpi` | int | all | 200 |
+| `dpi` | int | all | 300 |
 | `mass_in_kg` | bool | all | true |
 
 Validation before the run (TAB-04): columns must exist, Y columns must be numeric (X may
@@ -111,6 +111,5 @@ axes, subplots in one figure, plot templates saved by the user (with the user bl
 
 ## 5. Open questions
 
-1. Is a fixed house style enough, or should a company style file (`.mplstyle`) be selectable
-   in *Settings*? Proposal: house style now, style file with the user settings later.
-2. Default figure size 16 × 9 cm at 200 dpi: right for your reports?
+None. Answered 2026-11-26: the house style is enough for now (a company style file may come
+later with the user settings); default size 16 × 9 cm at **300 dpi**.

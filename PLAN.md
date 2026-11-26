@@ -13,8 +13,8 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## A. Graph block (spec 13)
 
-- [ ] 1. **Spec 13 reviewed** (first proposal written 2026-11-26), open questions
-      answered (house style vs. company style file; default size 16 × 9 cm, 200 dpi).
+- [x] 1. **Spec 13 reviewed** 2026-11-26: house style only (no company style file now);
+      default size 16 × 9 cm at **300 dpi**.
 - [ ] 2. **House style** `apb.figures.style` (fonts, Okabe–Ito colours, figure size in cm),
       used by the Graph block and offered to Python scripts (`house_style()`); the Python
       *Plot* template uses it. Figures carry their width (`apb_width_cm`), which the
@@ -36,9 +36,10 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## B. FE view block — spec and prototype (spec 14, built in round 8)
 
-- [ ] 7. **Spec 14 reviewed** (first proposal written 2026-11-26), open questions answered
-      (optional extra `[fem]` or normal dependency; orthographic default; coordinate
-      systems; element types in your models).
+- [x] 7. **Spec 14 reviewed** 2026-11-26: PyVista a normal dependency; orthographic and
+      perspective both available (orthographic default); basic coordinate system only to
+      start; elements CQUAD4, CBUSH, RBE2, CONM2 **plus boundary conditions** (SPC/SPC1,
+      GRID `PS`) as symbols.
 - [ ] 8. **Architecture rules for separable packages** (spec 00, short new section): a
       tool package (`apb.femview`, later the data processing tool) imports nothing from
       `apb.engine`/`apb.gui`, exchanges data through plain types/files, and plugs into the
@@ -46,7 +47,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       per-tool proposal stays with the data processing tool.
 - [ ] 9. **Prototype, headless rendering** (throwaway, `tools/prototypes/femview_render.py`,
       not shipped): read `modal.h5` (grids, CQUAD4, CBUSH, RBE2, eigenvector of mode 1),
-      render a PNG off-screen with PyVista from a fixed camera, on Linux and Windows in CI
+      plus the SPC grids, render a PNG off-screen with PyVista from a fixed camera, on Linux and Windows in CI
       (separate CI job, on the test branch only). Result in spec 14 §3.4: what CI needs
       (xvfb / OSMesa), render time, install size. Plus a quick check that a glTF export
       of the same mesh loads in `ui.scene` and the camera can be read back.

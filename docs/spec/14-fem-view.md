@@ -1,8 +1,10 @@
 # 14 — FE View Block (images of the FE model)
 
 Status: **first proposal** (2026-11-26). The spec is reviewed in round 7 and built in
-round 8. Decided 2026-11-26: renderer **VTK via PyVista**; the first version shows the
-**undeformed model** and **deformed shapes / mode shapes**. Contours come later.
+round 8. Decided 2026-11-26: renderer **VTK via PyVista**, a normal dependency; the first
+version shows the **undeformed model with boundary conditions** and **deformed shapes / mode
+shapes** of models with the elements CQUAD4, CBUSH, RBE2 and CONM2, in the basic coordinate
+system; orthographic and perspective projection. Contours come later.
 
 ## 1. Purpose
 
@@ -17,7 +19,9 @@ image is re-created on every run from the current results, with no GUI involved.
 | ID | Requirement | Prio |
 |----|-------------|------|
 | FV-01 | Block *FE view*: reads the model and results from an MSC Nastran `.h5` file (a file parameter or the `h5` output of the analysis block) and outputs one image (`Figure` port) | M |
-| FV-02 | Undeformed model: shells as filled faces with edges, bars/beams/rods/bushes as lines, RBE2/RBE3 as spider lines, CONM2 as points; solids as their outer faces | M |
+| FV-02 | Undeformed model: CQUAD4 as filled faces with edges, CBUSH as lines, RBE2 as spider lines, CONM2 as points (first version, 2026-11-26) | M |
+| FV-02a | Boundary conditions: grids constrained by SPC/SPC1 (and the `PS` field of GRID) shown as symbols with the constrained DOFs (e.g. `123`), switchable | M |
+| FV-02b | Further element types: CTRIA3, CQUAD8, CTRIA6, CBAR, CBEAM, CROD, CELAS, RBE3, solids (outer faces) | L |
 | FV-03 | Colour by element type, by property (PID), or one colour; legend for the colours | M |
 | FV-04 | Deformed shape for a static subcase (`NODAL/DISPLACEMENT`) and mode shape for a mode (`NODAL/EIGENVECTOR`), with a scale factor (automatic: largest deformation = 10 % of the model size; or a fixed factor) and an optional undeformed outline | M |
 | FV-05 | **The view is set interactively**: a 3D view in the GUI where the user rotates, pans and zooms. *Use this view* stores the camera in the block's parameters | M |
@@ -51,21 +55,24 @@ helper tools can later be built on it as a standalone tool.
 
 ### 3.2 Reading the model (FV-01, FV-02)
 
-From `NASTRAN/INPUT`: `NODE/GRID` (ID, CP, X, CD) and the element tables found in the
-file, among them `CQUAD4`, `CTRIA3`, `CQUAD8`, `CTRIA6` (corner nodes), `CBAR`, `CBEAM`,
-`CROD`, `CBUSH`, `CELAS1/2`, `RBE2` (`GM`/`RB`), `RBE3`, `CONM2`, `CHEXA`, `CPENTA`,
-`CTETRA` (outer faces). Element types the reader does not know are listed in the block log
-and skipped, so the block never fails on them.
+From `NASTRAN/INPUT`: `NODE/GRID` (ID, CP, X, CD, PS) and the element tables `CQUAD4`,
+`CBUSH`, `RBE2` (`GM`/`RB`) and `CONM2` (first version). Other element types found in the
+file are listed in the block log and skipped, so the block never fails on them (FV-02b adds
+them later).
 
-Coordinate systems: grids with `CP = 0` / `CD = 0` are used as they are (all example
-files). Rectangular systems (`CORD1R`, `CORD2R` in `INPUT/COORDINATE_SYSTEM`) are
-transformed to the basic system. Cylindrical and spherical systems are supported for `CP`
-and `CD` in the first version too, because models of round structures use them; if the
-file holds a system the reader does not know, the block stops with a clear message.
+Boundary conditions (FV-02a): `INPUT/CONSTRAINT` (`SPC`, `SPC1`; the SPC set used by the
+subcase where the file says so, otherwise all sets) and the `PS` field of the grids. Each
+constrained grid gets a small symbol (a cone/triangle glyph) with its DOFs as text,
+switchable (`constraints`: on/off).
+
+Coordinate systems (first version): **basic only**. Grids with `CP = 0` and `CD = 0` are
+used as they are (all example files). A grid in another system stops the block with a
+clear message ("grid 1001 uses coordinate system 5; the FE view supports the basic system
+only for now"). Rectangular, cylindrical and spherical systems come later.
 
 Results: `RESULT/NODAL/DISPLACEMENT` (subcase via `DOMAIN_ID` → `SUBCASE`) and
 `RESULT/NODAL/EIGENVECTOR` (mode, frequency from `SUMMARY/EIGENVALUE`). Translations
-`T1–T3` are given in the `CD` system and are transformed to basic.
+`T1–T3` are in the `CD` system, which is basic in the first version.
 
 ### 3.3 Block (FV-01 … FV-11)
 
@@ -86,7 +93,9 @@ Results: `RESULT/NODAL/DISPLACEMENT` (subcase via `DOMAIN_ID` → `SUBCASE`) and
 | `color_by` | `type`, `property`, `uniform` | `property` |
 | `hide` | properties (PIDs) and/or element types | none |
 | `edges` | bool | true |
-| `camera` | `{position, focal_point, view_up, parallel_scale, projection}` or a standard view name (`iso`, `+x`, …) | `iso` |
+| `constraints` | bool (FV-02a) | true |
+| `projection` | `orthographic`, `perspective` | `orthographic` |
+| `camera` | `{position, focal_point, view_up, parallel_scale, view_angle}` or a standard view name (`iso`, `+x`, …) | `iso` |
 | `title` | text with `{mode}`, `{frequency}`, `{subcase}`, `{scale}` | per `show` (FV-08) |
 | `width_px`, `height_px` | int | 1600 × 1000 |
 | `width_cm` | number (size in the report) | 16 |
@@ -99,8 +108,9 @@ standard view name, and is not applied when the user set an explicit camera.
 
 PyVista (`pyvista.Plotter(off_screen=True)`) builds one `UnstructuredGrid` (faces and
 lines). It applies the camera, renders, and returns the PNG via
-`screenshot(transparent_background=False)`. The projection is orthographic by default
-(true proportions, as engineers expect), perspective as an option. The legend, title,
+`screenshot(transparent_background=False)`. Both projections are available (2026-11-26):
+orthographic (default: true proportions) and perspective; the dialog switches the 3D view
+with it (`ui.scene` orthographic/perspective camera). The legend, title,
 triad and scale text are added as VTK 2D actors, so the image needs no extra composition
 step.
 
@@ -134,22 +144,19 @@ session, so a second FE view block on the same file does not read it again.
 
 ### 3.7 Dependency
 
-`pyvista` (with `vtk`, about 100 MB). Proposal: an **optional extra**
-`pip install potato-pipeline[fem]` (and in the uv dev group, so CI tests it). Without it,
-the FE view block shows "Needs the fem extra: pip install …[fem]" and everything else keeps
-working.
+`pyvista` (with `vtk`, about 100 MB) is a **normal dependency** (decided 2026-11-26): one
+install command, nothing to explain. The engine and the other blocks do not import it, so
+start-up time does not grow.
 
 ## 4. Out of scope (first version)
 
 Contours (FV-12, FV-13), several images per block, animation, picking, cutting planes,
 results from `.f06` or `.op2`, other solvers (Abaqus), element coordinate system arrows,
-loads and boundary conditions as symbols.
+loads as symbols, coordinate systems other than basic, element types other than CQUAD4,
+CBUSH, RBE2, CONM2 (FV-02b).
 
 ## 5. Open questions
 
-1. Optional extra `[fem]` (smaller installation for users who do not need images) or a
-   normal dependency (one install command, nothing to explain)?
-2. Orthographic projection as default: right for your reports?
-3. Are cylindrical/spherical coordinate systems needed in the first version (your real
-   models), or are rectangular systems enough to start?
-4. Which element types do your models use beyond the examples (CQUAD4, CBUSH, RBE2, CONM2)?
+None. Answered 2026-11-26: PyVista as a normal dependency; both projections (orthographic
+default); basic coordinate system to start; element types CQUAD4, CBUSH, RBE2, CONM2 plus
+boundary conditions.
