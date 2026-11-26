@@ -45,17 +45,23 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       `apb.engine`/`apb.gui`, exchanges data through plain types/files, and plugs into the
       pipeline through a block package. Only the rules needed by spec 14 now; the
       per-tool proposal stays with the data processing tool.
-- [ ] 9. **Prototype, headless rendering** (throwaway, `tools/prototypes/femview_render.py`,
+- [x] 9. **Prototype, headless rendering** (throwaway, `tools/prototypes/femview_render.py`,
       not shipped): read `modal.h5` (grids, CQUAD4, CBUSH, RBE2, eigenvector of mode 1),
       plus the SPC grids, render a PNG off-screen with PyVista from a fixed camera, on Linux and Windows in CI
       (separate CI job, on the test branch only). Result in spec 14 §3.4: what CI needs
       (xvfb / OSMesa), render time, install size. Plus a quick check that a glTF export
       of the same mesh loads in `ui.scene` and the camera can be read back.
+      **Result 2026-11-26** (spec 14 §3.4): the plain VTK wheel crashes (segfault) on both
+      CI machines (no GPU); software rendering (`vtk-osmesa`) works on both, 1.6–2.7 s per
+      image; the developer PC renders in 1.2 s. VTK is ~560 MB installed (not ~100 MB).
+      glTF loads in `ui.scene`, the camera can be read back. Two new open questions in
+      spec 14 (VTK build; normal dependency or extra), answered after the Windows test.
 
 ## C. Release
 
 - [ ] 10. Release 0.3.0: CI on a test branch, Windows test by the user (Graph block: each
-      plot type, reference line, live preview, report), changelog, version, tag, push to
+      plot type, reference line, live preview, report; **FE view prototype**: run
+      `tools/prototypes/femview_render.py` on the work PC, see below), changelog, version, tag, push to
       `main`, GitHub release, test branch deleted.
 
 ## Moved out

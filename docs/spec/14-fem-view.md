@@ -114,10 +114,34 @@ with it (`ui.scene` orthographic/perspective camera). The legend, title,
 triad and scale text are added as VTK 2D actors, so the image needs no extra composition
 step.
 
-**Risk to settle first (round 8, step 1):** off-screen OpenGL. Windows and Linux desktops
-with a graphics driver work out of the box. A machine without a GPU (VM, CI) may need
-software rendering (Mesa / `vtk-osmesa`). A prototype renders `modal.h5` on both CI
-platforms before the block is built, and decides whether the CI needs `xvfb` or OSMesa.
+**Prototype result (round 7 step 9, 2026-11-26;** `tools/prototypes/femview_render.py`,
+workflow *FE view prototype*, run 45885881015):
+
+| Machine | Plain `vtk` wheel | Software rendering (`vtk-osmesa`) | xvfb |
+|---------|-------------------|-----------------------------------|------|
+| Developer PC, Linux, GPU | works: model 1.2 s, mode 0.13 s | – | – |
+| CI Ubuntu (no GPU, no display) | **crash** (segfault, exit 139) | works: 1.6 s / 0.4 s | works: 3.3 s / 0.5 s |
+| CI Windows (no GPU) | **crash** (segfault, exit 139) | works: 2.7 s / 1.4 s | – |
+
+Model: `modal.h5`, 3008 grids, 3000 CQUAD4, 44 CBUSH, 40 RBE2, 40 SPC1 grids; reading
+0.02–0.06 s; image 1600 × 1000. The images are the same on all machines that render.
+
+Consequences for round 8:
+
+1. **Render in a child process.** Where OpenGL is missing (VM, remote desktop, server) VTK
+   does not raise an error, it crashes the process. Rendering inside the GUI server would
+   take the whole tool down. The block runs the renderer in a separate process (the engine
+   already runs Nastran that way, spec 09). A crash becomes a block error with a clear text:
+   "The FE view could not be drawn: no usable OpenGL on this computer (exit 139). See
+   README: software rendering."
+2. **Which VTK build** (open question 5): the standard `vtk` wheel from PyPI (uses the
+   graphics card; fast; crashes where there is none) or `vtk-osmesa` (software rendering;
+   works everywhere, also in CI; slower for large models; comes from VTK's own package
+   index `wheels.vtk.org`, not from PyPI, so the install command needs an extra
+   `--extra-index-url`). The two cannot be installed together.
+3. **CI** tests the block with `vtk-osmesa` on both platforms.
+4. **The decisive test is the user's Windows PC** (round 7 step 10): does the plain wheel
+   render there?
 
 ### 3.5 Setting the view (FV-05, FV-06)
 
@@ -144,9 +168,14 @@ session, so a second FE view block on the same file does not read it again.
 
 ### 3.7 Dependency
 
-`pyvista` (with `vtk`, about 100 MB) is a **normal dependency** (decided 2026-11-26): one
-install command, nothing to explain. The engine and the other blocks do not import it, so
-start-up time does not grow.
+`pyvista` (with `vtk`) was decided as a **normal dependency** (2026-11-26): one install
+command, nothing to explain. The engine and the other blocks do not import it, so start-up
+time does not grow.
+
+**Correction (prototype, 2026-11-26):** the size is not about 100 MB (that is roughly the
+download) but **about 560 MB installed** for VTK alone (1.1 GB for the whole environment
+with PyVista and its dependencies in CI, versus a few hundred MB for the tool today). This
+reopens the choice between a normal dependency and an optional extra (open question 6).
 
 ## 4. Out of scope (first version)
 
@@ -157,6 +186,21 @@ CBUSH, RBE2, CONM2 (FV-02b).
 
 ## 5. Open questions
 
-None. Answered 2026-11-26: PyVista as a normal dependency; both projections (orthographic
-default); basic coordinate system to start; element types CQUAD4, CBUSH, RBE2, CONM2 plus
-boundary conditions.
+Answered 2026-11-26: both projections (orthographic default); basic coordinate system to
+start; element types CQUAD4, CBUSH, RBE2, CONM2 plus boundary conditions.
+
+Open after the prototype (to answer before round 8):
+
+5. **VTK build:** standard `vtk` (graphics card; crashes without OpenGL, shown as a block
+   error) or `vtk-osmesa` (software rendering; works everywhere; extra package index)?
+   Depends on the test on the user's Windows PC. Proposal: standard `vtk` if it renders
+   there, with rendering in a child process and a README note on software rendering.
+6. **Normal dependency or optional extra**, now that VTK takes about 560 MB installed?
+   Proposal: optional extra `[fem]`, so installing the tool for the other blocks stays
+   small; the FE view block says which command adds it.
+
+Notes for round 8 from the prototype: glTF uses "Y up", Nastran "Z up" (rotate the
+glTF object by -90° about X in `ui.scene`); export the property colours per element (not
+interpolated per vertex); `scene.get_camera()` returns position, up and the orthographic
+bounds but no target point, so the focal point is computed from the view direction and the
+model centre.
