@@ -31,6 +31,8 @@ Change log:
 | 10 | [HDF5 viewer](10-hdf5-viewer.md) | Read-only view of a whole `.h5` file in its own tab: tree, raw and result views, copy path |
 | 11 | [Property panel layout](11-property-panel.md) | Inventory of all block panels, common layout rules, order of the rework |
 | 12 | [Versioning and releases](12-versioning.md) | Version numbers, single source, changelog, release steps, pipeline schema version |
+| 13 | [Graph block](13-graph-block.md) | Plots from tables (line, scatter, bar, histogram, box …) for the report — proposal, round 7 |
+| 14 | [FE view block](14-fem-view.md) | Images of the FE model, deformed shapes and mode shapes; view set interactively, rendered headless (PyVista) — proposal, built round 8 |
 
 Each feature spec has the same structure: *Purpose · Requirements · Design · Out of scope (v1) · Open questions*.
 
