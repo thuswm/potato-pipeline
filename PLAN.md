@@ -64,6 +64,31 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       `tools/prototypes/femview_render.py` on the work PC, see below), changelog, version, tag, push to
       `main`, GitHub release, test branch deleted.
 
+### Windows test of round 7 (user, on branch `test/round-7`)
+
+Graph block (open `examples\test_case.apb.json`, *Run*):
+
+1. The report `output\test_case_report.docx` has two figures (effective mass per mode,
+   CBUSH margins with the `MS = 0` line) at 16 cm width with readable text.
+2. Select *Global margins graph*: the eight plot type buttons; clicking *Line* changes the
+   fields (no *Bar labels*); back to *Bar*.
+3. Live preview: type a new *Y axis label* and leave the field → after about half a second
+   the preview shows the new label; only the report turns "out of date".
+4. Add a Graph block from *Figures* to any table, try a few plot types and *Series by*.
+
+FE view prototype (decides spec 14 open questions 5 and 6). In the repository folder, in a
+**separate** environment (it does not touch the tool's own):
+
+```bat
+python -m venv proto
+proto\Scripts\python -m pip install pyvista h5py
+proto\Scripts\python tools\prototypes\femview_render.py examples\fem\modal.h5 proto_out
+```
+
+Report back: the four lines it prints (times), whether `proto_out\model.png` and
+`proto_out\mode1.png` look like the model (or the error / that it closed without a
+message), and the size of the `proto` folder. Then delete `proto` and `proto_out`.
+
 ## Moved out
 
 - **FE view block, build** → round 8 (0.4.0), from spec 14 and the prototype (step 9).
