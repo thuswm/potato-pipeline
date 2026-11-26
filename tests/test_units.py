@@ -13,6 +13,7 @@ from apb.units import (
     convert_table,
     get_units,
     header_with_unit,
+    mass_in_kg,
     set_units,
     unit_label,
 )
@@ -80,3 +81,26 @@ def test_mixed_unit_systems_refused():
 def test_header_with_unit():
     assert header_with_unit("S", {"S": "MPa"}) == "S [MPa]"
     assert header_with_unit("EID", {}) == "EID"
+
+
+def test_mass_in_kg_for_output_only():
+    df = pd.DataFrame({"DIRECTION": [1, 2], "MASS": [0.0125, 0.0125], "X_CG": [10.0, 11.0]})
+    set_units(df, UnitSystem.SI_MM, {"MASS": "t", "X_CG": "mm"})
+    df.attrs["title"] = "GRID_WEIGHT"
+    out = mass_in_kg(df)
+    assert out["MASS"].tolist() == [12.5, 12.5]
+    assert get_units(out) == {"MASS": "kg", "X_CG": "mm"}
+    assert out.attrs["title"] == "GRID_WEIGHT"
+    assert get_units(df)["MASS"] == "t" and df["MASS"].iloc[0] == 0.0125  # input unchanged
+    plain = pd.DataFrame({"S": [1.0]})
+    assert mass_in_kg(plain) is plain
+
+
+def test_mass_in_kg_two_level_and_inertia():
+    cols = pd.MultiIndex.from_tuples([("I", "MAX"), ("I", "MAX_CASE"), ("EID", "")])
+    df = pd.DataFrame([[2.0, "LC1", 7]], columns=cols)
+    set_units(df, UnitSystem.SI_MM, {"I": "t·mm²"})
+    out = mass_in_kg(df)
+    assert out[("I", "MAX")].iloc[0] == 2000.0
+    assert out[("I", "MAX_CASE")].iloc[0] == "LC1"
+    assert get_units(out)["I"] == "kg·mm²"

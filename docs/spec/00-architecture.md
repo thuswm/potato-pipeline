@@ -148,6 +148,12 @@ Rules:
   systems** with a clear error ("table A is SI, table B is SI_mm — add a Convert units block").
 - **Reporting:** table column headers show the unit (`VON_MISES [MPa]`), scalars are printed
   with their unit, and the report states the unit system used (spec 05).
+- **Mass in kg in the outputs** (2026-11-26, Windows re-test: "t is not an understood
+  unit"). Inside the pipeline an `SI_mm` table keeps mass in `t`, so computations stay
+  consistent. The writers (*Word report* table, *Write Excel*, *Write CSV*) show mass
+  columns in kg: `t → kg` and `t·mm² → kg·mm²` (×1000), with a switch *Mass in kg* (on by
+  default) per block or table section (`apb.units.mass_in_kg`). The table preview keeps
+  `t` and explains it in a tooltip ("t = tonne = 1000 kg").
 - Unit handling is a small internal module (a fixed factor table, as above); no general
   unit library is needed for two systems.
 

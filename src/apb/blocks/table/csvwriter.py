@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from apb.engine.block import Block, OutputPath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.fileutil import OutputFileError, atomic_output
-from apb.units import get_units, header_with_unit
+from apb.units import get_units, header_with_unit, mass_in_kg
 
 #: Line ending (RFC 4180, the same on every platform).
 _EOL = "\r\n"
@@ -46,6 +46,7 @@ def write_csv(
     decimal: str = ".",
     units: Literal["header", "row", "none"] = "header",
     encoding: str = "utf-8-sig",
+    kg: bool = True,
 ) -> None:
     """Write one table to a CSV file (atomically; parent folders are created).
 
@@ -58,6 +59,7 @@ def write_csv(
             ``none``: plain column names.
         encoding: Text encoding; ``utf-8-sig`` (with a byte order mark) makes Excel read
             units such as ``°C`` and ``µm`` correctly.
+        kg: Write mass columns in kg instead of tonne (:func:`apb.units.mass_in_kg`).
 
     Raises:
         CsvWriteError: If separator and decimal sign are the same, or the file cannot be
@@ -65,6 +67,8 @@ def write_csv(
     """
     if separator == decimal:
         raise CsvWriteError(f"Separator and decimal sign are both {separator!r}")
+    if kg:
+        table = mass_in_kg(table)
     column_units = get_units(table) if units != "none" else {}
     names = flat_headers(table)
     header_rows = [
@@ -106,6 +110,11 @@ class WriteCsvParams(BaseModel):
         default="header",
         description="header: SX [MPa]; row: a second row with the units; none: no units",
     )
+    mass_in_kg: bool = Field(
+        title="Mass in kg",
+        default=True,
+        description="Write mass in kg (x 1000) instead of t (tonne, the mm unit system)",
+    )
     encoding: Literal["utf-8-sig", "utf-8", "cp1252"] = Field(
         default="utf-8-sig",
         description="utf-8-sig: UTF-8 that Excel recognises; cp1252: old Windows programs",
@@ -131,7 +140,7 @@ class WriteCsv(Block[WriteCsvParams]):
     inputs = (Port("table", PortType.TABLE, label="Table"),)
     outputs = (Port("file", PortType.TEXT, label="File"),)
     Params = WriteCsvParams
-    advanced_params = ("units", "encoding")
+    advanced_params = ("units", "mass_in_kg", "encoding")
     always_run = True
 
     @staticmethod
@@ -160,6 +169,7 @@ class WriteCsv(Block[WriteCsvParams]):
             decimal=params.decimal,
             units=params.units,
             encoding=params.encoding,
+            kg=params.mass_in_kg,
         )
         ctx.log(f"Wrote {target} ({len(table)} rows)")
         return {"file": str(target)}

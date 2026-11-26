@@ -70,3 +70,18 @@ def test_block_in_pipeline(tmp_path: Path):
     q.connect("e.table", "c.table")
     bad = Executor(default_registry()).run(q, tmp_path)
     assert "must end with .csv" in (bad.results["c"].error or "")
+
+
+def mass_table() -> pd.DataFrame:
+    df = pd.DataFrame({"DIRECTION": [1], "MASS": [0.5]})
+    set_units(df, UnitSystem.SI_MM, {"MASS": "t"})
+    return df
+
+
+def test_mass_in_kg_by_default(tmp_path: Path):
+    out = tmp_path / "m.csv"
+    write_csv(out, mass_table())
+    assert lines(out) == ["DIRECTION,MASS [kg]", "1,500.0"]
+    write_csv(out, mass_table(), kg=False)
+    assert lines(out) == ["DIRECTION,MASS [t]", "1,0.5"]
+    assert WriteCsvParams(file="m.csv").mass_in_kg is True

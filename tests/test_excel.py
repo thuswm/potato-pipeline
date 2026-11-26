@@ -117,3 +117,16 @@ def test_block_rejects_wrong_extension(tmp_path: Path):
     result = Executor(default_registry()).run(p, tmp_path)
     assert result.results["x"].state is BlockState.ERROR
     assert ".xlsx" in result.results["x"].error
+
+
+def test_mass_in_kg_by_default(tmp_path: Path):
+    df = pd.DataFrame({"DIRECTION": [1], "MASS": [0.5]})
+    set_units(df, UnitSystem.SI_MM, {"MASS": "t"})
+    path = tmp_path / "m.xlsx"
+    write_workbook(path, [df])
+    ws = openpyxl.load_workbook(path).active
+    assert [c.value for c in ws[1]] == ["DIRECTION", "MASS [kg]"]
+    assert ws[2][1].value == 500.0
+    write_workbook(path, [df], kg=False)
+    ws = openpyxl.load_workbook(path).active
+    assert [c.value for c in ws[1]] == ["DIRECTION", "MASS [t]"] and ws[2][1].value == 0.5

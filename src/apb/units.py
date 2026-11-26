@@ -274,3 +274,46 @@ def header_with_unit(column: str, units: Mapping[str, str]) -> str:
     """Return a column header with unit, e.g. ``"SX_Z1 [MPa]"`` (used by reports)."""
     unit = units.get(column, "")
     return f"{column} [{unit}]" if unit and unit != "-" else column
+
+
+#: Output labels for mass in kg (spec 00 §5.1): unit in the table -> (label, factor).
+MASS_IN_KG: dict[str, tuple[str, float]] = {
+    "t": ("kg", 1e3),
+    "t·mm²": ("kg·mm²", 1e3),
+}
+
+#: Tooltip for the tonne in previews (the pipeline keeps the consistent ``SI_mm`` unit).
+TONNE_HINT = "t = tonne = 1000 kg (consistent with mm, N, s)"
+
+
+def mass_in_kg(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the table with mass columns in kg instead of tonne, for output only.
+
+    The ``SI_mm`` system needs the tonne to stay consistent, so tables keep it inside the
+    pipeline; the writers (Word, Excel, CSV) show kg (spec 00 §5.1, 2026-11-26). Columns
+    in ``t`` become ``kg`` and ``t·mm²`` become ``kg·mm²`` (values x 1000). The result is
+    not a consistent table and must not be fed back into computations.
+
+    Args:
+        df: Table with units metadata.
+
+    Returns:
+        A converted copy, or ``df`` itself if it has no mass columns.
+    """
+    units = get_units(df)
+    changes = {c: MASS_IN_KG[u] for c, u in units.items() if u in MASS_IN_KG and c in df.columns}
+    if not changes:
+        return df
+    out = df.copy()
+    multi = isinstance(df.columns, pd.MultiIndex)
+    for col, (label, factor) in changes.items():
+        if multi:  # units are keyed by the top level; *_CASE columns hold case names
+            for full in df.columns:
+                if full[0] == col and not str(full[-1]).endswith("_CASE"):
+                    out[full] = out[full] * factor
+        else:
+            out[col] = out[col] * factor
+        units[col] = label
+    out.attrs = dict(df.attrs)
+    out.attrs[ATTR_UNITS] = units
+    return out

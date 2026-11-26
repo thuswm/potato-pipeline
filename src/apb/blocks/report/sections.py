@@ -172,6 +172,7 @@ class TableSection(_Section):
     max_rows: int | None = Field(default=None, ge=1)
     highlight: str = Field(default="", description="Rows to highlight, e.g. MS < 0")
     units_in_header: bool = True
+    mass_in_kg: bool = Field(default=True, description="Mass in kg instead of t (spec 00 §5.1)")
 
     @field_validator("default_format")
     @classmethod

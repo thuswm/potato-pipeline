@@ -186,6 +186,12 @@ and text columns. When the table of the last run is known, each row shows an exa
 column's first value as it will be written (`0.123456 → 0.12`), updated as the format is
 typed (2026-11-26, Windows re-test).
 
+**Mass in kg (2026-11-26).** A table section has `mass_in_kg: bool = True` (switch *Mass in
+kg* next to *Units in header*): columns in `t` / `t·mm²` are written in `kg` / `kg·mm²`
+(×1000), spec 00 §5.1; the format examples and the units in the format grid follow the
+switch. When a table section converts mass, the units statement says "masses in t (kg in
+the tables)" for `SI_mm`.
+
 **Text and placeholders (REP-17).** Heading, paragraph, label and caption fields get an
 *Insert value* button: a menu of the connected scalar and text items and the metadata fields
 (`title`, `document_number`, `revision`, `author`, `date`) that inserts `{name}` — for a

@@ -16,7 +16,7 @@ from nicegui import ui
 from apb.engine.events import BlockState
 from apb.engine.executor import BlockResult
 from apb.engine.store import StoreError
-from apb.units import Quantity, get_units, header_with_unit
+from apb.units import MASS_IN_KG, TONNE_HINT, Quantity, get_units, header_with_unit
 
 #: Files a text output can be opened from (Word, Excel, Nastran text files).
 OPENABLE_SUFFIXES = {".docx", ".xlsx", ".f06", ".f04", ".log", ".bdf", ".dat"}
@@ -84,11 +84,21 @@ def show_value(name: str, value: Any) -> None:
             ui.label(title).classes("text-sm font-medium text-slate-700 apb-table-title").tooltip(
                 'Table title (df.attrs["title"]): the default sheet name in Write Excel'
             )
-        ui.label(
-            f"{len(value)} rows x {len(value.columns)} columns"
-            + (f" (first {PREVIEW_ROWS} shown)" if len(value) > PREVIEW_ROWS else "")
-            + (f" · units {value.attrs['unit_system']}" if value.attrs.get("unit_system") else "")
-        ).classes("text-xs text-slate-500")
+        with ui.row().classes("items-center gap-1"):
+            ui.label(
+                f"{len(value)} rows x {len(value.columns)} columns"
+                + (f" (first {PREVIEW_ROWS} shown)" if len(value) > PREVIEW_ROWS else "")
+                + (
+                    f" · units {value.attrs['unit_system']}"
+                    if value.attrs.get("unit_system")
+                    else ""
+                )
+            ).classes("text-xs text-slate-500")
+            if any(u in MASS_IN_KG for u in get_units(value).values()):
+                # Spec 00 §5.1: the pipeline keeps the tonne; the writers show kg.
+                ui.label("· t = tonne").classes(
+                    "text-xs text-slate-500 underline decoration-dotted apb-tonne-hint"
+                ).tooltip(TONNE_HINT + "; written in kg by Word, Excel and CSV (Mass in kg)")
         columns, rows = table_rows(value)
         ui.table(columns=columns, rows=rows, pagination=15).props(
             "dense flat bordered wrap-cells"

@@ -43,7 +43,16 @@ from apb.blocks.report.sections import (
     format_value,
     python_format,
 )
-from apb.units import Quantity, QuantityKind, UnitSystem, get_units, header_with_unit, unit_label
+from apb.units import (
+    MASS_IN_KG,
+    Quantity,
+    QuantityKind,
+    UnitSystem,
+    get_units,
+    header_with_unit,
+    mass_in_kg,
+    unit_label,
+)
 
 HEADER_FILL = "D9D9D9"
 HIGHLIGHT_FILL = "FFC7CE"
@@ -93,6 +102,7 @@ class ReportBuilder:
         self.log = log
         self._tables = 0
         self._figures = 0
+        self._mass_in_kg = False
         self.pipeline_file: Path | None = None
         """Pipeline file, listed by the traceability section."""
         self.source_files: list[Path] = []
@@ -103,6 +113,13 @@ class ReportBuilder:
 
     def build(self, sections: Sequence[Section]) -> DocumentObject:
         """Append all sections to the document and return it."""
+        self._mass_in_kg = any(
+            isinstance(s, TableSection)
+            and s.mass_in_kg
+            and isinstance(table := self.items.get(s.item), pd.DataFrame)
+            and any(u in MASS_IN_KG for u in get_units(table).values())
+            for s in sections
+        )
         for section in sections:
             self._add(section)
         if not self.doc.paragraphs and not self.doc.tables:
@@ -218,6 +235,8 @@ class ReportBuilder:
 
     def _table(self, section: TableSection) -> None:
         df: pd.DataFrame = self._item(section.item, "table", lambda v: isinstance(v, pd.DataFrame))
+        if section.mass_in_kg:
+            df = mass_in_kg(df)
         multi = isinstance(df.columns, pd.MultiIndex)
         units = get_units(df) if section.units_in_header else {}
         if section.columns:
@@ -362,6 +381,8 @@ class ReportBuilder:
                     ("masses", QuantityKind.MASS),
                 )
             ]
+            if system is UnitSystem.SI_MM and self._mass_in_kg:
+                parts[-1] += " (kg in the tables)"
             self.doc.add_paragraph(f"Unit system {name}: {', '.join(parts)}.")
         if len(systems) > 1:
             self.log("WARNING: report items use more than one unit system")

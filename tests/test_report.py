@@ -284,3 +284,22 @@ def test_fastener_example_report(tmp_path):
     texts = [p.text for p in doc.paragraphs]
     assert "The minimum margin of safety is 0.23." in texts
     assert len(doc.tables) == 3 and len(doc.inline_shapes) == 1
+
+
+def test_mass_in_kg_in_report_tables():
+    weight = pd.DataFrame({"DIRECTION": [1], "MASS": [0.0125]})
+    set_units(weight, UnitSystem.SI_MM, {"MASS": "t"})
+    builder = ReportBuilder({"weight": weight}, {})
+    doc = builder.build(
+        SECTIONS.validate_python(
+            [
+                {"kind": "units"},
+                {"kind": "table", "item": "weight"},
+                {"kind": "table", "item": "weight", "mass_in_kg": False},
+            ]
+        )
+    )
+    kg, tonne = doc.tables
+    assert table_text(kg)[0] == ["DIRECTION", "MASS [kg]"] and table_text(kg)[1][1] == "12.5"
+    assert table_text(tonne)[0] == ["DIRECTION", "MASS [t]"]
+    assert any(p.text.endswith("masses in t (kg in the tables).") for p in doc.paragraphs)

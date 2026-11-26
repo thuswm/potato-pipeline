@@ -290,6 +290,13 @@ The preview shows the table title (`attrs["title"]`) above the row count, with a
 saying that it is the default sheet name. The *Table calculation* Python template sets a
 title, as an example.
 
+### 3.15 Mass in kg in the written files — round 6 (2026-11-26)
+
+*Write Excel* and *Write CSV* get the parameter `mass_in_kg: bool = True` (*Mass in kg*,
+under *Advanced*). When on, columns in `t` are written in `kg` and columns in `t·mm²` in
+`kg·mm²` (values ×1000, header unit changed), see spec 00 §5.1. The connected table itself
+is not changed. Off: the units of the table are written as they are.
+
 ## 4. Out of scope (v1)
 
 General pivot tables beyond the load case table, unit systems other than `SI`/`SI_mm`, interpolation blocks,

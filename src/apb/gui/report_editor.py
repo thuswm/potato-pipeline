@@ -27,7 +27,7 @@ from apb.blocks.report.sections import FormatError, python_format
 from apb.engine.types import PortType
 from apb.gui.editor import EditError
 from apb.gui.forms import ParamForm, PickFile
-from apb.units import get_units
+from apb.units import get_units, mass_in_kg
 
 KIND_ICONS = {
     "title": "title",
@@ -638,6 +638,16 @@ class ReportPanel:
         switch.on_value_change(
             lambda e, i=index: self._set_field(i, "units_in_header", bool(e.value), keep_empty=True)
         )
+        kg = ui.switch("Mass in kg", value=bool(section.get("mass_in_kg", True))).props("dense")
+        kg.classes("apb-mass-kg").tooltip(
+            "Write mass in kg (x 1000) instead of t (tonne, the unit of the mm system)"
+        )
+
+        def kg_changed(e: Any, i: int = index) -> None:
+            self._set_field(i, "mass_in_kg", bool(e.value), keep_empty=True)
+            self._render_body(i)
+
+        kg.on_value_change(kg_changed)
 
     def _columns_field(self, index: int, info: ed.ItemInfo | None) -> None:
         chosen = list(self.sections[index].get("columns", []))
@@ -670,12 +680,10 @@ class ReportPanel:
         section = self.sections[index]
         formats: dict[str, str] = dict(section.get("formats", {}))
         columns = list(section.get("columns") or (info.columns if info and info.columns else ()))
-        units: Mapping[str, str] = (
-            get_units(info.value)
-            if info is not None and isinstance(info.value, pd.DataFrame)
-            else {}
-        )
         table = info.value if info is not None and isinstance(info.value, pd.DataFrame) else None
+        if table is not None and section.get("mass_in_kg", True):
+            table = mass_in_kg(table)
+        units: Mapping[str, str] = get_units(table) if table is not None else {}
         default_format = str(section.get("default_format") or "")
         with container:
             rows = columns + [c for c in formats if c not in columns]

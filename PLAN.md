@@ -145,7 +145,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
         instead of the word "default".
       - Next to each box a live example: the column's first value as it will be written
         (e.g. `0.123456 → 0.12`), once the connected block has run.
-- [ ] 22. **Mass in kg in the outputs** (spec 00 §5.1, 03, 05). A model in mm uses the
+- [x] 22. **Mass in kg in the outputs** (spec 00 §5.1, 03, 05). A model in mm uses the
       consistent system mm–N–MPa–**t** (tonne), so mass columns read from Nastran are in
       `t`. That stays inside the pipeline (computations stay consistent), but the writers
       show mass in **kg**: *Word report* table, *Write Excel* and *Write CSV* convert

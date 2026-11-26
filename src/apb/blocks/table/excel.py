@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from apb.engine.block import Block, OutputPath, RunContext, file_types
 from apb.engine.types import Port, PortType
 from apb.fileutil import OutputFileError, atomic_output
-from apb.units import get_units, header_with_unit
+from apb.units import get_units, header_with_unit, mass_in_kg
 
 #: Excel's limit on sheet name length.
 MAX_SHEET_NAME = 31
@@ -121,6 +121,7 @@ def write_workbook(
     names: Sequence[str] = (),
     *,
     units_in_header: bool = True,
+    kg: bool = True,
 ) -> list[str]:
     """Write tables to a new ``.xlsx`` workbook, one sheet per table.
 
@@ -132,6 +133,7 @@ def write_workbook(
         tables: Tables to write (in sheet order).
         names: Sheet names (see :func:`sheet_names`).
         units_in_header: Write column headers with units, e.g. ``SX_Z1 [MPa]``.
+        kg: Write mass columns in kg instead of tonne (:func:`apb.units.mass_in_kg`).
 
     Returns:
         The sheet names used.
@@ -149,6 +151,7 @@ def write_workbook(
     try:
         with atomic_output(path) as tmp, pd.ExcelWriter(tmp, engine="openpyxl") as writer:
             for table, name in zip(tables, used_names, strict=True):
+                table = mass_in_kg(table) if kg else table
                 units = get_units(table) if units_in_header else {}
                 if isinstance(table.columns, pd.MultiIndex):
                     _write_two_level(writer, name, table, units)
@@ -176,6 +179,11 @@ class WriteExcelParams(BaseModel):
         json_schema_extra={"apb_per_item": "tables"},
     )
     units_in_header: bool = Field(default=True, description="Show units in the column headers")
+    mass_in_kg: bool = Field(
+        title="Mass in kg",
+        default=True,
+        description="Write mass in kg (x 1000) instead of t (tonne, the mm unit system)",
+    )
 
 
 class WriteExcel(Block[WriteExcelParams]):
@@ -188,7 +196,7 @@ class WriteExcel(Block[WriteExcelParams]):
     inputs = (Port("tables", PortType.TABLE, label="Tables", multiple=True),)
     outputs = (Port("file", PortType.TEXT, label="File"),)
     Params = WriteExcelParams
-    advanced_params = ("units_in_header",)
+    advanced_params = ("units_in_header", "mass_in_kg")
     always_run = True
 
     def output_files(
@@ -207,7 +215,11 @@ class WriteExcel(Block[WriteExcelParams]):
             raise ExcelWriteError(f"Excel file must end with .xlsx, got {params.file!r}")
         target = path if path.is_absolute() else ctx.output_dir / path
         names = write_workbook(
-            target, inputs["tables"], params.sheet_names, units_in_header=params.units_in_header
+            target,
+            inputs["tables"],
+            params.sheet_names,
+            units_in_header=params.units_in_header,
+            kg=params.mass_in_kg,
         )
         ctx.log(f"Wrote {target} (sheets: {', '.join(names)})")
         return {"file": str(target)}
