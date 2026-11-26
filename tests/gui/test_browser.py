@@ -254,6 +254,10 @@ def select(pg, label: str) -> None:
 def run_all(pg) -> None:
     pg.get_by_role("button", name="Run", exact=True).click()
     pg.wait_for_selector("text=/Run (finished|stopped)/", timeout=30000)
+    # The canvas states follow the log a little later (slow CI machines).
+    pg.wait_for_function(
+        "() => !document.querySelector('.drawflow-node.apb-state-running')", timeout=10000
+    )
     pg.wait_for_timeout(500)
 
 
