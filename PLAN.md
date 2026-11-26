@@ -64,6 +64,9 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       `tools/prototypes/femview_render.py` on the work PC, see below), changelog, version, tag, push to
       `main`, GitHub release, test branch deleted.
 
+CI on `test/round-7`: green 2026-11-26 (run 45893630478, Windows + Linux, 3.12 + 3.13), after
+three fixes of timing in the browser tests.
+
 ### Windows test of round 7 (user, on branch `test/round-7`)
 
 Graph block (open `examples\test_case.apb.json`, *Run*):
