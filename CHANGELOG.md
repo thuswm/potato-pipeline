@@ -7,6 +7,22 @@ a minor release may break pipeline files; such changes are listed under **Breaki
 
 ## [Unreleased]
 
+### Added
+- **Graph** block (category *Figures*): line, scatter, bar (grouped or stacked), horizontal
+  bar, step, area, histogram and box plots from a table. One series per Y column or per
+  value of a column (e.g. load case), axis labels with units, log axes, limits, reference
+  lines (typed or from a connected value), values on bars, bars below a limit in red. The
+  panel shows only the fields of the chosen plot type, and the preview updates while you
+  edit when everything before the block is up to date.
+- One house style for all figures (`from apb.figures import house_style, new_figure`), used
+  by the Graph block and the Python *Plot* template. Figures are drawn at their size in the
+  report (default 16 × 9 cm, 300 dpi), so the text has its real size.
+- The test case report shows the effective mass per mode and the CBUSH margins as graphs.
+
+### Changed
+- Word report figure sections: empty width and dpi now mean the figure's own size (else
+  15 cm and 200 dpi as before).
+
 ## [0.2.0] - 2026-11-26
 
 ### Changed

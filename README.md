@@ -82,6 +82,17 @@ apb run examples/test_case.apb.json         # run a pipeline without the GUI
 apb h5view examples/fem/modal.h5            # look through an HDF5 result file
 ```
 
+## Blocks
+
+| Category | Blocks |
+|----------|--------|
+| Nastran | MSC Nastran analysis (run or reuse results), HDF5 results, eigenvalues, f06 tables (effective mass, grid point weight) |
+| Table | Read Excel/CSV, constants, select/rename, filter, sort, computed column, envelope, join, stack, load case table, pick value, convert/set units |
+| Loads / checks | Fastener loads (tension/shear), requirement check |
+| Python | Your own `run(...)` function in a `.py` file, with templates |
+| Figures | **Graph**: line, scatter, bar, horizontal bar, step, area, histogram and box plots from a table, with series per load case, reference lines and highlighting, sized for the report |
+| Output | Write Excel, write CSV, Word report |
+
 ## Configuration
 
 The GUI opens in a Chrome or Edge app window (no tabs or address bar). It is a separate

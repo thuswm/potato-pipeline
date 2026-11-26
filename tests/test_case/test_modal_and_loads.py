@@ -51,7 +51,7 @@ def test_pipeline_file_is_what_the_generator_writes():
 def test_whole_pipeline_runs(outcome):
     _, result = outcome
     assert result.ok
-    assert len(result.results) == 15
+    assert len(result.results) == 17
 
 
 def test_the_analyses_check_their_f06_files(outcome):
@@ -167,6 +167,9 @@ def test_word_report(outcome):
         "higher than 20.0 Hz" in t and "factor on the CBUSH loads is 1.50" in t for t in text
     )
     assert any("Unit system SI" in t for t in text)
+    # The two graphs (spec 13 §3.6), placed at their own width of 16 cm.
+    assert [round(shape.width.cm) for shape in doc.inline_shapes] == [16, 16]
+    assert any(t.endswith(": Translational effective mass per mode") for t in text)
     headings = [p.text for p in doc.paragraphs if p.style.name.startswith("Heading")]
     assert headings == [
         "1 Introduction",
@@ -250,6 +253,8 @@ def test_second_run_takes_unchanged_blocks_from_the_cache(tmp_path):
         "local_forces",
         "global_margins",
         "local_margins",
+        "mass_graph",
+        "margins_graph",
     }  # the report and the workbook always run
 
 

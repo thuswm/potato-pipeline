@@ -912,8 +912,52 @@ def test_report_editor_refuses_a_name_in_use_and_flags_missing_items(page):
 
 
 @pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
+def test_graph_panel_fields_per_kind_and_live_preview(page, workdir: Path):
+    """Spec 13 §3.5: plot type buttons, fields per type, reference lines, live preview."""
+    run_all(page)
+    select(page, "Global margins graph")
+    kinds = page.locator(".apb-graph-kind")
+    assert kinds.count() == 8
+    assert page.locator(".apb-graph-kind-chosen").get_attribute("aria-label") == "Bar"
+    assert page.get_by_label("Bar labels").count() == 1
+    assert page.locator(".apb-reference-value input").input_value() == "0.0"
+    # Another type: fields of bars go, the sort switch of lines comes (under Advanced).
+    page.get_by_role("button", name="Line", exact=True).click()
+    page.wait_for_timeout(500)
+    assert page.locator(".apb-graph-kind-chosen").get_attribute("aria-label") == "Line"
+    assert page.get_by_label("Bar labels").count() == 0
+    page.get_by_role("button", name="Bar", exact=True).click()
+    page.wait_for_timeout(500)
+
+    # Live preview: a change re-runs only this block, without a notification.
+    image = page.locator(".q-tab-panels img").first
+    expect(image).to_be_visible()
+    before = image.get_attribute("src")
+    box = page.get_by_label("Y axis label")
+    box.fill("Margin of safety")
+    box.blur()
+    page.wait_for_timeout(2500)
+    assert page.locator(".q-tab-panels img").first.get_attribute("src") != before
+    assert page.locator(".q-notification", has_text="Run finished").count() <= 1  # only Run all
+    # Only the graph ran; what uses it (the report) is now out of date, nothing else.
+    assert "apb-state-done" in node(page, "Global margins graph").get_attribute("class")
+    assert "apb-state-stale" in node(page, "Test case report").get_attribute("class")
+    stale = page.locator(".drawflow-node.apb-state-stale")
+    assert stale.count() == 1
+
+    page.get_by_role("button", name="Add line").click()
+    page.wait_for_timeout(400)
+    assert page.locator(".apb-reference-line").count() == 2
+    save_file(page)
+    saved = json.loads((workdir / "test_case.apb.json").read_text(encoding="utf-8"))
+    graph = next(b for b in saved["blocks"] if b["id"] == "margins_graph")
+    assert graph["params"]["y_label"] == "Margin of safety"
+    assert len(graph["params"]["reference_lines"]) == 2
+
+
+@pytest.mark.parametrize("server", ["test_case.apb.json"], indirect=True)
 def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
-    assert counts(page) == (15, 27)
+    assert counts(page) == (17, 31)
     assert node(page, "Frequency requirement").locator(".apb-sub").inner_text() == (
         "Requirement check"
     )
@@ -951,6 +995,8 @@ def test_test_case_pipeline_runs_in_the_gui(page, workdir: Path):
         "min_ms_global",
         "local_margins",
         "nastran_messages",
+        "mass_plot",
+        "margins_plot",
     ]
     assert page.locator(".apb-unused").count() == 0
     assert page.locator(".apb-section-warning:visible").count() == 0
@@ -990,7 +1036,7 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 
     reopen(page, server)
     assert states(page) == {"apb-state-done"}  # recognised as run, nothing was run
-    assert "Stored outputs found for 15 of 15 blocks" in log_text(page)
+    assert "Stored outputs found for 17 of 17 blocks" in log_text(page)
     assert not (workdir / "output" / "x").exists()
 
     select(page, "Frequency requirement")
@@ -1009,7 +1055,7 @@ def test_reopened_pipeline_shows_stored_results_without_running(page, server, wo
 
     # Run: the blocks that are up to date come from the store; the writers run again.
     run_all(page)
-    assert "13 up to date" in log_text(page)
+    assert "15 up to date" in log_text(page)
     assert states(page) == {"apb-state-done"}
 
 
@@ -1044,7 +1090,7 @@ def test_clear_output_of_a_block_clears_everything_downstream(page, workdir: Pat
     page.get_by_role("button", name="Clear output").click()
     dialog = page.locator(".q-dialog")
     assert "Clear the stored output of 'Global margins'" in dialog.inner_text()
-    assert "downstream: Test case report" in dialog.inner_text()
+    assert "downstream: Global margins graph, Test case report" in dialog.inner_text()
     dialog.get_by_role("button", name="Clear", exact=True).click()
     page.wait_for_timeout(1000)
     assert state_of(page, "Global margins") == "idle"
@@ -1068,9 +1114,9 @@ def test_stored_outputs_dialog_and_clear_all(page, workdir: Path):
     dialog = page.locator(".q-dialog")
     folder = dialog.locator(".apb-stored-folder").inner_text().replace("\\", "/")
     assert ".apb/test_case" in folder
-    assert "15 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
+    assert "17 block(s)" in dialog.locator(".apb-stored-facts").inner_text()
     dialog.get_by_role("button", name="Clear all…").click()
-    page.wait_for_selector("text=Delete the stored outputs of 15 block(s)")
+    page.wait_for_selector("text=Delete the stored outputs of 17 block(s)")
     page.get_by_role("button", name="Clear all", exact=True).click()
     page.wait_for_timeout(1000)
     assert {state_of(page, n) for n in ("Modal results", "Global margins", "Test case report")} == {
@@ -1387,7 +1433,7 @@ def test_constants_panel_edit_add_rename_delete(page, workdir: Path):
     name.press("Enter")
     page.wait_for_timeout(600)
     assert page.get_by_text("Renamed SF to SF_ult").first.is_visible()
-    assert counts(page) == (15, 27)
+    assert counts(page) == (17, 31)
 
     # Delete the unused constant (no question asked), then save.
     constant_row(page, 2).locator(".apb-constant-delete").click()
@@ -1419,7 +1465,7 @@ def test_deleting_a_used_constant_asks_first(page):
     page.locator(".q-dialog").get_by_role("button", name="Delete").click()
     page.wait_for_timeout(500)
     assert page.locator(".apb-constant-row").count() == 1
-    assert counts(page) == (15, 25)  # its two connectors are gone
+    assert counts(page) == (17, 29)  # its two connectors are gone
 
 
 def test_report_side_panel_summary_and_editor_tabs(page):

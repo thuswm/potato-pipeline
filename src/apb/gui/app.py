@@ -19,6 +19,7 @@ import pandas as pd
 from nicegui import app, core, run, ui
 
 from apb import __version__
+from apb.blocks.figures.graph import Graph
 from apb.blocks.nastran import h5reader
 from apb.blocks.nastran.analysis import NastranRun
 from apb.blocks.nastran.blocks import Hdf5Results
@@ -27,7 +28,7 @@ from apb.blocks.report import editing as report_editing
 from apb.blocks.report.block import WordReport
 from apb.blocks.table.constants import Constants
 from apb.blocks.table.readers import ReadExcel, sheet_list
-from apb.engine.events import EventKind, RunEvent
+from apb.engine.events import BlockState, EventKind, RunEvent
 from apb.engine.graph import ValidationIssue, prepare
 from apb.engine.registry import BlockRegistry, default_registry
 from apb.engine.store import StoreError, format_size
@@ -39,6 +40,7 @@ from apb.gui.constants_panel import ConstantsPanel
 from apb.gui.editor import ConnectionKey, EditError, EditorState
 from apb.gui.filedialog import FileDialog, confirm
 from apb.gui.forms import ParamForm, short_path
+from apb.gui.graph_panel import GraphPanel
 from apb.gui.nastran_panel import PEEK_ROWS, Hdf5ResultsPanel
 from apb.gui.preview import open_with_system, show_result, show_value, stored_time
 from apb.gui.python_panel import PythonPanel
@@ -46,6 +48,9 @@ from apb.gui.report_editor import ReportPanel
 from apb.gui.runner import EVENT_STATES, RunController, describe_value, summary
 from apb.gui.user_settings import UserSettingsDialog
 from apb.units import Quantity, UnitSystem
+
+LIVE_PREVIEW_DELAY_S = 0.5
+"""Delay after the last change before a live preview run (spec 13 §3.5)."""
 
 HEADER_HEIGHT = 52
 
@@ -395,6 +400,16 @@ class EditorPage:
                 ports_editor.build()
                 self._ports_section(block, editor=ports_editor.build_ports)
                 return
+            elif cls is Graph:  # plot type buttons, fields per type (spec 13 §3.5)
+                GraphPanel(
+                    block.params,
+                    on_change=lambda name, value: self._set_graph_param(block.id, name, value),
+                    columns=lambda ports: self._input_columns(block.id, ports),
+                    references=lambda: [
+                        i.name for i in self.state.item_infos(block.id, "reference")
+                    ],
+                    rebuild=self._show_panel,
+                ).build()
             elif cls is Constants:  # constants table (spec 03 §3.5.3)
                 ConstantsPanel(
                     block.params,
@@ -561,6 +576,41 @@ class EditorPage:
         )
         self._show_issues()
         return changes
+
+    def _set_graph_param(self, block_id: str, name: str, value: Any) -> None:
+        """Store a Graph parameter and refresh its preview (spec 13 §3.5, GR-10)."""
+        self._set_param(block_id, name, value)
+        self._schedule_live_preview(block_id)
+
+    def _schedule_live_preview(self, block_id: str) -> None:
+        """Re-run one block shortly after the last change, if only it would run.
+
+        The run starts 0.5 s after the last change (typing does not start a run per key)
+        and only when every block it depends on is up to date, so a change never starts
+        an analysis or a long chain of blocks.
+        """
+        timer: ui.timer | None = getattr(self, "_live_timer", None)
+        if timer is not None:
+            timer.cancel()
+
+        async def run() -> None:
+            self._live_timer: ui.timer | None = None
+            if self.selected == block_id and self._live_ready(block_id):
+                await self.run_pipeline(block_id, quiet=True)
+
+        self._live_timer = ui.timer(LIVE_PREVIEW_DELAY_S, run, once=True)
+
+    def _live_ready(self, block_id: str) -> bool:
+        """Return whether running ``block_id`` would run only that block."""
+        if self.runner.running:
+            return False
+        try:
+            graph = prepare(self.state.pipeline, self.state.registry)
+            states = self.runner.executor.states(self.state.pipeline, self.state.base_dir)
+        except Exception:  # an invalid pipeline: no live preview
+            return False
+        needed = graph.upstream(block_id) - {block_id}
+        return bool(needed) and all(states.get(b) is BlockState.DONE for b in needed)
 
     def _set_param(self, block_id: str, name: str, value: Any) -> None:
         block = self.state.pipeline.block(block_id)
@@ -1026,8 +1076,13 @@ class EditorPage:
 
     # ---- run --------------------------------------------------------------------------------
 
-    async def run_pipeline(self, until: str | None) -> None:
-        """Run the whole pipeline, or the blocks needed for ``until`` (GUI-08)."""
+    async def run_pipeline(self, until: str | None, *, quiet: bool = False) -> None:
+        """Run the whole pipeline, or the blocks needed for ``until`` (GUI-08).
+
+        Args:
+            until: Run only the blocks needed for this block; ``None`` = all.
+            quiet: A live preview run: no notification and no log line when it succeeds.
+        """
         if self.runner.running:
             return
         if self.state.path is None:
@@ -1057,8 +1112,11 @@ class EditorPage:
             ui.notify("The pipeline has problems: see the log", type="negative")
             return
         text, kind = summary(outcome)
-        self._log(text, "ok" if kind == "positive" else "warn" if kind == "warning" else "error")
-        ui.notify(text, type=kind)
+        if not (quiet and kind == "positive"):
+            self._log(
+                text, "ok" if kind == "positive" else "warn" if kind == "warning" else "error"
+            )
+            ui.notify(text, type=kind)
         self._states_dirty = True
         self._render_stored()
         panel = getattr(self, "analysis_panel", None)

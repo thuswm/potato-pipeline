@@ -41,7 +41,7 @@ def build() -> PipelineModel:
     p.variables.update({"doc_number": "APB-TC-001", "revision": "A"})
 
     def block(
-        type_id: str, block_id: str, label: str, x: float, y: float, **params: object
+        type_id: str, block_id: str, label: str, x: float, y: float, /, **params: object
     ) -> None:
         inst = p.add_block(type_id, block_id=block_id, label=label, **params)
         inst.position = (x + (0 if type_id == "nastran.run" else SHIFT), y)
@@ -155,6 +155,37 @@ def build() -> PipelineModel:
     for case in ("modal", "global", "local"):
         p.connect(f"{case}_run.messages", "msgs.tables")
 
+    # Graphs for the report (spec 13 §3.6)
+    block(
+        "figure.graph",
+        "mass_graph",
+        "Effective mass graph",
+        620,
+        200,
+        kind="bar",
+        x="MODE",
+        y=["T1", "T2", "T3"],
+        y_label="Effective mass [kg]",
+        height_cm=7.0,
+    )
+    p.connect("modal.table", "mass_graph.table")
+    block(
+        "figure.graph",
+        "margins_graph",
+        "Global margins graph",
+        940,
+        560,
+        kind="bar",
+        x="EID",
+        y=["MS"],
+        series_by="LOCATION",
+        reference_lines=[{"axis": "y", "value": 0.0, "label": "MS = 0", "style": "dashed"}],
+        bar_labels="0.00",
+        highlight_below=0.0,
+        height_cm=7.0,
+    )
+    p.connect("global_margins.margins", "margins_graph.table")
+
     # Report
     sections: list[dict[str, object]] = [
         {"kind": "title"},
@@ -193,6 +224,7 @@ def build() -> PipelineModel:
             "formats": {"FREQUENCY": "0.00"},
             "default_format": "0.0",
         },
+        {"kind": "figure", "item": "mass_plot", "caption": "Translational effective mass per mode"},
         {"kind": "heading", "text": "3 Global loads"},
         {
             "kind": "paragraph",
@@ -206,6 +238,11 @@ def build() -> PipelineModel:
             "columns": MARGIN_COLUMNS,
             "formats": MARGIN_FORMATS,
             "highlight": "MS < 0",
+        },
+        {
+            "kind": "figure",
+            "item": "margins_plot",
+            "caption": "Global loads: margin of safety per CBUSH and location",
         },
         {"kind": "paragraph", "text": "Minimum margin of safety: {min_ms_global:.2f}."},
         {"kind": "heading", "text": "4 Local loads"},
@@ -264,6 +301,8 @@ def build() -> PipelineModel:
         ("global_margins.min_ms", "min_ms_global"),
         ("local_margins.margins", "local_margins"),
         ("msgs.table", "nastran_messages"),
+        ("mass_graph.figure", "mass_plot"),
+        ("margins_graph.figure", "margins_plot"),
     ):
         p.connect(source, "report.items", name=name)
     for number, connection in enumerate(p.connections, start=1):

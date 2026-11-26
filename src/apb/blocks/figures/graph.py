@@ -96,7 +96,7 @@ class GraphParams(BaseModel):
         description="One series per value of this column, e.g. SUBCASE; empty = none",
         json_schema_extra={"apb_columns": "table"},
     )
-    stacked: bool = Field(default=False, description="Stack the series (bar, area)")
+    stacked: bool = Field(default=False, description="Stack the series (bar, area, histogram)")
     bins: int | None = Field(
         default=None, ge=1, le=500, description="Number of bins (histogram); empty = automatic"
     )

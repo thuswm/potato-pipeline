@@ -27,10 +27,10 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 - [x] 4. **Axes and annotations:** log axes, limits, grid, legend position, reference lines
       (value typed or from a connected scalar), bar labels with a number format,
       highlighting of bars below a limit.
-- [ ] 5. **Panel:** kind as icon buttons, only the fields of the chosen kind, column
+- [x] 5. **Panel:** kind as icon buttons, only the fields of the chosen kind, column
       drop-downs, reference line rows; live preview: a change re-runs only this block
       from its stored input (debounced). Browser tests.
-- [ ] 6. **Example:** the test case pipeline gets two graphs in the report: effective mass
+- [x] 6. **Example:** the test case pipeline gets two graphs in the report: effective mass
       fraction per mode (bars) and CBUSH margins per fastener and load case with `MS = 0`.
       README: the Graph block in the block list.
 

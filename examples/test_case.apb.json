@@ -282,6 +282,58 @@
       "notes": ""
     },
     {
+      "id": "mass_graph",
+      "type_id": "figure.graph",
+      "type_version": 1,
+      "label": "Effective mass graph",
+      "params": {
+        "kind": "bar",
+        "x": "MODE",
+        "y": [
+          "T1",
+          "T2",
+          "T3"
+        ],
+        "y_label": "Effective mass [kg]",
+        "height_cm": 7.0
+      },
+      "position": [
+        910.0,
+        200.0
+      ],
+      "notes": ""
+    },
+    {
+      "id": "margins_graph",
+      "type_id": "figure.graph",
+      "type_version": 1,
+      "label": "Global margins graph",
+      "params": {
+        "kind": "bar",
+        "x": "EID",
+        "y": [
+          "MS"
+        ],
+        "series_by": "LOCATION",
+        "reference_lines": [
+          {
+            "axis": "y",
+            "value": 0.0,
+            "label": "MS = 0",
+            "style": "dashed"
+          }
+        ],
+        "bar_labels": "0.00",
+        "highlight_below": 0.0,
+        "height_cm": 7.0
+      },
+      "position": [
+        1230.0,
+        560.0
+      ],
+      "notes": ""
+    },
+    {
       "id": "report",
       "type_id": "report.word",
       "type_version": 1,
@@ -359,6 +411,11 @@
             "default_format": "0.0"
           },
           {
+            "kind": "figure",
+            "item": "mass_plot",
+            "caption": "Translational effective mass per mode"
+          },
+          {
             "kind": "heading",
             "text": "3 Global loads"
           },
@@ -384,6 +441,11 @@
               "MS": "0.00"
             },
             "highlight": "MS < 0"
+          },
+          {
+            "kind": "figure",
+            "item": "margins_plot",
+            "caption": "Global loads: margin of safety per CBUSH and location"
           },
           {
             "kind": "paragraph",
@@ -648,13 +710,37 @@
         "port": "table"
       },
       "target": {
+        "block": "mass_graph",
+        "port": "table"
+      },
+      "name": ""
+    },
+    {
+      "id": "c18",
+      "source": {
+        "block": "global_margins",
+        "port": "margins"
+      },
+      "target": {
+        "block": "margins_graph",
+        "port": "table"
+      },
+      "name": ""
+    },
+    {
+      "id": "c19",
+      "source": {
+        "block": "modal",
+        "port": "table"
+      },
+      "target": {
         "block": "report",
         "port": "items"
       },
       "name": "effective_mass"
     },
     {
-      "id": "c18",
+      "id": "c20",
       "source": {
         "block": "f1",
         "port": "value"
@@ -666,7 +752,7 @@
       "name": "f1"
     },
     {
-      "id": "c19",
+      "id": "c21",
       "source": {
         "block": "const",
         "port": "f_min"
@@ -678,7 +764,7 @@
       "name": ""
     },
     {
-      "id": "c20",
+      "id": "c22",
       "source": {
         "block": "const",
         "port": "table"
@@ -690,7 +776,7 @@
       "name": "constants"
     },
     {
-      "id": "c21",
+      "id": "c23",
       "source": {
         "block": "req",
         "port": "result"
@@ -702,7 +788,7 @@
       "name": "requirement"
     },
     {
-      "id": "c22",
+      "id": "c24",
       "source": {
         "block": "req",
         "port": "status"
@@ -714,7 +800,7 @@
       "name": "req_status"
     },
     {
-      "id": "c23",
+      "id": "c25",
       "source": {
         "block": "const",
         "port": "SF"
@@ -726,7 +812,7 @@
       "name": ""
     },
     {
-      "id": "c24",
+      "id": "c26",
       "source": {
         "block": "global_margins",
         "port": "margins"
@@ -738,7 +824,7 @@
       "name": "global_margins"
     },
     {
-      "id": "c25",
+      "id": "c27",
       "source": {
         "block": "global_margins",
         "port": "min_ms"
@@ -750,7 +836,7 @@
       "name": "min_ms_global"
     },
     {
-      "id": "c26",
+      "id": "c28",
       "source": {
         "block": "local_margins",
         "port": "margins"
@@ -762,7 +848,7 @@
       "name": "local_margins"
     },
     {
-      "id": "c27",
+      "id": "c29",
       "source": {
         "block": "msgs",
         "port": "table"
@@ -772,6 +858,30 @@
         "port": "items"
       },
       "name": "nastran_messages"
+    },
+    {
+      "id": "c30",
+      "source": {
+        "block": "mass_graph",
+        "port": "figure"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "mass_plot"
+    },
+    {
+      "id": "c31",
+      "source": {
+        "block": "margins_graph",
+        "port": "figure"
+      },
+      "target": {
+        "block": "report",
+        "port": "items"
+      },
+      "name": "margins_plot"
     }
   ],
   "macros": []
