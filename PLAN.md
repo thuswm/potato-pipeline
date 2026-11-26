@@ -40,7 +40,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       perspective both available (orthographic default); basic coordinate system only to
       start; elements CQUAD4, CBUSH, RBE2, CONM2 **plus boundary conditions** (SPC/SPC1,
       GRID `PS`) as symbols.
-- [ ] 8. **Architecture rules for separable packages** (spec 00, short new section): a
+- [x] 8. **Architecture rules for separable packages** (spec 00, short new section): a
       tool package (`apb.femview`, later the data processing tool) imports nothing from
       `apb.engine`/`apb.gui`, exchanges data through plain types/files, and plugs into the
       pipeline through a block package. Only the rules needed by spec 14 now; the

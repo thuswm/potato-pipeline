@@ -176,6 +176,39 @@ docs/spec/
 examples/          # example pipelines + small test .h5 files
 ```
 
+### 6.1 Tool packages that can be split off (round 7, 2026-11-26)
+
+The helper tools of the roadmap (FE view / mesh viewer, data processing tool, figure tool,
+document generator, dashboard) may start inside this repository, but each must be able to
+move to a package of its own later without a rewrite (user decision 2026-11-22). The rules,
+needed now by the FE view (spec 14), are:
+
+1. **One subpackage per tool**, directly under `apb` (e.g. `apb.femview`), not under
+   `apb.blocks` or `apb.gui`.
+2. **No imports from the pipeline.** A tool package imports nothing from `apb.engine`,
+   `apb.blocks` or `apb.gui`. It may use only small shared modules without pipeline
+   knowledge: `apb.units` and `apb.figures`. When the tool moves out, these go with it or
+   become a small shared package.
+3. **Plain data at the boundary.** Functions take and return standard types: NumPy arrays,
+   pandas DataFrames, PNG bytes, paths, Pydantic models defined in the tool package. No
+   `Block`, `RunContext` or NiceGUI objects.
+4. **The pipeline uses the tool through a block package** (e.g. `apb.blocks.fem`) and the
+   GUI through its own module (e.g. `apb.gui.femview_editor`). Only these two import the
+   tool. After a split, the block package is registered with the `apb.blocks` entry point
+   (spec 01), so the pipeline does not change.
+5. **Dependencies of a tool** (e.g. PyVista for the FE view) are imported only inside the
+   tool package, never at the start of the engine or the GUI, so they cost nothing until
+   used.
+6. **Tests of a tool** need no pipeline: they call the tool's functions directly. The block
+   package has its own, separate tests.
+7. **A check in the test suite** imports every tool package and fails if it loads
+   `apb.engine`, `apb.blocks` or `apb.gui` (rule 2), so a boundary is not broken by
+   accident.
+
+Not covered yet (with the data processing tool, round 9): a proposal per tool (inside or
+separate, own GUI or panel), and whether the HDF5 viewer (spec 10), which today uses
+`apb.blocks.nastran`, should follow the same rules.
+
 ## 7. Version 1 — definition of done
 
 An analyst can, in the browser:

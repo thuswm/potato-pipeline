@@ -50,7 +50,7 @@ src/apb/blocks/fem/view.py   # the block (uses apb.femview only)
 src/apb/gui/femview_editor.py # the view dialog
 ```
 
-`apb.femview` reuses nothing from the GUI. That way the *mesh viewer* from the list of
+`apb.femview` follows the rules for separable tool packages (spec 00 §6.1): it imports nothing from the engine, the blocks or the GUI. That way the *mesh viewer* from the list of
 helper tools can later be built on it as a standalone tool.
 
 ### 3.2 Reading the model (FV-01, FV-02)
