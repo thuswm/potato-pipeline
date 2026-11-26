@@ -1,0 +1,62 @@
+name: FE view prototype
+
+# Round 7 step 9 (spec 14 §3.4): can PyVista render off-screen on the CI machines, and
+# what does it need? Throwaway: removed when the FE view block has its own tests (round 8).
+# PyVista is installed next to the locked environment, so uv.lock does not change.
+
+on:
+  push:
+    branches: ["test/**"]
+  workflow_dispatch:
+
+jobs:
+  render:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv venv proto
+      - name: Install pyvista
+        shell: bash
+        run: |
+          PY=proto/bin/python; [ -x "$PY" ] || PY=proto/Scripts/python.exe
+          uv pip install --python "$PY" pyvista h5py
+          echo "PY=$PY" >> "$GITHUB_ENV"
+      - name: Render (plain)
+        id: plain
+        continue-on-error: true
+        shell: bash
+        run: $PY -I tools/prototypes/femview_render.py examples/fem/modal.h5 out/plain
+      - name: Render (xvfb, Linux)
+        id: xvfb
+        if: steps.plain.outcome == 'failure' && runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          sudo apt-get install -y xvfb libgl1 > /dev/null
+          xvfb-run -a $PY -I tools/prototypes/femview_render.py examples/fem/modal.h5 out/xvfb
+      - name: Render (OSMesa software rendering)
+        id: osmesa
+        if: steps.plain.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          uv pip install --python "$PY" --reinstall --extra-index-url https://wheels.vtk.org vtk-osmesa
+          $PY -I tools/prototypes/femview_render.py examples/fem/modal.h5 out/osmesa
+      - name: Summary
+        shell: bash
+        run: |
+          echo "plain=${{ steps.plain.outcome }} xvfb=${{ steps.xvfb.outcome }} osmesa=${{ steps.osmesa.outcome }}" | tee -a "$GITHUB_STEP_SUMMARY"
+          du -sh proto 2>/dev/null | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: femview-${{ matrix.os }}
+          path: out/
+          if-no-files-found: ignore
