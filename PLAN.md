@@ -19,12 +19,12 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       used by the Graph block and offered to Python scripts (`house_style()`); the Python
       *Plot* template uses it. Figures carry their width (`apb_width_cm`), which the
       report figure section uses as its default width.
-- [ ] 3. **Block `figure.graph`**, category *Figures*: line, scatter, bar (grouped /
+- [x] 3. **Block `figure.graph`**, category *Figures*: line, scatter, bar (grouped /
       stacked), horizontal bar, step, area, histogram, box; X, Y columns, *Series by*;
       axis labels from the units; mass in kg. Checks before the run (columns exist,
       numeric Y, positive values on log axes). Tests per plot type (image produced, axes,
       labels, legend entries), no image comparison.
-- [ ] 4. **Axes and annotations:** log axes, limits, grid, legend position, reference lines
+- [x] 4. **Axes and annotations:** log axes, limits, grid, legend position, reference lines
       (value typed or from a connected scalar), bar labels with a number format,
       highlighting of bars below a limit.
 - [ ] 5. **Panel:** kind as icon buttons, only the fields of the chosen kind, column

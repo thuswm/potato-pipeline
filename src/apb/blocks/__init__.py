@@ -10,6 +10,7 @@ from apb.engine.block import Block
 def builtin_blocks() -> list[type[Block[Any]]]:
     """Return all block types shipped with the tool."""
     from apb.blocks.check.requirement import BLOCKS as CHECK
+    from apb.blocks.figures.graph import BLOCKS as GRAPH
     from apb.blocks.loads.fastener import BLOCKS as FASTENER
     from apb.blocks.nastran.analysis import BLOCKS as ANALYSIS
     from apb.blocks.nastran.blocks import BLOCKS as NASTRAN
@@ -36,6 +37,7 @@ def builtin_blocks() -> list[type[Block[Any]]]:
         *FASTENER,
         *CHECK,
         *PYTHON,
+        *GRAPH,
         *EXCEL,
         *CSV,
         *REPORT,

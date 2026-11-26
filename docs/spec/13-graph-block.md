@@ -55,7 +55,7 @@ spec 14). Library: **matplotlib** (already a dependency, renders headless with `
 | `markers` | bool | line, step | true when ≤ 30 points |
 | `sort_x` | bool | line, step, area | true |
 | `title` | text | all | empty (the report caption is the usual title) |
-| `x_label`, `y_label` | text | all | `column [unit]`; several Y columns with the same unit: `unit` only |
+| `x_label`, `y_label` | text, for the horizontal / vertical axis (for horizontal bars the values are on the horizontal axis) | all | `column [unit]`; several Y columns with one unit: `A, B [unit]` |
 | `legend` | `auto`, `off`, `inside`, `below` | all | `auto` (shown when there is more than one series) |
 | `x_scale`, `y_scale` | `linear`, `log` | all | `linear` |
 | `x_min`, `x_max`, `y_min`, `y_max` | number or empty | all | empty = automatic |
@@ -75,11 +75,14 @@ and the first bad row).
 
 - **Several Y columns, no *Series by*:** one series per Y column (legend = column name).
 - ***Series by* set:** the table is grouped by that column; one series per group and Y
-  column (legend = group value, or `group – column` when there are several Y columns).
+  column (legend = group value, or `group - column` when there are several Y columns).
   Groups keep the order of first appearance; at most 20 series (more → error suggesting a
   filter), to keep the plot readable.
 - **Text X column (bar/barh/box):** categories in table order (e.g. `EID` as text).
 - **Bar, grouped:** bars side by side per category; **stacked**: on top of each other.
+- **Bars need one value per category and series:** an X column with repeated values and no
+  *Series by* (e.g. `EID` over several subcases) is refused with a hint to set *Series by*.
+- Whole-number X columns (`MODE`, `SUBCASE`) and histogram counts get whole-number ticks.
 
 ### 3.4 Style (GR-09)
 
