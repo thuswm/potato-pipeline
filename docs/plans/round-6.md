@@ -1,8 +1,6 @@
 # PLAN — round 6 (2026-11-23)
 
-Status: steps 1–20 done (15–20 approved 2026-11-24); steps 21–23 (second Windows re-test,
-2026-11-26) **approved 2026-11-26** (mass: kg in the writers; re-test before release)
-(ports stay the master, step 18). In progress. Completed plans are archived in `docs/plans/`.
+Status: **complete** (released as 0.2.0 on 2026-11-26). Completed plans are archived in `docs/plans/`.
 
 Release at the end of the round: **0.2.0** (spec 12).
 
@@ -168,7 +166,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## I. Release
 
-- [ ] 24. Release 0.2.0: changelog, version, tag, push to `main`, delete `test/round-6`,
+- [x] 24. Release 0.2.0 (2026-11-26; Windows re-test of 21–23 skipped at the user's request): changelog, version, tag, push to `main`, delete `test/round-6`,
       and a **GitHub release** (`gh release create v0.2.0`, notes from the changelog). CI
       on `test/round-6` first, then a short re-test on Windows by the user.
       CI on `test/round-6`: green 2026-11-24 (run 45430513168, Windows + Linux, 3.12 + 3.13).
