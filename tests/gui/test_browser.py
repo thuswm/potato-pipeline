@@ -175,8 +175,7 @@ def test_add_connect_reject_delete_save(page, workdir: Path):
     # Save via File > Save writes the file and clears the unsaved marker.
     page.get_by_role("button", name="File", exact=True).click()
     page.get_by_text("Save", exact=True).click()
-    page.wait_for_timeout(500)
-    assert "*" not in page.locator(".q-header").inner_text()
+    expect(page.locator(".q-header")).not_to_contain_text("*", timeout=10000)
     saved = json.loads((workdir / "fastener_loads.apb.json").read_text(encoding="utf-8"))
     assert len(saved["blocks"]) == 16 and len(saved["connections"]) == 24
 
