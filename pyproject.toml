@@ -1,6 +1,6 @@
 [project]
 name = "analysis-pipeline-builder"
-version = "0.2.0"
+version = "0.3.0.dev0"
 description = "Potato Pipeline: graphical pipeline builder for structural analysis, from Nastran results to Word report."
 readme = "README.md"
 authors = [{ name = "thuswm" }]
