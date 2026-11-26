@@ -133,7 +133,9 @@ dpi=…)` method that reports and the preview use. It is *not* a live matplotlib
 Python block that receives it can write it again but not draw into it. Because a Python
 block can also keep its figure only in memory, nothing breaks: a block that has a figure
 output and runs in the current session gives the live figure to its successors; only
-blocks restored from the store give the image.
+blocks restored from the store give the image. A figure made for a size in the report
+(`apb_width_cm`, spec 13 §3.4) keeps that width in its description (`"width_cm"`), so a
+restored figure is placed at the same width.
 
 **Not stored (STO-10):** values the formats above cannot hold; failed, skipped or stopped
 blocks (there is nothing valid to store); blocks of an unknown type.

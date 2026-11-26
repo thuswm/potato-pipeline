@@ -126,19 +126,20 @@ TEMPLATES: dict[str, ScriptTemplate] = {
             "A bar chart of one table column, ready for the report.",
             inputs=(PortRole("table", PortType.TABLE),),
             outputs=(PortRole("plot", PortType.FIGURE),),
-            imports=("import matplotlib.pyplot as plt", "import pandas as pd"),
+            imports=("import pandas as pd", "", "from apb.figures import house_style, new_figure"),
             summary="Plot one column of the table as a bar chart.",
             body="""\
-    # The column to plot: edit this line.
+    # The column to plot: edit this line. (For standard plots, the Graph block needs no code.)
     column = "SHEAR"
 
     labels = @table@["EID"].astype(str) if "EID" in @table@.columns else @table@.index.astype(str)
     unit = @table@.attrs.get("units", {}).get(column, "")
-    fig, ax = plt.subplots(figsize=(6, 3.5))
-    ax.bar(labels, @table@[column])
-    ax.set_ylabel(f"{column} [{unit}]" if unit else column)
-    ax.grid(True, axis="y", alpha=0.3)
-    fig.tight_layout()
+    with house_style():  # the look of all figures; 16 x 9 cm is its size in the report
+        fig = new_figure(16, 9)
+        ax = fig.subplots()
+        ax.bar(labels, @table@[column])
+        ax.set_ylabel(f"{column} [{unit}]" if unit else column)
+        ax.grid(False, axis="x")  # bars: horizontal grid lines only
     @plot@ = fig
 """,
         ),

@@ -303,3 +303,22 @@ def test_mass_in_kg_in_report_tables():
     assert table_text(kg)[0] == ["DIRECTION", "MASS [kg]"] and table_text(kg)[1][1] == "12.5"
     assert table_text(tonne)[0] == ["DIRECTION", "MASS [t]"]
     assert any(p.text.endswith("masses in t (kg in the tables).") for p in doc.paragraphs)
+
+
+def test_figure_section_uses_the_figure_size_when_empty():
+    from apb.figures import new_figure
+
+    fig = new_figure(8, 5, dpi=100)
+    fig.subplots().plot([0, 1], [0, 1])
+    builder = ReportBuilder({"plot": fig}, {})
+    doc = builder.build(
+        SECTIONS.validate_python(
+            [
+                {"kind": "figure", "item": "plot"},
+                {"kind": "figure", "item": "plot", "width_cm": 12},
+            ]
+        )
+    )
+    own, set_ = doc.inline_shapes
+    assert round(own.width.cm, 2) == 8.0
+    assert round(set_.width.cm, 2) == 12.0

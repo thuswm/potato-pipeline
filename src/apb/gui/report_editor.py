@@ -448,8 +448,12 @@ class ReportPanel:
                 case "figure":
                     self._item_select(index, kind)
                     self._text(index, "caption", "Caption")
-                    self._number(index, "width_cm", "Width [cm]", section.get("width_cm", 15.0))
-                    self._number(index, "dpi", "DPI", section.get("dpi", 200), integer=True)
+                    # Empty: the figure's own size (spec 13 §3.4).
+                    self._number(index, "width_cm", "Width [cm]", section.get("width_cm"))
+                    self._number(index, "dpi", "DPI", section.get("dpi"), integer=True)
+                    ui.label("Empty: the figure's own size (else 15 cm, 200 dpi)").classes(
+                        "text-[10px] text-slate-500"
+                    )
                 case "traceability":
                     self._text(index, "heading", "Heading", placeholders=False)
                 case _:

@@ -399,3 +399,14 @@ def test_format_size():
         "3.4 MB",
         "2.0 GB",
     ]
+
+
+def test_stored_figure_keeps_its_report_width(tmp_path):
+    from apb.figures import new_figure
+
+    fig = new_figure(12, 6, dpi=100)
+    fig.subplots().plot([0, 1], [1, 0])
+    back = roundtrip(fig, tmp_path)
+    assert back.apb_width_cm == 12.0
+    (tmp_path / "b").mkdir()
+    assert not hasattr(roundtrip(make_figure(), tmp_path / "b"), "apb_width_cm")

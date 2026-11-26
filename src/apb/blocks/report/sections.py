@@ -194,8 +194,12 @@ class FigureSection(_Section):
     kind: Literal["figure"] = "figure"
     item: str
     caption: str = ""
-    width_cm: float = Field(default=15.0, gt=0, le=30)
-    dpi: int = Field(default=200, ge=50, le=600)
+    width_cm: float | None = Field(
+        default=None, gt=0, le=30, description="Empty: the figure's own width, else 15 cm"
+    )
+    dpi: int | None = Field(
+        default=None, ge=50, le=600, description="Empty: the figure's own dpi, else 200"
+    )
 
 
 class PageBreakSection(_Section):

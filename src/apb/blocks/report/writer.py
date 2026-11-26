@@ -43,6 +43,7 @@ from apb.blocks.report.sections import (
     format_value,
     python_format,
 )
+from apb.figures.size import figure_dpi, figure_width_cm
 from apb.units import (
     MASS_IN_KG,
     Quantity,
@@ -58,6 +59,11 @@ HEADER_FILL = "D9D9D9"
 HIGHLIGHT_FILL = "FFC7CE"
 TABLE_FONT_SIZE = Pt(8.5)
 METADATA_KEYS = ("title", "document_number", "revision", "author", "date")
+
+DEFAULT_FIGURE_WIDTH_CM = 15.0
+"""Width of a figure in the report when neither section nor figure gives one."""
+DEFAULT_FIGURE_DPI = 200
+"""Resolution when neither section nor figure gives one."""
 
 
 class ReportError(ValueError):
@@ -348,10 +354,13 @@ class ReportBuilder:
 
     def _figure(self, section: FigureSection) -> None:
         fig = self._item(section.item, "figure", lambda v: hasattr(v, "savefig"))
+        # Empty fields: the size the figure was made for (spec 13 §3.4).
+        width = section.width_cm or figure_width_cm(fig) or DEFAULT_FIGURE_WIDTH_CM
+        dpi = section.dpi or figure_dpi(fig) or DEFAULT_FIGURE_DPI
         buffer = io.BytesIO()
-        fig.savefig(buffer, format="png", dpi=section.dpi, bbox_inches="tight")
+        fig.savefig(buffer, format="png", dpi=dpi, bbox_inches="tight")
         buffer.seek(0)
-        self.doc.add_picture(buffer, width=Cm(section.width_cm))
+        self.doc.add_picture(buffer, width=Cm(width))
         self.doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
         self._figures += 1
         self._caption(

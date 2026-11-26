@@ -66,6 +66,10 @@ Section kinds: `title` (title and a small metadata table), `heading` (level 1–
 `paragraph`, `value` (`label: value unit`), `table`, `figure`, `page_break`, `units`,
 `traceability`.
 
+Figure sections: `width_cm` and `dpi` are optional (round 7). Empty means the size the
+figure was made for (`apb_width_cm`, `apb_dpi`, set by the Graph block and by
+`apb.figures.new_figure`, spec 13 §3.4), else 15 cm and 200 dpi.
+
 `{name}` / `{name:format}` placeholders in text refer to connected scalar/text items and to
 the metadata fields (Python format-string syntax, evaluated safely — attribute access and
 indexing are not allowed; unknown names give an error listing the available ones).

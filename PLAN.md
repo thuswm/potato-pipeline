@@ -1,6 +1,6 @@
 # PLAN — round 7 (2026-11-26)
 
-Status: **proposal, awaiting approval**. Completed plans are archived in `docs/plans/`.
+Status: **approved 2026-11-26**, in progress. Completed plans are archived in `docs/plans/`.
 
 Release at the end of the round: **0.3.0** (spec 12).
 
@@ -15,7 +15,7 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 - [x] 1. **Spec 13 reviewed** 2026-11-26: house style only (no company style file now);
       default size 16 × 9 cm at **300 dpi**.
-- [ ] 2. **House style** `apb.figures.style` (fonts, Okabe–Ito colours, figure size in cm),
+- [x] 2. **House style** `apb.figures.style` (fonts, Okabe–Ito colours, figure size in cm),
       used by the Graph block and offered to Python scripts (`house_style()`); the Python
       *Plot* template uses it. Figures carry their width (`apb_width_cm`), which the
       report figure section uses as its default width.

@@ -71,11 +71,14 @@ class StoredFigure:
     Args:
         png: The stored PNG data.
         dpi: Resolution the PNG was rendered at.
+        width_cm: Width the figure was made for (``apb_width_cm``), if known.
     """
 
-    def __init__(self, png: bytes, dpi: int = FIGURE_DPI) -> None:
+    def __init__(self, png: bytes, dpi: int = FIGURE_DPI, width_cm: float | None = None) -> None:
         self._png = png
         self._dpi = dpi
+        if width_cm is not None:
+            self.apb_width_cm = float(width_cm)
 
     def savefig(
         self, fname: str | os.PathLike[str] | BinaryIO, *, format: str = "png", **kwargs: Any
@@ -214,7 +217,12 @@ def decode_value(desc: Mapping[str, Any], folder: Path) -> Any:
         if kind == "json":
             return desc["value"]
         if kind == "figure":
-            return StoredFigure((folder / desc["file"]).read_bytes(), int(desc["dpi"]))
+            width = desc.get("width_cm")
+            return StoredFigure(
+                (folder / desc["file"]).read_bytes(),
+                int(desc["dpi"]),
+                float(width) if width is not None else None,
+            )
     except StoreError:
         raise
     except (OSError, KeyError, ValueError, TypeError) as exc:
@@ -230,7 +238,12 @@ def _encode_figure(figure: Any, folder: Path, stem: str) -> Description:
         raise StoreError(f"the figure cannot be rendered: {exc}") from exc
     data = buffer.getvalue()
     (folder / f"{stem}.png").write_bytes(data)
-    return {"kind": "figure", "file": f"{stem}.png", "dpi": FIGURE_DPI, "bytes": len(data)}
+    desc: Description = {"kind": "figure", "file": f"{stem}.png", "dpi": FIGURE_DPI}
+    width = getattr(figure, "apb_width_cm", None)
+    if isinstance(width, int | float) and width > 0:
+        desc["width_cm"] = float(width)  # the report's default width (spec 13 §3.4)
+    desc["bytes"] = len(data)
+    return desc
 
 
 # ---- tables ---------------------------------------------------------------------------
