@@ -252,8 +252,11 @@ def select(pg, label: str) -> None:
 
 
 def run_all(pg) -> None:
+    # Wait for a *new* "Run finished" line: an earlier run's line may still be in the log.
+    ended = pg.locator(".apb-log-line", has_text=re.compile(r"Run (finished|stopped)"))
+    before = ended.count()
     pg.get_by_role("button", name="Run", exact=True).click()
-    pg.wait_for_selector("text=/Run (finished|stopped)/", timeout=30000)
+    expect(ended).to_have_count(before + 1, timeout=30000)
     # The canvas states follow the log a little later (slow CI machines).
     pg.wait_for_function(
         "() => !document.querySelector('.drawflow-node.apb-state-running')", timeout=10000
