@@ -773,8 +773,15 @@ def test_report_editor_table_columns_formats_and_warnings(page, workdir: Path):
     formats = page.locator(".apb-formats")
     assert "TENSION [N]" in formats.inner_text()
     assert page.locator(".apb-format-column input").count() == 5
+    assert "Excel style" in page.locator(".apb-format-help").inner_text()
+    assert page.locator(".apb-format-column input").nth(0).get_attribute("placeholder") == "as is"
     box = page.locator(".apb-format-column input").nth(3)  # EID, SUBCASE, TENSION, SHEAR, MS
     assert box.input_value() == "0.0"
+    example = page.locator(".apb-format-example").nth(3)
+    assert "→" in example.inner_text()
+    box.fill("0.0000")
+    page.wait_for_timeout(300)
+    assert example.inner_text().split("→")[1].strip().split(".")[1].__len__() == 4
     box.fill("0.0.0")
     box.press("Tab")
     page.wait_for_timeout(300)

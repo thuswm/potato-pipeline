@@ -19,7 +19,13 @@ import numpy as np
 import pandas as pd
 from pydantic import TypeAdapter, ValidationError
 
-from apb.blocks.report.sections import FormatError, Section, TableSection, fill_text
+from apb.blocks.report.sections import (
+    FormatError,
+    Section,
+    TableSection,
+    fill_text,
+    format_value,
+)
 from apb.engine.types import PortType
 from apb.units import Quantity
 
@@ -416,3 +422,67 @@ def _placeholder_problems(
             )
             out.append(f"Unknown placeholder {{{name}}}. Available: {available}")
     return out
+
+
+# --------------------------------------------------------------------------------------
+# Number formats per column (spec 05 §3.4, 2026-11-26)
+# --------------------------------------------------------------------------------------
+
+#: Help line shown above the per-column number formats.
+FORMAT_HELP = (
+    "How the numbers of each column are written. Excel style: 0.00 two decimals, "
+    "0.0E+00 exponent, #,##0 thousands separator, 0.0% percent. "
+    "Empty: the default format below."
+)
+
+
+def empty_format_text(column: pd.Series | None, default_format: str) -> str:
+    """Return what applies to a column whose format field is empty (the placeholder).
+
+    The writer uses the default format for decimal columns only; integer and text columns
+    are written as they are.
+
+    Args:
+        column: The column of the last run, or ``None`` if not known.
+        default_format: The section's default format (empty = ``auto``).
+
+    Returns:
+        ``"default: 0.00"``-style text, or ``"as is"``.
+    """
+    default = default_format.strip() or "auto"
+    if column is not None and not pd.api.types.is_float_dtype(column):
+        return "as is"
+    return f"default: {default}"
+
+
+def format_example(column: pd.Series | None, spec: str, default_format: str) -> str:
+    """Return the first value of a column as the report will write it.
+
+    Uses the same rule as the writer: the column's format if given, else the default
+    format for decimal columns and ``auto`` for the others.
+
+    Args:
+        column: The column of the last run, or ``None`` if not known.
+        spec: The column's format (empty = not set).
+        default_format: The section's default format.
+
+    Returns:
+        ``"0.123456 → 0.12"``, or ``""`` if the column is unknown, empty, has no value,
+        or the format is invalid.
+    """
+    if column is None:
+        return ""
+    values = column.dropna()
+    if values.empty:
+        return ""
+    value = values.iloc[0]
+    if isinstance(value, str):
+        return ""
+    if not spec.strip():
+        spec = (default_format.strip() or "auto") if pd.api.types.is_float_dtype(column) else ""
+    try:
+        written = format_value(value, spec or "auto")
+    except FormatError:
+        return ""
+    raw = repr(float(value)) if isinstance(value, float | np.floating) else str(value)
+    return f"{raw} → {written}"

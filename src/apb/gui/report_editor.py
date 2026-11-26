@@ -606,7 +606,8 @@ class ReportPanel:
         self._item_select(index, "table")
         self._text(index, "caption", "Caption")
         self._columns_field(index, info)
-        ui.label("Formats").classes("text-[10px] font-medium text-slate-600")
+        ui.label("Number format per column").classes("text-[10px] font-medium text-slate-600")
+        ui.label(ed.FORMAT_HELP).classes("text-[10px] text-slate-500 apb-format-help")
         formats = ui.column().classes("w-full gap-1 apb-formats")
         self._format_rows(index, info, formats)
         self._format_input(
@@ -674,6 +675,8 @@ class ReportPanel:
             if info is not None and isinstance(info.value, pd.DataFrame)
             else {}
         )
+        table = info.value if info is not None and isinstance(info.value, pd.DataFrame) else None
+        default_format = str(section.get("default_format") or "")
         with container:
             rows = columns + [c for c in formats if c not in columns]
             if not rows:
@@ -687,10 +690,23 @@ class ReportPanel:
                     ui.label(label + ("" if known else " (not in table)")).classes(
                         "text-xs w-2/5 truncate" + ("" if known else " text-amber-800")
                     )
+                    series = table[column] if table is not None and column in table else None
                     box = (
-                        ui.input(value=formats.get(column, ""), placeholder="default")
+                        ui.input(
+                            value=formats.get(column, ""),
+                            placeholder=ed.empty_format_text(series, default_format),
+                        )
                         .props("dense outlined")
                         .classes("grow apb-format-column")
+                    )
+                    example = ui.label(
+                        ed.format_example(series, formats.get(column, ""), default_format)
+                    ).classes("text-[10px] text-slate-500 w-1/4 truncate apb-format-example")
+                    example.tooltip("The first value of the column as the report writes it")
+                    box.on_value_change(
+                        lambda e, s=series, x=example: x.set_text(
+                            ed.format_example(s, str(e.value or ""), default_format)
+                        )
                     )
                     box.on(
                         "blur",

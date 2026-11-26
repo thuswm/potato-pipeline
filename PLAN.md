@@ -1,6 +1,7 @@
 # PLAN — round 6 (2026-11-23)
 
-Status: steps 1–14 done; steps 15–20 (Windows re-test, 2026-11-24) **approved 2026-11-24**
+Status: steps 1–20 done (15–20 approved 2026-11-24); steps 21–23 (second Windows re-test,
+2026-11-26) **approved 2026-11-26** (mass: kg in the writers; re-test before release)
 (ports stay the master, step 18). In progress. Completed plans are archived in `docs/plans/`.
 
 Release at the end of the round: **0.2.0** (spec 12).
@@ -133,9 +134,38 @@ Each step starts with its spec change (first proposal, user reviews), then code 
       it appears in the library. A user block library from the GUI ("Save as library
       block", see *Moved out*) gets its own spec in round 7.
 
-## H. Release
+## H. Findings from the second Windows re-test (2026-11-26, proposal)
 
-- [ ] 21. Release 0.2.0: changelog, version, tag, push to `main`, delete `test/round-6`,
+- [x] 21. **Report table "Formats" explained** (spec 05). The section sets how the numbers
+      of each column are written in the Word table, Excel style (`0.00` two decimals,
+      `0.0E+00` exponent, `#,##0` thousands separator, `0.0%` percent); empty = the
+      *Default format* below. Today nothing says so. Changes:
+      - Heading *Number format per column* with a help line and the four examples.
+      - The placeholder shows what applies when empty (`auto`, or the default format)
+        instead of the word "default".
+      - Next to each box a live example: the column's first value as it will be written
+        (e.g. `0.123456 → 0.12`), once the connected block has run.
+- [ ] 22. **Mass in kg in the outputs** (spec 00 §5.1, 03, 05). A model in mm uses the
+      consistent system mm–N–MPa–**t** (tonne), so mass columns read from Nastran are in
+      `t`. That stays inside the pipeline (computations stay consistent), but the writers
+      show mass in **kg**: *Word report* table, *Write Excel* and *Write CSV* convert
+      `t → kg` (×1000) and `t·mm² → kg·mm²` (×1000) by default, with a switch
+      *Mass in kg* (on) per block. The table preview keeps `t` with the tooltip
+      "tonne = 1000 kg (consistent with mm, N, s)".
+- [ ] 23. **Python block, output side of step 18** (spec 04 §3.9.1). The test could fix
+      the inputs from the code but not the outputs. Two gaps found:
+      - Output ports are only read from the code when `run()` ends in `return {...}`; with
+        `result = {...}` … `return result` nothing was offered and nothing said why. Also
+        read that pattern (a dict literal assigned to a name, plus `result["x"] = ...`
+        with plain string keys). When the keys still cannot be read, say so in the panel:
+        "Output ports are checked after the run: run() does not return a {...} literal."
+      - *Code in the pipeline file* (inline code) got no check and no fix buttons at
+        all; give it the same check line and fixes as a script file.
+      - Re-test instructions written step by step (below), so it is clear what to test.
+
+## I. Release
+
+- [ ] 24. Release 0.2.0: changelog, version, tag, push to `main`, delete `test/round-6`,
       and a **GitHub release** (`gh release create v0.2.0`, notes from the changelog). CI
       on `test/round-6` first, then a short re-test on Windows by the user.
       CI on `test/round-6`: green 2026-11-24 (run 45430513168, Windows + Linux, 3.12 + 3.13).
@@ -153,6 +183,18 @@ Each step starts with its spec change (first proposal, user reviews), then code 
         notice says the `.py` is saved and the pipeline must be saved too.
       - 19: *Advanced* shows *Code in the pipeline file* with its help text.
       - 20: README section *Adding your own blocks* reads clearly.
+      Result 2026-11-26: 15, 16, 17, 19, 20 ok; 18 inputs ok, outputs not → step 23.
+      **Short re-test of steps 21–23** (user, on `test/round-6`):
+      - 21: Word report, table section: the format help is shown; type `0.00` for a
+        column → the example next to it shows two decimals; the report table follows.
+      - 22: grid point weight (or any mass table) to Word, Excel and CSV → header `kg`,
+        values ×1000; switch *Mass in kg* off → `t` as before.
+      - 23: (a) Python block with a script file whose `run()` ends in
+        `return {"table": out}`; edit it to `return {"table": out, "extra": out}` and save
+        → the panel shows *Add output port(s): extra*; click it → a second output port.
+        (b) Remove `"extra"` again → *Remove output port(s): extra*. (c) Same with
+        `result = {"table": out}` / `return result`. (d) Same with code in the pipeline
+        file (*Advanced*).
 
 ## Moved out
 

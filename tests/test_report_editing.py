@@ -262,3 +262,32 @@ def test_block_run_refuses_sections_that_do_not_fit(tmp_path):
     assert "- Section 1 (Table · margins): Column(s) ['NOPE'] not in item 'margins'" in text
     assert "- Section 2 ({nope}): Unknown placeholder {nope}" in text
     assert not (tmp_path / "r.docx").exists()
+
+
+# ---- number formats per column (spec 05 §3.4, 2026-11-26) ------------------------------
+
+
+def test_empty_format_text_names_what_applies() -> None:
+    floats = pd.Series([0.123456, 2.0])
+    ints = pd.Series([1, 2])
+    assert ed.empty_format_text(floats, "") == "default: auto"
+    assert ed.empty_format_text(floats, "0.00") == "default: 0.00"
+    assert ed.empty_format_text(ints, "0.00") == "as is"
+    assert ed.empty_format_text(None, "0.0") == "default: 0.0"
+
+
+def test_format_example_follows_the_writer_rule() -> None:
+    floats = pd.Series([float("nan"), 0.123456])
+    assert ed.format_example(floats, "0.00", "") == "0.123456 → 0.12"
+    assert ed.format_example(floats, "", "0.000") == "0.123456 → 0.123"
+    assert ed.format_example(floats, "", "") == "0.123456 → 0.1235"
+    assert ed.format_example(floats, "0.0E+00", "") == "0.123456 → 1.2E-01"
+    assert ed.format_example(pd.Series([1001, 2]), "", "0.00") == "1001 → 1001"
+    assert ed.format_example(pd.Series([1001, 2]), "#,##0", "") == "1001 → 1,001"
+
+
+def test_format_example_empty_when_unknown_or_invalid() -> None:
+    assert ed.format_example(None, "0.00", "") == ""
+    assert ed.format_example(pd.Series([], dtype=float), "0.00", "") == ""
+    assert ed.format_example(pd.Series(["a"]), "0.00", "") == ""
+    assert ed.format_example(pd.Series([1.5]), "0.0.0", "") == ""

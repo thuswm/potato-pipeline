@@ -177,7 +177,14 @@ Table; *figure* — Figure; *value* — Scalar and Text; items of type `Any` fit
 block); if the item has not been run yet the field is a plain comma-separated text field.
 Formats are edited per column in a small grid listing the chosen columns (all columns if
 none are chosen) with the unit of each column shown; the format fields accept the same
-forms as §3.2 and show a red border for an invalid format.
+forms as §3.2 and show a red border for an invalid format. The grid is headed *Number
+format per column* with a help line ("How the numbers of each column are written. Excel
+style: `0.00` two decimals, `0.0E+00` exponent, `#,##0` thousands separator, `0.0%`
+percent. Empty: the default format below."). An empty field shows as placeholder what
+applies instead: the *Default format* (or `auto`) for decimal columns, `as is` for integer
+and text columns. When the table of the last run is known, each row shows an example: the
+column's first value as it will be written (`0.123456 → 0.12`), updated as the format is
+typed (2026-11-26, Windows re-test).
 
 **Text and placeholders (REP-17).** Heading, paragraph, label and caption fields get an
 *Insert value* button: a menu of the connected scalar and text items and the metadata fields
