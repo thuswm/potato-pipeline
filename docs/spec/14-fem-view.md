@@ -1,7 +1,7 @@
 # 14 — FE View Block (images of the FE model)
 
 Status: **first proposal** (2026-11-26). The spec is reviewed in round 7 and built in
-round 8. Decided 2026-11-26: renderer **VTK via PyVista**, a normal dependency; the first
+round 8. Decided 2026-11-26: renderer **VTK via PyVista**, an optional extra `[fem]` (changed 2026-11-28 from normal dependency); the first
 version shows the **undeformed model with boundary conditions** and **deformed shapes / mode
 shapes** of models with the elements CQUAD4, CBUSH, RBE2 and CONM2, in the basic coordinate
 system; orthographic and perspective projection. Contours come later.
@@ -122,6 +122,7 @@ workflow *FE view prototype*, run 45885881015):
 | Developer PC, Linux, GPU | works: model 1.2 s, mode 0.13 s | – | – |
 | CI Ubuntu (no GPU, no display) | **crash** (segfault, exit 139) | works: 1.6 s / 0.4 s | works: 3.3 s / 0.5 s |
 | CI Windows (no GPU) | **crash** (segfault, exit 139) | works: 2.7 s / 1.4 s | – |
+| User's Windows work PC | works: model 0.53 s, mode 0.13 s, glTF 0.03 s (228 kB) | – | – |
 
 Model: `modal.h5`, 3008 grids, 3000 CQUAD4, 44 CBUSH, 40 RBE2, 40 SPC1 grids; reading
 0.02–0.06 s; image 1600 × 1000. The images are the same on all machines that render.
@@ -140,8 +141,9 @@ Consequences for round 8:
    index `wheels.vtk.org`, not from PyPI, so the install command needs an extra
    `--extra-index-url`). The two cannot be installed together.
 3. **CI** tests the block with `vtk-osmesa` on both platforms.
-4. **The decisive test is the user's Windows PC** (round 7 step 10): does the plain wheel
-   render there?
+4. **The decisive test was the user's Windows PC** (round 7 step 10, 2026-11-28): the plain
+   wheel renders there without errors, the images show the model, and the prototype
+   environment (`pip install pyvista h5py`) takes **813 MB**.
 
 ### 3.5 Setting the view (FV-05, FV-06)
 
@@ -168,14 +170,15 @@ session, so a second FE view block on the same file does not read it again.
 
 ### 3.7 Dependency
 
-`pyvista` (with `vtk`) was decided as a **normal dependency** (2026-11-26): one install
-command, nothing to explain. The engine and the other blocks do not import it, so start-up
+`pyvista` (with `vtk`) was first decided as a normal dependency (2026-11-26); after the
+prototype it became the **optional extra `[fem]`** (2026-11-28, open question 6).
+The engine and the other blocks do not import it, so start-up
 time does not grow.
 
 **Correction (prototype, 2026-11-26):** the size is not about 100 MB (that is roughly the
 download) but **about 560 MB installed** for VTK alone (1.1 GB for the whole environment
 with PyVista and its dependencies in CI, versus a few hundred MB for the tool today). This
-reopens the choice between a normal dependency and an optional extra (open question 6).
+led to the optional extra (open question 6).
 
 ## 4. Out of scope (first version)
 
@@ -189,15 +192,14 @@ CBUSH, RBE2, CONM2 (FV-02b).
 Answered 2026-11-26: both projections (orthographic default); basic coordinate system to
 start; element types CQUAD4, CBUSH, RBE2, CONM2 plus boundary conditions.
 
-Open after the prototype (to answer before round 8):
+Answered 2026-11-28, after the prototype test on the user's Windows PC:
 
-5. **VTK build:** standard `vtk` (graphics card; crashes without OpenGL, shown as a block
-   error) or `vtk-osmesa` (software rendering; works everywhere; extra package index)?
-   Depends on the test on the user's Windows PC. Proposal: standard `vtk` if it renders
-   there, with rendering in a child process and a README note on software rendering.
-6. **Normal dependency or optional extra**, now that VTK takes about 560 MB installed?
-   Proposal: optional extra `[fem]`, so installing the tool for the other blocks stays
-   small; the FE view block says which command adds it.
+5. **VTK build:** the standard `vtk` wheel from PyPI (it renders on the Windows work PC).
+   Rendering runs in a child process; a crash becomes a block error pointing to the README
+   note on software rendering (`vtk-osmesa`). CI uses `vtk-osmesa`.
+6. **Optional extra `[fem]`** (`pip install "analysis-pipeline-builder[fem]"`), since the
+   environment grows by about 800 MB. Without it, the FE view block shows an error with the
+   command that adds it; the other blocks are not affected.
 
 Notes for round 8 from the prototype: glTF uses "Y up", Nastran "Z up" (rotate the
 glTF object by -90° about X in `ui.scene`); export the property colours per element (not

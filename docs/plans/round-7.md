@@ -1,6 +1,6 @@
 # PLAN — round 7 (2026-11-26)
 
-Status: **approved 2026-11-26**, in progress. Completed plans are archived in `docs/plans/`.
+Status: **approved 2026-11-26**, **done 2026-11-28** (released 0.3.0). Completed plans are archived in `docs/plans/`.
 
 Release at the end of the round: **0.3.0** (spec 12).
 
@@ -59,13 +59,19 @@ Each step starts with its spec change (first proposal, user reviews), then code 
 
 ## C. Release
 
-- [ ] 10. Release 0.3.0: CI on a test branch, Windows test by the user (Graph block: each
+- [x] 10. Release 0.3.0: CI on a test branch, Windows test by the user (Graph block: each
       plot type, reference line, live preview, report; **FE view prototype**: run
       `tools/prototypes/femview_render.py` on the work PC, see below), changelog, version, tag, push to
       `main`, GitHub release, test branch deleted.
 
 CI on `test/round-7`: green 2026-11-26 (run 45893630478, Windows + Linux, 3.12 + 3.13), after
 three fixes of timing in the browser tests.
+
+**Windows test 2026-11-28 (user):** Graph block checks 1–4 all passed. FE view prototype:
+no errors, the images show the model; read 0.01 s (3008 grids), `model.png` 0.53 s,
+`mode1.png` 0.13 s, `model.gltf` 0.03 s / 228 kB; prototype environment 813 MB. Spec 14
+questions answered: **5** standard `vtk` wheel (`vtk-osmesa` in CI only), **6** optional
+extra `[fem]`. Round 8 = FE view block build (user, 2026-11-28).
 
 ### Windows test of round 7 (user, on branch `test/round-7`)
 
